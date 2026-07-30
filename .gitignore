@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+
+# uv
+.uv/
+
+# Guard decision traces. These record what the guard saw, so they can contain
+# fragments of the private content airlock exists to protect. Never commit them.
+*.jsonl
+decisions*.json
+
+# macOS
+.DS_Store

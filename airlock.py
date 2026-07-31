@@ -2,7 +2,8 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
-#     "mcp[cli]>=2.0",
+#     # Bounded both sides on purpose; see CLAUDE.md before widening.
+#     "mcp[cli]>=2.0.0,<2.1.0",
 #     "rich>=13.7",
 #     "presidio-analyzer>=2.2",
 #     "spacy>=3.7",
@@ -22,20 +23,14 @@ external one, where everything is inspected before it is allowed through.
 Modes
 -----
     airlock doctor              check that everything is set up
-    airlock chat                talk to the local model interactively
+    airlock                     talk to the local model interactively (default)
     airlock ask "question"      one-shot question
     airlock guard "text"        test whether text would pass the guard
     airlock serve               run as an MCP server for a cloud assistant
 
-Relationship to prior work
---------------------------
-The local-plus-cloud division of labour follows the Minions protocol from
-Stanford Hazy Research (Narayan, Biderman, Eyuboglu, Re; ICML 2025). This is
-an independent implementation, not their library, and the naming avoids
-implying otherwise. Their follow-up, Minions Secure, protects data in transit
-with trusted execution environments. That is orthogonal: a TEE stops third
-parties reading what you send, while this decides whether a thing should be
-sent at all.
+Follows the local-plus-cloud split of the Minions protocol (Stanford Hazy
+Research, ICML 2025), adding the content guard that work did not have. See
+README.md for the architecture and CLAUDE.md for design notes.
 
 The guard, and why it is layered
 --------------------------------
@@ -64,7 +59,9 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import sys
+import textwrap
 import urllib.error
 import urllib.request
 import uuid
@@ -83,17 +80,21 @@ from rich.text import Text
 
 console = Console()
 
+# A second console bound to stderr. Required in serve mode, where stdout is the
+# MCP JSON-RPC channel: a single stray character written there corrupts the
+# stream and the client drops the connection. Anything printed while serving
+# must go here.
+err_console = Console(stderr=True)
+
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 REQUEST_TIMEOUT = 120
 MAX_REVISIONS = 3
 MAX_WORKER_STEPS = 8
 FILE_SLICE_CHARS = 4000
 MAX_LISTING_ENTRIES = 200
-# Verified working on Apple Silicon 2026-07-30. The -mlx tag runs on Ollama's
-# MLX engine and is a drop-in for the plain qwen3.5:0.8b tag; both are
-# multimodal and carry a 256K context. Override with --model on Linux or
-# elsewhere, where the plain tag is the right choice.
-DEFAULT_MODEL = "qwen3.5:0.8b-mlx"
+# Deliberately NOT the -mlx build, despite MLX being the faster backend on
+# Apple Silicon.
+DEFAULT_MODEL = "qwen3.5:0.8B"
 
 # The guard deliberately does not default to DEFAULT_MODEL. A general-purpose
 # model asked to judge whether text leaks private information is doing a job it
@@ -124,40 +125,62 @@ BLOCKING_ENTITIES: set[str] = {
 PRESIDIO_THRESHOLD = 0.5
 
 # --------------------------------------------------------------------------
-# Layer 1: secrets and credentials
-#
-# Two detectors in union, because measurement showed neither is sufficient.
-#
-# Yelp's detect-secrets contributes vendor coverage this file would otherwise
-# have to hand-maintain: Stripe, Slack, Basic Auth, JWT, IBM, Azure and more.
-#
-# Two things it does NOT do well here, both established by testing rather than
-# assumption:
-#
-#   1. Its entropy plugins are tuned for scanning source code, where a random
-#      string is inherently suspicious. Run against ordinary English prose they
-#      fire constantly: the sentence "The folder contains twelve planning
-#      files about budgets." produced six "Base64 High Entropy String" hits.
-#      Since this guard inspects natural language, entropy detectors are
-#      filtered out or the guard would block everything.
-#
-#   2. With entropy disabled it missed both a GitHub token and an OpenAI key
-#      that the patterns below catch.
-#
-# So the two run together and their findings are merged. Neither is redundant.
-# --------------------------------------------------------------------------
+# Layer 1: secrets and credentials  Two detectors in union, because
+# measurement showed neither is sufficient.
 
+# Shape-based rules. Each matches the credential's own form, with no
+# requirement on surrounding text, so they fire inside ordinary prose. Patterns
+# follow the gitleaks rule set, which is written this way for the same reason.
 SECRET_PATTERNS: dict[str, re.Pattern[str]] = {
+    # sk- and sk_ both appear in the wild: OpenAI uses the hyphen, Stripe the
+    # underscore. An earlier hyphen-only pattern let every Stripe key through.
     "openai_key": re.compile(r"\bsk-[A-Za-z0-9_-]{16,}\b"),
     "anthropic_key": re.compile(r"\bsk-ant-[A-Za-z0-9_-]{16,}\b"),
+    "stripe_key": re.compile(r"\b(?:sk|rk|pk)_(?:test|live|prod)_[A-Za-z0-9]{10,99}\b"),
     "github_token": re.compile(r"\bgh[pousr]_[A-Za-z0-9]{16,}\b"),
-    "aws_access_key": re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
-    "google_api_key": re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b"),
+    "gitlab_token": re.compile(r"\bglpat-[A-Za-z0-9_-]{20,}(?![A-Za-z0-9_-])"),
+    "aws_access_key": re.compile(r"\b(?:A3T[A-Z0-9]|ABIA|ACCA|AKIA|ASIA)[0-9A-Z]{16}\b"),
+    # Closing lookahead, not \b: a key ending in "-" has no word boundary
+    # after it, so \b silently misses roughly one in twenty-seven of them.
+    "google_api_key": re.compile(r"\bAIza[0-9A-Za-z_-]{35}(?![0-9A-Za-z_-])"),
     "slack_token": re.compile(r"\bxox[baprs]-[0-9A-Za-z-]{10,}\b"),
+    "slack_webhook": re.compile(r"https://hooks\.slack\.com/services/[A-Za-z0-9/+]{44,}"),
+    # Length is a floor, not an exact count. Vendors lengthen tokens over time
+    # and an exact quantifier turns that into a silent miss.
+    "sendgrid_key": re.compile(r"\bSG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{32,}"),
+    "npm_token": re.compile(r"\bnpm_[A-Za-z0-9]{36}\b"),
+    "pypi_token": re.compile(r"\bpypi-AgEIcHlwaS5vcmc[A-Za-z0-9_-]{50,}\b"),
+    "digitalocean_token": re.compile(r"\bdo[oprsv]_v1_[a-f0-9]{64}\b"),
+    "twilio_key": re.compile(r"\bSK[0-9a-fA-F]{32}\b"),
     "private_key_block": re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
     "jwt": re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"),
     "generic_secret_assignment": re.compile(
         r"\b(?:password|passwd|secret|api[_-]?key|token)\s*[:=]\s*['\"]?[^\s'\"]{8,}",
+        re.I,
+    ),
+}
+
+# --------------------------------------------------------------------------
+# Shapeless credentials, caught by context instead of form
+# --------------------------------------------------------------------------
+# Some credentials have no distinguishing shape at all.
+CONTEXT_SECRET_PATTERNS: dict[str, re.Pattern[str]] = {
+    # No \b after the keywords. Underscore is a word character, so \baws\b does
+    # not match the AWS_SECRET_ACCESS_KEY= form that these keys most often
+    # appear in. The leading \b is kept so that "laws" and "flaws" do not match.
+    "aws_secret_access_key": re.compile(
+        r"\baws[^\n]{0,40}?(?:secret|access|key|token|credential)[^\n]{0,20}?"
+        r"[\s:=\"']([A-Za-z0-9/+]{40})",
+        re.I,
+    ),
+    # The bare word "key" is included despite being common English. The 24
+    # character floor on the token is what makes that safe: no ordinary word
+    # following "key" is that long in this character class, so "key findings"
+    # and "the key to good documentation" do not fire, while "key is <40 chars
+    # of base64>" does. Verified against a false-positive corpus.
+    "labelled_opaque_token": re.compile(
+        r"\b(?:secret|api[_-]?key|access[_-]?token|bearer|auth[_-]?token|key|credentials?)"
+        r"[^\n]{0,20}?[\s:=\"']([A-Za-z0-9/+_-]{24,})",
         re.I,
     ),
 }
@@ -171,16 +194,6 @@ def mask(value: str) -> str:
     return f"{stripped[:2]}{'*' * (len(stripped) - 4)}{stripped[-2:]}"
 
 
-# Structured personal identifiers with rigid formats. These deliberately
-# duplicate part of Presidio's coverage and always run, including when
-# Presidio is disabled.
-#
-# The reason is a bug found in testing: with PII detection delegated entirely
-# to Presidio, running with --no-presidio approved a message containing an
-# email address and a phone number, because nothing deterministic was left and
-# the small guard model let it through. An escape hatch must not silently
-# remove every reliable check. Presidio still adds what patterns cannot do,
-# which is recognising names and places.
 PII_PATTERNS: dict[str, re.Pattern[str]] = {
     "email": re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.-]{2,}\b"),
     "phone": re.compile(r"\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b"),
@@ -284,9 +297,32 @@ def scan_secrets_library(text: str) -> list[dict[str, str]]:
     return findings
 
 
+def scan_secrets_context(text: str) -> list[dict[str, str]]:
+    """Find credentials that have no distinguishing shape, using nearby words.
+
+    Runs only against what the shape rules did not already claim. Ordering
+    matters: this pass is the false-positive-prone one, so it should decide as
+    little as possible.
+    """
+    findings: list[dict[str, str]] = []
+    for name, pattern in CONTEXT_SECRET_PATTERNS.items():
+        for match in pattern.finditer(text):
+            value = match.group(1)
+            # A token already matched by a shape rule needs no second opinion,
+            # and reporting it twice would misrepresent which layer caught it.
+            if any(p.search(value) for p in SECRET_PATTERNS.values()):
+                continue
+            findings.append(
+                {"rule": name, "masked": mask(value), "layer": "secrets:context"}
+            )
+    return findings
+
+
 def scan_secrets(text: str) -> list[dict[str, str]]:
-    """Union of both credential detectors, de-duplicated by rule name."""
-    combined = scan_secrets_patterns(text) + scan_secrets_library(text)
+    """Union of all credential detectors, de-duplicated by rule name."""
+    combined = (
+        scan_secrets_patterns(text) + scan_secrets_library(text) + scan_secrets_context(text)
+    )
     seen: set[str] = set()
     unique: list[dict[str, str]] = []
     for finding in combined:
@@ -306,16 +342,6 @@ class PresidioUnavailable(Exception):
     """Raised when Presidio or its language model cannot be loaded."""
 
 
-# Which spaCy pipeline backs Presidio's named-entity recognition. Overridable
-# with --spacy-model.
-#
-# This is set explicitly rather than left to Presidio's default for a concrete
-# reason found in testing: constructing AnalyzerEngine() with no configuration
-# reaches out and downloads en_core_web_lg, roughly 400MB, even when a smaller
-# model is already installed. Naming the model keeps startup predictable and
-# offline. The small pipeline is around 12MB and less accurate at names than
-# the large one, so use --spacy-model en_core_web_lg if recall matters more
-# than footprint.
 DEFAULT_SPACY_MODEL = "en_core_web_sm"
 
 
@@ -377,20 +403,7 @@ def scan_pii(text: str, spacy_model: str = DEFAULT_SPACY_MODEL) -> list[dict[str
 
 
 # --------------------------------------------------------------------------
-# Filesystem sandbox
-#
-# There is no established Python library for this. The recommended practice,
-# per the OpenStack security guidelines and similar sources, is exactly what
-# is implemented below: canonicalise the path with resolve(), which follows
-# symlinks, then confirm containment. Python 3.9 added Path.is_relative_to,
-# which expresses that check directly.
-#
-# Two honest limitations. First, this is a logical boundary, not an OS
-# enforced one: real isolation would mean sandbox-exec on macOS, Landlock on
-# Linux, or a container. Second, there is a small time-of-check to time-of-use
-# window between resolving a path and opening it, which matters only if an
-# attacker can already create symlinks inside the workspace.
-# --------------------------------------------------------------------------
+# Filesystem sandbox  There is no established Python library for this.
 
 
 class SandboxError(Exception):
@@ -453,7 +466,9 @@ class Sandbox:
     def write_text(self, relative: str, content: str) -> str:
         """Write a file, refusing unless writes were explicitly enabled."""
         if not self.allow_writes:
-            raise SandboxError("Writes are disabled. Restart with --allow-writes.")
+            raise SandboxError(
+                "Writes are disabled. Enable with --allow-writes, or /config writes on."
+            )
         target = self.resolve(relative)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
@@ -659,23 +674,9 @@ Message:
 
 
 # --------------------------------------------------------------------------
-# Optional layer 3a: IBM Granite Guardian
-#
-# A purpose-built judging model rather than a general instruct model, so it is
-# a better shape for this job. Two constraints from IBM's model card drive how
-# it is used here:
-#
-#   1. Its built-in taxonomy covers harm, bias, jailbreak, violence, profanity,
-#      sexual content and unethical behaviour. There is NO privacy or PII
-#      category, so privacy has to be supplied through Bring Your Own Criteria.
-#      IBM warns that custom criteria must be tested before production use, so
-#      treat this as advisory until measured on your own examples.
-#
-#   2. It is documented as intended "only in the prescribed yes/no scoring
-#      mode", where deviation may produce unsafe output. So it is NOT asked for
-#      our JSON schema. It is called in its native guardian format and returns
-#      a score, and the revision instruction is supplied separately below.
-# --------------------------------------------------------------------------
+# Optional layer 3a: IBM Granite Guardian  A purpose-built judging model
+# rather than a general instruct model, so it is a better shape for this
+# job.
 
 GUARDIAN_CRITERIA = (
     "The text reveals private or sensitive information about a specific person. "
@@ -980,6 +981,17 @@ def trace(event: str, **fields: Any) -> None:
         pass
 
 
+def evaluate_session(session: Session, text: str) -> GuardVerdict:
+    """Run the guard using a session's configuration."""
+    return evaluate(
+        text,
+        session.guard_model,
+        session.use_presidio,
+        session.spacy_model,
+        session.guardian_model,
+    )
+
+
 def run_worker(
     session: Session, question: str, on_step: StepCallback | None = None
 ) -> dict[str, Any]:
@@ -1031,7 +1043,14 @@ def run_worker(
                 result = session.sandbox.write_text(target, step.get("content", ""))
             elif action == "answer":
                 draft = str(step.get("answer", "")).strip()
-                break
+                if draft:
+                    break
+                # Schema-valid and useless: only "action" is required, so a
+                # small model can emit {"action": "answer"} with no text and
+                # end the run with nothing. Feed the mistake back instead of
+                # dead-ending, the same way sandbox refusals are handled.
+                note("refused", "empty answer")
+                result = "your answer field was empty. Put the reply text in it."
             else:
                 result = f"unknown action: {action}"
         except SandboxError as exc:
@@ -1048,7 +1067,7 @@ def run_worker(
 
     for attempt in range(MAX_REVISIONS):
         note("guard", f"checking (attempt {attempt + 1})")
-        verdict = evaluate(draft, session.guard_model, session.use_presidio, session.spacy_model, session.guardian_model)
+        verdict = evaluate_session(session, draft)
         trace(
             "guard_verdict",
             session=session.session_id,
@@ -1089,16 +1108,43 @@ def run_worker(
     return envelope(session, "blocked", "", ["could not produce a message passing the guard"])
 
 
+def sanitise_concerns(concerns: list[str]) -> list[str]:
+    """Strip guard explanations that quote the content they objected to.
+
+    Concerns from the model layer are free text the guard model wrote, and a
+    helpful model explains itself: "the message reveals the email
+    alice@example.com". Returning that verbatim means the guard leaks exactly
+    what it just blocked, on the block path, which is the one path where
+    nothing is supposed to get out. Found by testing the envelope directly.
+
+    Each concern is re-checked with the same deterministic detectors that
+    inspect outbound messages. Anything that trips them is replaced rather
+    than redacted in place, because partial redaction of a sentence still
+    leaks its shape.
+    """
+    safe: list[str] = []
+    for concern in concerns:
+        if scan_secrets(concern) or scan_pii_patterns(concern):
+            safe.append("withheld: the explanation itself contained sensitive content")
+        else:
+            safe.append(concern)
+    return safe
+
+
 def envelope(
     session: Session, status: str, message: str, concerns: list[str]
 ) -> dict[str, Any]:
-    """Build the structured reply, stating plainly when content was withheld."""
+    """Build the structured reply, stating plainly when content was withheld.
+
+    The single choke point for anything leaving for the caller, which is why
+    concern sanitising happens here rather than at each call site.
+    """
     return {
         "session": session.session_id,
         "status": status,
         "message": message,
         "withheld": bool(concerns),
-        "guard_concerns": concerns,
+        "guard_concerns": sanitise_concerns(concerns),
         "counters": {
             "exchanges": session.exchanges,
             "revisions": session.revisions,
@@ -1115,22 +1161,22 @@ def envelope(
 # Presentation
 # --------------------------------------------------------------------------
 
-STEP_STYLE = {
-    "list": ("dim cyan", "ls"),
-    "read": ("dim cyan", "read"),
-    "search": ("dim cyan", "grep"),
-    "write": ("yellow", "write"),
-    "refused": ("red", "refused"),
-    "guard": ("dim magenta", "guard"),
-    "revise": ("yellow", "revise"),
-    "approved": ("green", "ok"),
-    "blocked": ("red", "blocked"),
+STEP_STYLE: dict[str, tuple[str, str]] = {
+    "list": ("list", "cyan"),
+    "read": ("read", "cyan"),
+    "search": ("search", "cyan"),
+    "write": ("WRITE", "bold yellow"),
+    "refused": ("refused", "yellow"),
+    "guard": ("guard", "dim"),
+    "revise": ("revise", "yellow"),
+    "approved": ("approved", "green"),
+    "blocked": ("BLOCKED", "bold red"),
 }
 
 
 def print_step(action: str, detail: str) -> None:
     """Render one worker step as a dim status line."""
-    style, label = STEP_STYLE.get(action, ("dim", action))
+    label, style = STEP_STYLE.get(action, (action, "dim"))
     text = Text(f"  {label:<8}", style=style)
     text.append(detail[:80], style="dim")
     console.print(text)
@@ -1213,6 +1259,23 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         check("workspace", False, str(exc))
         return 1
 
+    # The MCP SDK is only imported by `serve`, so every other subcommand works
+    # even when the dependency cannot resolve. That is convenient and it also
+    # means a broken pin stays invisible until the moment you try to serve,
+    # which is the worst time to find out. Report it here instead.
+    sdk = installed_version("mcp")
+    if sdk:
+        # No rich markup in a check() detail: it is rendered through
+        # Text.assemble, which prints tags literally rather than parsing them.
+        # The detail is already styled dim by check itself.
+        check("mcp sdk", True, f"mcp {sdk} (pin this version)")
+    else:
+        check(
+            "mcp sdk",
+            False,
+            "not installed. Only `serve` needs it, so the rest of airlock still works",
+        )
+
     if args.no_presidio:
         check("pii detector", True, "disabled by --no-presidio (weaker detection)")
     else:
@@ -1245,10 +1308,15 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                         "for Gemma 4 on Apple Silicon. Upgrading is the "
                         "cheapest speedup available here[/dim]"
                     )
-                elif not any("-mlx" in name for name in installed):
+                elif "-mlx" in args.model:
+                    # This advisory used to recommend -mlx tags for speed.
+                    # That advice was wrong for the worker: the MLX build of
+                    # qwen3.5:0.8b ignores the JSON schema and breaks every
+                    # step. Speed is worth nothing if the loop cannot run.
                     console.print(
-                        "       [dim]no -mlx tagged models installed; on Apple "
-                        "Silicon those use the MLX engine[/dim]"
+                        "       [dim]worker is an -mlx tag; MLX builds have been "
+                        "observed ignoring JSON schemas. The check below is the "
+                        "one that matters[/dim]"
                     )
             except ValueError:
                 pass
@@ -1263,7 +1331,20 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         return 1
 
     def has(tag: str) -> bool:
-        return tag in installed or any(m.split(":")[0] == tag.split(":")[0] for m in installed)
+        """Whether this exact tag is installed.
+
+        Matched case-insensitively, because tags are pulled with whatever
+        casing the user typed and qwen3.5:0.8B and qwen3.5:0.8b are the same
+        model. An implicit :latest is treated as equivalent to the bare name.
+
+        Previously this compared only the family before the colon, so any
+        sibling satisfied it: qwen3.5:99b-nonexistent reported as present
+        because qwen3.5:0.8B was installed. That turned a missing model into
+        a confusing failure later instead of a clear one here.
+        """
+        names = {m.lower() for m in installed}
+        want = tag.lower()
+        return want in names or f"{want}:latest" in names or want.removesuffix(":latest") in names
 
     guard_model = args.guard_model or args.model
     if not check("worker model", has(args.model), args.model):
@@ -1273,6 +1354,34 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         ok = False
         console.print(f"\n[dim]  ollama pull {guard_model}[/dim]")
 
+    # The worker has to emit JSON matching WORKER_SCHEMA, and nothing above
+    # checks that it can.
+    if ok:
+        try:
+            probe = ollama_chat(
+                args.model,
+                "Reply with the action 'answer' and a one word answer.",
+                WORKER_SCHEMA,
+            )
+            valid = isinstance(probe, dict) and "action" in probe
+            if not check(
+                "worker emits valid JSON",
+                valid,
+                "schema honoured" if valid else f"got {type(probe).__name__}: {str(probe)[:40]!r}",
+            ):
+                ok = False
+                console.print(
+                    "       [dim]this model is not honouring the JSON schema, so every "
+                    "worker step will fail[/dim]"
+                )
+                console.print(
+                    "       [dim]try a different tag: a larger model, or the non-mlx "
+                    "build of the same one[/dim]"
+                )
+        except RuntimeError as exc:
+            check("worker emits valid JSON", False, str(exc)[:70])
+            ok = False
+
     if ok:
         cases = [
             ("blocks a credential", "my key is sk-abcdefghijklmnop1234", False),
@@ -1280,7 +1389,10 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             ("allows safe text", "The folder contains twelve planning files.", True),
         ]
         for label, sample, should_pass in cases:
-            verdict = evaluate(sample, guard_model, not args.no_presidio, args.spacy_model, args.guardian_model)
+            verdict = evaluate(
+                sample, guard_model, not args.no_presidio,
+                args.spacy_model, args.guardian_model,
+            )
             passed = verdict.approved == should_pass
             detail = f"{verdict.decision} via {' + '.join(verdict.layers_run)}"
             if not check(label, passed, detail):
@@ -1297,7 +1409,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     console.print()
     console.print(
-        "[bold green]Ready.[/bold green] Try: [cyan]airlock chat[/cyan]"
+        "[bold green]Ready.[/bold green] Run [cyan]airlock[/cyan] to start a session."
         if ok
         else "[bold red]Not ready.[/bold red] Fix the items above."
     )
@@ -1320,6 +1432,8 @@ def make_session(args: argparse.Namespace, objective: str) -> Session:
 
 HELP_TEXT = """[bold]Commands[/bold]
   [cyan]/help[/cyan]      show this
+  [cyan]/config[/cyan]    view and change settings: models, guard layers, writes
+  [cyan]/mcp[/cyan]       how to connect a cloud assistant to this workspace
   [cyan]/stats[/cyan]     session counters
   [cyan]/files[/cyan]     list the workspace
   [cyan]/guard[/cyan]     test text, e.g. /guard my ssn is 123-45-6789
@@ -1329,6 +1443,311 @@ HELP_TEXT = """[bold]Commands[/bold]
 Ask anything else in plain language. The local model reads your files and
 answers. Every answer is screened before it reaches you, and the same
 screening applies when a cloud assistant asks through MCP."""
+
+
+def read_key() -> str:
+    """Read one keypress, decoding arrow keys, or "" if stdin is not a terminal.
+
+    Uses termios directly rather than adding a dependency: this is the only
+    place airlock needs raw input, and a menu is not worth a package. Returns
+    "" when there is no terminal so callers can fall back to a numbered
+    prompt, which is also what makes the config screen testable.
+    """
+    try:
+        import termios
+        import tty
+    except ImportError:  # not POSIX
+        return ""
+    if not sys.stdin.isatty():
+        return ""
+    fd = sys.stdin.fileno()
+    saved = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        char = sys.stdin.read(1)
+        if char == "\x1b":  # escape sequence, possibly an arrow
+            char += sys.stdin.read(2)
+        return char
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, saved)
+
+
+KEY_UP, KEY_DOWN = ("\x1b[A", "k"), ("\x1b[B", "j")
+
+# What each setting does, shown for whichever row the cursor is on. Written to
+# say what changes as a consequence, not what the field is named: someone
+# opening this screen can already read the label.
+SETTING_NOTES: dict[str, str] = {
+    "worker": (
+        "The local model that reads your files and drafts every answer. It must return "
+        "JSON matching a fixed schema, and a model that cannot do that fails every step, "
+        "so confirm with a question after changing it."
+    ),
+    "guard": (
+        "Judges drafts the deterministic layers already passed, catching what regex "
+        "cannot describe. Errors and unparseable replies count as block, never approve."
+    ),
+    "guardian": (
+        "An optional second judge run before the guard, using its own yes/no scoring. "
+        "Aimed at health, financial, employment, legal and family circumstances."
+    ),
+    "presidio": (
+        "Recognises names, places and account numbers by reading context rather than "
+        "matching patterns. Turning it off leaves only the regex layers, which still "
+        "catch structured identifiers such as emails and card numbers but miss a name "
+        "in ordinary prose."
+    ),
+    "writes": (
+        "Whether the local model may create or modify files in this workspace. Off by "
+        "default. The sandbox boundary is unaffected either way: nothing outside the "
+        "workspace is reachable."
+    ),
+    "trace": (
+        "Appends every guard decision to a file as JSON lines, recording rule names and "
+        "verdicts but never message content, so a trace can be reviewed or shared "
+        "without leaking what the guard was protecting."
+    ),
+    "objective": (
+        "The standing framing handed to the local model with every question. Steers what "
+        "it looks for; it does not change what the guard permits."
+    ),
+}
+
+
+def choose(
+    title: str,
+    rows: list[tuple[str, str]],
+    footer: str = "",
+    start: int = 0,
+    notes: dict[str, str] | None = None,
+) -> int | None:
+    """Arrow-key picker. Returns the chosen index, or None if cancelled.
+
+    Clears and redraws rather than rewinding counted lines, so any number of
+    nested screens works. Assumes the caller has entered the alternate screen
+    buffer. Falls back to a numbered prompt when there is no terminal.
+    """
+    notes = notes or {}
+    if not sys.stdin.isatty():
+        console.print(f"[bold]{title}[/bold]")
+        for index, (label, value) in enumerate(rows, 1):
+            console.print(f"  {index}. {label}  [dim]{value}[/dim]")
+            if label in notes:
+                console.print(f"       [dim]{notes[label]}[/dim]")
+        answer = Prompt.ask("number, or blank to go back", default="")
+        return int(answer) - 1 if answer.strip().isdigit() else None
+
+    cursor = max(0, min(start, len(rows) - 1))
+    # Reserve the description area so the list does not jump as the cursor
+    # moves between a one-line note and a two-line one.
+    note_lines = max((len(textwrap.wrap(n, 74)) for n in notes.values()), default=0)
+    while True:
+        sys.stdout.write("\x1b[H\x1b[J")  # home, then clear to end of screen
+        console.print(f"[bold]{title}[/bold]\n")
+        for index, (label, value) in enumerate(rows):
+            mark = "[cyan]>[/cyan]" if index == cursor else " "
+            style = "bold" if index == cursor else "dim"
+            console.print(f" {mark} [{style}]{label:11}[/{style}] [dim]{value}[/dim]")
+        if notes:
+            console.print("")
+            current = textwrap.wrap(notes.get(rows[cursor][0], ""), 74)
+            for line in current:
+                console.print(f"   [italic dim]{line}[/italic dim]")
+            for _ in range(note_lines - len(current)):
+                console.print("")
+        if footer:
+            console.print(f"\n[dim]{footer}[/dim]")
+        console.print("\n[dim]up/down move, enter select, esc back[/dim]")
+        sys.stdout.flush()
+
+        key = read_key()
+        if key in KEY_UP:
+            cursor = (cursor - 1) % len(rows)
+        elif key in KEY_DOWN:
+            cursor = (cursor + 1) % len(rows)
+        elif key in ("\r", "\n"):
+            return cursor
+        elif key in ("\x1b", "q", "\x03"):
+            return None
+
+
+def config_tui(session: Session, args: argparse.Namespace) -> None:
+    """Interactive settings screen.
+
+    Runs on the alternate screen buffer so the chat scrollback survives.
+    Messages are collected as notices and printed after leaving, because
+    anything written inside that buffer vanishes with it. Models are picked
+    from what is installed rather than typed.
+    """
+    global TRACE_PATH
+    notices: list[str] = []
+    interactive = sys.stdin.isatty()
+    if interactive:
+        sys.stdout.write("\x1b[?1049h")  # enter alternate screen
+        sys.stdout.flush()
+    try:
+        _config_loop(session, args, notices)
+    finally:
+        if interactive:
+            sys.stdout.write("\x1b[?1049l")  # restore, chat history intact
+            sys.stdout.flush()
+    for notice in notices:
+        console.print(notice)
+
+
+def _config_loop(session: Session, args: argparse.Namespace, notices: list[str]) -> None:
+    """The settings loop itself, separated so the screen is always restored."""
+    global TRACE_PATH
+
+    def models() -> list[str]:
+        try:
+            return sorted(ollama_models())
+        except RuntimeError as exc:
+            # A notice, not a print: anything written here is on the alternate
+            # screen and disappears the moment the user leaves it.
+            notices.append(f"[red]cannot list models:[/red] {exc}")
+            return []
+
+    def pick_model(label: str, current: str | None, allow_none: bool) -> Any:
+        available = models()
+        if not available:
+            return False
+        rows = [(m, "current" if m == current else "") for m in available]
+        if allow_none:
+            rows.append(("(none)", "current" if current is None else ""))
+        # Open on the current value rather than the top of the list, so Enter
+        # without moving is a no-op instead of a silent change.
+        start = available.index(current) if current in available else len(rows) - 1
+        index = choose(f"{label} model", rows, start=start)
+        if index is None or not 0 <= index < len(rows):
+            return False
+        if allow_none and index == len(available):
+            return None
+        return available[index]
+
+    cursor = 0
+    while True:
+        rows = [
+            ("worker", session.worker_model),
+            ("guard", session.guard_model),
+            ("guardian", session.guardian_model or "not set"),
+            ("presidio", "on" if session.use_presidio else "OFF, weaker detection"),
+            ("writes", "enabled" if session.sandbox.allow_writes else "disabled"),
+            ("trace", str(args.trace) if args.trace else "off"),
+            ("objective", session.objective[:44]),
+        ]
+        choice = choose(
+            "settings",
+            rows,
+            footer=f"workspace {session.sandbox.root}  approval {args.approve}  "
+            f"spacy {session.spacy_model}",
+            start=cursor,
+            notes=SETTING_NOTES,
+        )
+        if choice is None or not 0 <= choice < len(rows):
+            return
+        # Reopen where the user left off, so changing two settings does not
+        # mean navigating from the top again.
+        cursor = choice
+
+        name = rows[choice][0]
+        if name == "worker":
+            picked = pick_model("worker", session.worker_model, allow_none=False)
+            if picked and picked != session.worker_model:
+                session.worker_model = args.model = picked
+                notices.append(
+                    f"[green]worker[/green] -> {picked}  [dim]ask something to confirm it "
+                    "honours the JSON schema; installed and usable differ[/dim]"
+                )
+        elif name == "guard":
+            picked = pick_model("guard", session.guard_model, allow_none=False)
+            if picked:
+                session.guard_model = args.guard_model = picked
+        elif name == "guardian":
+            picked = pick_model("guardian", session.guardian_model, allow_none=True)
+            if picked is not False:
+                session.guardian_model = args.guardian_model = picked
+        elif name == "presidio":
+            session.use_presidio = not session.use_presidio
+            args.no_presidio = not session.use_presidio
+            if not session.use_presidio:
+                notices.append(
+                    "[yellow]Presidio off.[/yellow] [dim]Names and places are no longer "
+                    "recognised. Structured identifiers are still checked.[/dim]"
+                )
+        elif name == "writes":
+            if session.sandbox.allow_writes:
+                session.sandbox.allow_writes = args.allow_writes = False
+                notices.append("[green]writes disabled[/green]")
+            elif Confirm.ask(
+                "\n[yellow]Let the local model modify files in this workspace?[/yellow]",
+                default=False,
+            ):
+                # Asked rather than toggled, because gaining the ability to
+                # change the user's files is a capability change and should
+                # not read like flipping a preference.
+                session.sandbox.allow_writes = args.allow_writes = True
+                notices.append(
+                    "[yellow]writes enabled[/yellow] [dim]the local model can now modify "
+                    "files in this workspace[/dim]"
+                )
+        elif name == "trace":
+            entered = Prompt.ask("trace file, or blank for off", default="").strip()
+            TRACE_PATH = args.trace = Path(entered).expanduser() if entered else None
+        elif name == "objective":
+            entered = Prompt.ask("objective", default=session.objective).strip()
+            if entered:
+                session.objective = entered
+
+
+def render_mcp_help(args: argparse.Namespace) -> None:
+    """Print ready-to-paste client configuration for this exact workspace.
+
+    Shown because a user who has just started chatting has no way to discover
+    that the same workspace can be served to a cloud assistant, and the paths
+    have to be absolute, which is the detail people get wrong.
+    """
+    root = Path(args.root).expanduser().resolve()
+    script = Path(__file__).resolve()
+    config = {
+        "mcpServers": {
+            "airlock": {
+                "command": "uv",
+                "args": [
+                    "run", "--script", str(script),
+                    "serve", "--root", str(root),
+                    "--model", args.model,
+                    "--guard-model", args.guard_model,
+                ],
+            }
+        }
+    }
+    console.print(
+        Panel(
+            Group(
+                Text("Serve this workspace to a cloud assistant.", style="bold"),
+                Text(""),
+                Text("Claude Desktop, in claude_desktop_config.json:", style="dim"),
+                Text(json.dumps(config, indent=2), style="cyan"),
+                Text(""),
+                Text("Claude Code:", style="dim"),
+                Text(
+                    f"claude mcp add airlock -- uv run --script {script} "
+                    f"serve --root {root}",
+                    style="cyan",
+                ),
+                Text(""),
+                Text(
+                    "The assistant receives guarded answers, never your files. "
+                    "It gets a receipt by default and must ask explicitly for content.",
+                    style="dim",
+                ),
+            ),
+            title="connect over MCP",
+            border_style="magenta",
+            padding=(1, 2),
+        )
+    )
 
 
 def cmd_chat(args: argparse.Namespace) -> int:
@@ -1345,7 +1764,10 @@ def cmd_chat(args: argparse.Namespace) -> int:
         default=False,
     ):
         return 0
-    console.print("[dim]Type /help for commands, /exit to quit.[/dim]\n")
+    console.print(
+        "[dim]Type /help for commands, /config for settings, /mcp to connect a "
+        "cloud assistant, /exit to quit.[/dim]\n"
+    )
 
     while True:
         try:
@@ -1362,6 +1784,10 @@ def cmd_chat(args: argparse.Namespace) -> int:
                 break
             if command == "/help":
                 console.print(Panel(HELP_TEXT, border_style="dim", padding=(1, 2)))
+            elif command == "/config":
+                config_tui(session, args)
+            elif command == "/mcp":
+                render_mcp_help(args)
             elif command == "/stats":
                 table = Table(show_header=False, box=None, padding=(0, 2))
                 table.add_row("exchanges", str(session.exchanges))
@@ -1375,7 +1801,7 @@ def cmd_chat(args: argparse.Namespace) -> int:
                 session.objective = rest or session.objective
                 console.print(f"[dim]objective: {session.objective}[/dim]")
             elif command == "/guard":
-                verdict = evaluate(rest, session.guard_model, session.use_presidio, session.spacy_model, session.guardian_model)
+                verdict = evaluate_session(session, rest)
                 colour = "green" if verdict.approved else "red"
                 console.print(f"  [{colour}]{verdict.decision}[/{colour}]  [dim]"
                               f"{' + '.join(verdict.layers_run)}[/dim]")
@@ -1415,7 +1841,10 @@ def cmd_ask(args: argparse.Namespace) -> int:
 
 def cmd_guard(args: argparse.Namespace) -> int:
     """Test whether a piece of text would pass the guard."""
-    verdict = evaluate(args.text, args.guard_model or args.model, not args.no_presidio, args.spacy_model, args.guardian_model)
+    verdict = evaluate(
+        args.text, args.guard_model or args.model, not args.no_presidio,
+        args.spacy_model, args.guardian_model,
+    )
     colour = {"approve": "green", "revise": "yellow", "block": "red"}[verdict.decision]
     console.print(
         Panel(
@@ -1443,26 +1872,216 @@ def cmd_guard(args: argparse.Namespace) -> int:
     return 0 if verdict.approved else 2
 
 
-def cmd_serve(args: argparse.Namespace) -> int:
-    """Run as an MCP server so a cloud assistant can consult the workspace."""
+# --------------------------------------------------------------------------
+# Approval policy
+# --------------------------------------------------------------------------
+# Two independent choices, flattened into one flag because they are always
+# decided together: what needs approving (everything, or only calls that can
+# alter files), and who does the asking.
+APPROVE_MODES = ("gate-all", "gate-writes", "hint-all", "hint-writes", "none")
+
+
+def installed_version(package: str) -> str:
+    """Return an installed distribution's version, or "" if it is absent.
+
+    Reported by doctor so the version in use is observable rather than assumed.
+    Uses importlib.metadata so it works without importing the package, which
+    matters for mcp: importing it is what fails when the pin is wrong, and a
+    diagnostic that crashes on the thing it is diagnosing is no use.
+    """
+    try:
+        from importlib.metadata import version
+
+        return version(package)
+    except Exception:  # noqa: BLE001 - informational only
+        return ""
+
+
+def tty_handle() -> Any:
+    """Open the controlling terminal, or return None if there is not one.
+
+    Prompting cannot use stdin while serving, because stdin is the JSON-RPC
+    input stream and reading from it would consume protocol frames. The
+    controlling terminal is a separate channel, and it does not exist at all
+    when a GUI client spawns the server as a background subprocess.
+    """
+    try:
+        return open("/dev/tty", "r+")
+    except OSError:
+        return None
+
+
+def approval_required(mode: str, alters: bool) -> bool:
+    """Whether this call needs a human answer before it runs."""
+    if mode == "gate-all":
+        return True
+    if mode == "gate-writes":
+        return alters
+    return False
+
+
+def confirm_on_tty(handle: Any, question: str) -> bool:
+    """Ask a yes or no question on the terminal. Anything but yes is no.
+
+    Returns False if the terminal disappears mid-session, because a gate that
+    cannot ask must not approve.
+    """
+    try:
+        handle.write(f"\n  {question} [y/N] ")
+        handle.flush()
+        answer = handle.readline().strip().lower()
+    except (OSError, ValueError):
+        return False
+    return answer in ("y", "yes")
+
+
+# How each worker action is rendered in the serve activity log. Reads and
+# writes are coloured differently from everything else because they are the
+# operations that touch the operator's files, and a write is the only one that
+# changes them.
+
+
+WORKER_ACTIONS = frozenset({"list", "read", "search", "write", "refused"})
+
+
+def receipt(result: dict[str, Any], actions: list[str]) -> dict[str, Any]:
+    """Describe what airlock DID, with nothing about what it FOUND.
+
+    Reports step counts, action kinds and guard verdicts. Never paths, match
+    counts, topics or anything else derived from file contents: the guard
+    inspects answer text and never sees this metadata, so content-derived
+    facts here would be an unguarded oracle. See CLAUDE.md.
+    """
+    # Only actions that touched the workspace. The callback also reports guard
+    # lifecycle events (guard, revise, approved, blocked), and passing those
+    # through would both pad the count and hand the caller a running tally of
+    # how many redrafts the guard forced, which is a signal about the content
+    # rather than about the operation.
+    worker_actions = [a for a in actions if a in WORKER_ACTIONS]
+    return {
+        "session": result.get("session", ""),
+        "status": result.get("status", ""),
+        "performed": True,
+        "steps": len(worker_actions),
+        "action_kinds": sorted(set(worker_actions)),
+        "guard": {
+            "withheld": result.get("withheld", False),
+            "concerns": result.get("guard_concerns", []),
+        },
+        "disclosure": (
+            "No content returned. This is a receipt describing the operation only. "
+            "To receive the local model's answer, call again with disclosure_request "
+            "set to a short statement of what you need and why."
+        ),
+    }
+
+
+def serve_reporter(session_id: str) -> StepCallback:
+    """Render one session's worker activity to stderr as it happens.
+
+    This is the operator's only view of what the cloud model caused to happen
+    on their disk. Everything goes to stderr: stdout carries JSON-RPC frames
+    and cannot be written to.
+    """
+
+    def report(action: str, detail: str) -> None:
+        label, style = STEP_STYLE.get(action, (action, "dim"))
+        err_console.print(
+            Text.assemble(
+                ("  │ ", "dim"),
+                (f"{label:9}", style),
+                (detail[:96], "dim" if action == "guard" else ""),
+            )
+        )
+
+    return report
+
+
+def build_server(args: argparse.Namespace) -> Any:
+    """Construct the MCP server object without running a transport.
+
+    Split out of cmd_serve so tests can drive the real server in memory with
+    the SDK's own Client, which is the only way to exercise MCPServer, the
+    annotation types, and the tool signatures against the installed package
+    rather than against assumptions about it.
+
+    Raises SandboxError, FileNotFoundError, or RuntimeError rather than
+    printing and exiting, so a caller can decide what to do.
+    """
     # MCPServer is the server class in MCP Python SDK v2. It replaced FastMCP,
     # and mcp.server.fastmcp.* was removed rather than deprecated, so there is
     # no older path worth supporting. The dependency pin above requires v2.
     from mcp.server import MCPServer
 
-    try:
-        sandbox = Sandbox(root=args.root, allow_writes=args.allow_writes)
-    except (SandboxError, FileNotFoundError) as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 1
+    # mcp_types, not mcp.types. SDK v2 moved the protocol wire types into a
+    # standalone `mcp-types` distribution and removed the `mcp.types`
+    # submodule outright, so the old import raises ImportError. The package
+    # arrives as a dependency of `mcp`, which is why it is not declared
+    # separately above: pinning mcp pins this with it.
+    from mcp_types import ToolAnnotations
+
+    sandbox = Sandbox(root=args.root, allow_writes=args.allow_writes)
+
+    # Enabling writes raises the approval posture on its own, so that writes
+    # cannot be turned on while approval is quietly left off.
+    if args.approve == "hint-writes" and args.allow_writes:
+        args.approve = "gate-writes"
+
+    tty = tty_handle() if args.approve.startswith("gate") else None
+    if args.approve.startswith("gate") and tty is None:
+        # Refusing is the point. Falling back to no approval would turn a
+        # request for a gate into silence, which is the worst of the available
+        # outcomes and the one that happens if nobody checks.
+        raise RuntimeError(
+            f"--approve {args.approve} needs a terminal to ask on, and there is none.\n"
+            "  stdin is the JSON-RPC stream here, so prompting uses /dev/tty, which does\n"
+            "  not exist when a GUI client launches this server as a subprocess.\n"
+            "  Run airlock in a terminal, or choose --approve hint-writes to let the "
+            "client ask."
+        )
 
     guard_model = args.guard_model or args.model
     use_presidio = not args.no_presidio
     mcp = MCPServer("airlock")
 
-    @mcp.tool()
+    # Annotations are computed here, not hardcoded, because whether asking a
+    # question can alter anything depends on --allow-writes. A fixed
+    # read_only_hint=True would be a lie in precisely the configuration where
+    # the lie matters, and clients use these to decide what to auto-approve.
+    can_alter = sandbox.allow_writes
+    ask_annotations = ToolAnnotations(
+        title="Ask the sandboxed local model",
+        read_only_hint=not can_alter,
+        destructive_hint=can_alter,
+        idempotent_hint=False,
+        open_world_hint=False,
+    )
+    read_only = ToolAnnotations(read_only_hint=True, idempotent_hint=True, open_world_hint=False)
+
+    @mcp.tool(
+        annotations=ToolAnnotations(
+            title="Open an airlock session",
+            read_only_hint=True,
+            idempotent_hint=False,
+            open_world_hint=False,
+        )
+    )
     def airlock_open(objective: str) -> dict[str, Any]:
         """Start a session with the local model over the sandboxed workspace.
+
+        This server sits between you and a private directory you cannot see.
+        A local model reads the files; a privacy guard decides what may be
+        returned to you. Please work with that grain rather than against it:
+
+        - Ask for the minimum that answers your question. Structure and
+          summaries are usually enough, and are far more likely to be released
+          than verbatim content.
+        - Do not ask for identifiers, contact details, credentials, or
+          personal circumstances. Those are blocked, and asking wastes a turn.
+        - A withheld reply is a correct outcome, not an error. Do not retry it
+          with rephrasing intended to get around the guard.
+        - Prefer several narrow questions over one broad request for
+          everything, so that less is exposed if any single answer is released.
 
         Args:
             objective: What you want to achieve, in one or two sentences.
@@ -1481,36 +2100,127 @@ def cmd_serve(args: argparse.Namespace) -> int:
             guardian_model=args.guardian_model,
         )
         SESSIONS[session.session_id] = session
+        counts = sandbox.stats()
+        # Counts, never names.
         return {
             "session": session.session_id,
             "workspace": sandbox.root.name,
-            "entries": sandbox.list_dir("."),
+            "files": counts["files"],
+            "directories": counts["directories"],
             "writes_enabled": sandbox.allow_writes,
             "protocol": (
-                "Call airlock_ask with this session id. Replies pass a layered "
-                "privacy guard and may be generalised or withheld."
+                "File and directory names are not disclosed. Ask questions with "
+                "airlock_ask instead: the local model reads the files and a "
+                "layered privacy guard decides what may be returned. Replies "
+                "may be generalised or withheld."
             ),
         }
 
-    @mcp.tool()
-    def airlock_ask(session: str, question: str) -> dict[str, Any]:
-        """Ask the local model about the workspace. Replies are guarded.
+    @mcp.tool(annotations=ask_annotations)
+    def airlock_ask(
+        session: str, question: str, disclosure_request: str | None = None
+    ) -> dict[str, Any]:
+        """Ask the local model about the workspace. Returns a receipt by default.
+
+        By default this returns only a description of what was done: how many
+        steps ran, which kinds of action, and the guard's decision. It does NOT
+        return the local model's answer. That is deliberate, so that content
+        crosses the boundary only when something explicitly asks for it.
+
+        To receive the answer, set disclosure_request to a short statement of
+        what you need and why, for example "a two sentence summary of the
+        project status, to draft a status update". The statement is recorded
+        and shown to the operator alongside whatever is released, so write one
+        you would be willing to have read back to you. Request the least that
+        answers the question.
 
         Args:
             session: Session id from airlock_open.
             question: A question about structure, topics, or findings. Requests
                 for identifiers, contact details, or credentials are blocked.
+            disclosure_request: Optional. What you need returned and why.
+                Omit it when you only need to know the work happened.
 
         Returns:
-            An envelope with status, the message if approved, and whether
-            anything was withheld.
+            A receipt, or, when disclosure_request is given, the guarded answer.
         """
         found = SESSIONS.get(session)
         if found is None:
             return {"status": "error", "message": "Unknown session."}
-        return run_worker(found, question.strip())
 
-    @mcp.tool()
+        err_console.print(
+            Text.assemble(
+                ("\n  ┌ ask     ", "bold cyan"),
+                (question.strip()[:96], ""),
+                (f"   [{session[:8]}]", "dim"),
+            )
+        )
+        if disclosure_request:
+            err_console.print(
+                Text.assemble(
+                    ("  │ wants   ", "bold yellow"), (disclosure_request.strip()[:96], "")
+                )
+            )
+
+        if approval_required(args.approve, can_alter):
+            allowed = confirm_on_tty(
+                tty, f"Allow this call on {sandbox.root.name}? ({question.strip()[:60]})"
+            )
+            trace("approval", session=session, granted=allowed, mode=args.approve)
+            if not allowed:
+                err_console.print(Text.assemble(("  └ denied  ", "bold red"), ("by operator", "")))
+                return {"status": "denied", "message": "The operator declined this call."}
+
+        actions: list[str] = []
+        reporter = serve_reporter(session)
+
+        def watch(action: str, detail: str) -> None:
+            actions.append(action)
+            reporter(action, detail)
+
+        result = run_worker(found, question.strip(), on_step=watch)
+
+        # The governing fact is what actually crossed the boundary, so print
+        # the approved text itself rather than a summary of it.
+        status = result.get("status", "?")
+        if status == "approved":
+            if disclosure_request:
+                err_console.print(
+                    Text.assemble(
+                        ("  └ sent    ", "bold green"), (result.get("message", "")[:200], "")
+                    )
+                )
+            else:
+                err_console.print(
+                    Text.assemble(
+                        ("  └ receipt ", "bold green"),
+                        ("no content released, caller did not request disclosure", "dim"),
+                    )
+                )
+        else:
+            err_console.print(
+                Text.assemble(
+                    ("  └ withheld ", "bold red"),
+                    ("; ".join(result.get("guard_concerns", []))[:160], "dim"),
+                )
+            )
+
+        trace(
+            "disclosure",
+            session=session,
+            requested=bool(disclosure_request),
+            purpose=(disclosure_request or "")[:200],
+            released_chars=len(result.get("message", "")) if disclosure_request else 0,
+        )
+        if disclosure_request:
+            return result
+        return receipt(result, actions)
+
+    @mcp.tool(
+        annotations=ToolAnnotations(
+            title="Close an airlock session", read_only_hint=False, open_world_hint=False
+        )
+    )
     def airlock_close(session: str) -> dict[str, Any]:
         """End a session and discard its state.
 
@@ -1522,8 +2232,8 @@ def cmd_serve(args: argparse.Namespace) -> int:
             return {"status": "error", "message": "Unknown session."}
         return {"status": "closed", "exchanges": found.exchanges}
 
-    @mcp.tool()
-    def guard_check(text: str) -> dict[str, Any]:
+    @mcp.tool(annotations=read_only)
+    def airlock_guard_check(text: str) -> dict[str, Any]:
         """Test whether text would pass the privacy guard.
 
         Args:
@@ -1538,32 +2248,128 @@ def cmd_serve(args: argparse.Namespace) -> int:
             "findings": verdict.findings,
         }
 
-    print(f"airlock serving {sandbox.root} over MCP", file=sys.stderr)
+    return mcp
+
+
+def cmd_serve(args: argparse.Namespace) -> int:
+    """Run as an MCP server so a cloud assistant can consult the workspace."""
+    try:
+        mcp = build_server(args)
+    except (SandboxError, FileNotFoundError, RuntimeError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(f"airlock serving {Path(args.root).resolve()} over MCP", file=sys.stderr)
     mcp.run()
     return 0
 
 
+def offer_repairs(args: argparse.Namespace) -> bool:
+    """Walk the user through fixing whatever is missing. Returns True if fixed.
+
+    Deliberately narrow. It repairs the one class of problem that is both
+    common and unambiguous, a model tag that is not pulled yet, and for
+    everything else it prints the command rather than running it. Guessing at
+    someone's Ollama installation or Python environment is how a setup helper
+    turns into the thing that broke their machine.
+    """
+    # doctor has already printed the diagnosis and the fix command for each
+    # failure. This function only adds what doctor cannot: doing the work.
+    # Anything it prints that doctor already said is noise.
+    try:
+        installed = set(ollama_models())
+    except RuntimeError:
+        console.print("\n[dim]Not installed? https://ollama.com/download[/dim]")
+        return False
+
+    wanted = [("worker", args.model), ("guard", args.guard_model)]
+    if args.guardian_model:
+        wanted.append(("guardian", args.guardian_model))
+    missing = [(role, tag) for role, tag in wanted if tag not in installed]
+    if not missing:
+        return False
+
+    # Pulling a model downloads gigabytes. Always ask, never assume.
+    console.print()
+    plural = "s" if len(missing) > 1 else ""
+    if not Confirm.ask(
+        f"Pull the {len(missing)} missing model{plural} now?", default=True
+    ):
+        console.print("[dim]Skipped. The commands above will do it.[/dim]")
+        return False
+
+    fixed = False
+    for role, tag in missing:
+        console.print(f"\n[dim]pulling {tag} ...[/dim]")
+        try:
+            done = subprocess.run(["ollama", "pull", tag], check=False)
+        except FileNotFoundError:
+            console.print("[red]The 'ollama' command is not on your PATH.[/red]")
+            console.print(f"[dim]Pull it manually: ollama pull {tag}[/dim]")
+            return fixed
+        if done.returncode == 0:
+            fixed = True
+        else:
+            console.print(f"[red]Could not pull {tag}.[/red] Check the tag name at")
+            console.print("[dim]https://ollama.com/library[/dim]")
+    return fixed
+
+
+def cmd_quickstart(args: argparse.Namespace) -> int:
+    """Bare `airlock`, with no arguments: orient, check, then start a session.
+
+    The workspace defaults to the current directory, which is convenient and
+    also the one genuinely dangerous default in this tool, so it is printed
+    before anything else happens and confirmed below when it is too broad.
+    """
+    console.print(Rule("airlock", style="cyan"))
+    console.print(
+        "A local model reads one directory and answers questions about it.\n"
+        "Nothing reaches an external service until a privacy guard approves it.\n"
+    )
+
+    root = Path(args.root).expanduser().resolve()
+    console.print(Text.assemble(("workspace   ", "dim"), (str(root), "bold yellow")))
+    console.print("[dim]readable by the local model, nothing above it[/dim]\n")
+
+    # Running from a home directory or the filesystem root would expose far
+    # more than anyone means to. Neither is refused outright, because there are
+    # legitimate reasons, but neither is the default answer either.
+    if root == Path.home() or root == root.parent:
+        where = "your home directory" if root == Path.home() else "the filesystem root"
+        console.print(f"[yellow]That is {where}.[/yellow] Every file beneath it is in scope.")
+        console.print("[dim]Prefer: cd into a specific project, or pass --root[/dim]\n")
+        if not Confirm.ask("Continue anyway?", default=False):
+            return 0
+
+    # First run and a broken install look identical from here, so there is no
+    # need to detect which one this is: if doctor is unhappy, offer to fix what
+    # is fixable and check again. One retry only, because a second failure of
+    # the same repair means the problem is not the one being repaired.
+    if cmd_doctor(args) != 0:
+        if not offer_repairs(args):
+            return 1
+        console.print()
+        if cmd_doctor(args) != 0:
+            return 1
+
+    # Straight into the session. Typing `airlock` is the request; asking
+    # "start a session?" afterwards would be confirming something already
+    # said. The one prompt kept above is the home-directory guard, which
+    # asks about scope rather than intent.
+    console.print()
+    return cmd_chat(args)
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Construct the command line interface."""
-    parser = argparse.ArgumentParser(
-        prog="airlock",
-        description="A guarded local model that works over one directory.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=(
-            "examples:\n"
-            "  airlock doctor --root .\n"
-            "  airlock chat --root ~/project\n"
-            '  airlock ask --root . "what topics do these files cover?"\n'
-            '  airlock guard "Jane Doe, 555-555-0100"\n'
-            "  airlock serve --root ~/project\n"
-        ),
-    )
-    common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("--root", type=Path, default=Path("."), help="Workspace directory.")
-    common.add_argument("--model", default=DEFAULT_MODEL, help="Local worker model.")
+    # Every shared option carries argument_default=SUPPRESS, so an option
+    # the user did not type is absent from the namespace rather than present
+    # with a default value.
+    common = argparse.ArgumentParser(add_help=False, argument_default=argparse.SUPPRESS)
+    common.add_argument("--root", type=Path, help="Workspace directory (default: .).")
+    common.add_argument("--model", help=f"Local worker model (default: {DEFAULT_MODEL}).")
     common.add_argument(
         "--guard-model",
-        default=DEFAULT_GUARD_MODEL,
         help=f"Guard model (default: {DEFAULT_GUARD_MODEL}). Pass --guard-model "
         "with the worker tag to run both roles on one model.",
     )
@@ -1575,36 +2381,52 @@ def build_parser() -> argparse.ArgumentParser:
     )
     common.add_argument(
         "--spacy-model",
-        default=DEFAULT_SPACY_MODEL,
         help=f"spaCy pipeline behind Presidio (default: {DEFAULT_SPACY_MODEL}). "
         "Use en_core_web_lg for better name recall at ~400MB.",
     )
     common.add_argument(
         "--guardian-model",
-        default=None,
         help="Optional dedicated judging model (for example granite4.1-guardian:8b) "
         "run before the general guard model, using its native yes/no scoring.",
     )
     common.add_argument(
         "--trace",
         type=Path,
-        default=None,
         help="Append guard decisions as JSON lines for later review or scoring. "
         "Records rule names and verdicts only, never message content.",
     )
-    objective = argparse.ArgumentParser(add_help=False)
-    objective.add_argument(
-        "--objective",
-        default="Help the user understand and work with the files in this directory.",
-        help="Framing for the local model.",
+    common.add_argument(
+        "--approve",
+        choices=APPROVE_MODES,
+        help="Who approves tool calls, and which ones (default: hint-writes, which "
+        "becomes gate-writes automatically with --allow-writes). gate-* means airlock "
+        "holds the call until you answer on the terminal and is a real control. hint-* "
+        "means the tools are annotated so the client can prompt, which it is free to "
+        "ignore. none disables both.",
     )
+    objective = argparse.ArgumentParser(add_help=False, argument_default=argparse.SUPPRESS)
+    objective.add_argument("--objective", help="Framing for the local model.")
 
-    sub = parser.add_subparsers(dest="command", required=True)
+    parser = argparse.ArgumentParser(
+        prog="airlock",
+        description="A guarded local model that works over one directory.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        parents=[common, objective],
+        epilog=(
+            "examples:\n"
+            "  airlock                          check the setup, then start a session here\n"
+            "  airlock --root ~/notes           same, over a specific directory\n"
+            "  airlock doctor --root .          check the setup and stop\n"
+            '  airlock ask --root . "what topics do these files cover?"\n'
+            '  airlock guard "Jane Doe, 555-555-0100"\n'
+            "  airlock serve --root ~/project   run as an MCP server\n"
+        ),
+    )
+    parser.set_defaults(func=cmd_quickstart)
+
+    sub = parser.add_subparsers(dest="command")
     sub.add_parser("doctor", parents=[common], help="Check the setup.").set_defaults(
         func=cmd_doctor
-    )
-    sub.add_parser("chat", parents=[common, objective], help="Interactive session.").set_defaults(
-        func=cmd_chat
     )
     p_ask = sub.add_parser("ask", parents=[common, objective], help="One-shot question.")
     p_ask.add_argument("question", help="What to ask.")
@@ -1622,10 +2444,29 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+# Applied after parsing rather than through argparse defaults. See the comment
+# in build_parser for why set_defaults cannot be used for these.
+CLI_DEFAULTS: dict[str, Any] = {
+    "root": Path("."),
+    "model": DEFAULT_MODEL,
+    "guard_model": DEFAULT_GUARD_MODEL,
+    "allow_writes": False,
+    "no_presidio": False,
+    "spacy_model": DEFAULT_SPACY_MODEL,
+    "guardian_model": None,
+    "trace": None,
+    "approve": "hint-writes",
+    "objective": "Help the user understand and work with the files in this directory.",
+}
+
+
 def main(argv: list[str] | None = None) -> int:
     """Entry point. Returns a process exit code."""
     global TRACE_PATH
     args = build_parser().parse_args(argv)
+    for name, value in CLI_DEFAULTS.items():
+        if not hasattr(args, name):
+            setattr(args, name, value)
     TRACE_PATH = getattr(args, "trace", None)
     try:
         return int(args.func(args))

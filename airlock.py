@@ -8,6 +8,7 @@
 #     "presidio-analyzer>=2.2",
 #     "spacy>=3.7",
 #     "detect-secrets>=1.5",
+#     "pypdf>=5.0",
 # ]
 # ///
 """airlock: a guarded local model that works over one directory.
@@ -88,6 +89,13 @@ err_console = Console(stderr=True)
 
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 REQUEST_TIMEOUT = 120
+# How long Ollama holds a model in memory after a request. Ollama's default is
+# five minutes, and it queues every request while swapping one model out for
+# another. airlock alternates between a worker and a differently-sized guard on
+# every single step, so on a machine that cannot hold both it spends more time
+# loading weights than generating. Holding them for the length of a session
+# removes that entirely.
+KEEP_ALIVE = "30m"
 MAX_REVISIONS = 3
 MAX_WORKER_STEPS = 8
 FILE_SLICE_CHARS = 4000
@@ -178,6 +186,19 @@ CONTEXT_SECRET_PATTERNS: dict[str, re.Pattern[str]] = {
     # following "key" is that long in this character class, so "key findings"
     # and "the key to good documentation" do not fire, while "key is <40 chars
     # of base64>" does. Verified against a false-positive corpus.
+    # Identifiers with no distinguishing shape, caught by the words around
+    # them. A bare nine-digit run is a phone number, an order id, or an SSN,
+    # and only the label separates them.
+    "labelled_ssn": re.compile(
+        r"\b(?:ssn|social security(?:\s+number)?|taxpayer id)\b[^\n]{0,24}?"
+        r"\b(\d{9})\b",
+        re.I,
+    ),
+    "labelled_account": re.compile(
+        r"\b(?:account|acct|routing|iban|policy)(?:\s*(?:number|no|#))?\b"
+        r"[^\n]{0,20}?[\s:=#]([0-9][0-9\-]{6,})",
+        re.I,
+    ),
     "labelled_opaque_token": re.compile(
         r"\b(?:secret|api[_-]?key|access[_-]?token|bearer|auth[_-]?token|key|credentials?)"
         r"[^\n]{0,20}?[\s:=\"']([A-Za-z0-9/+_-]{24,})",
@@ -197,7 +218,11 @@ def mask(value: str) -> str:
 PII_PATTERNS: dict[str, re.Pattern[str]] = {
     "email": re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.-]{2,}\b"),
     "phone": re.compile(r"\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b"),
-    "us_ssn": re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),
+    # Hyphens or spaces. A bare nine-digit run is handled by a context rule
+    # below, because on its own it is indistinguishable from any other number.
+    "us_ssn": re.compile(r"\b\d{3}[-\s]\d{2}[-\s]\d{4}\b"),
+    # Employer and payer identification numbers: two digits, hyphen, seven.
+    "us_ein": re.compile(r"\b\d{2}-\d{7}\b"),
     "credit_card": re.compile(r"\b(?:\d[ -]*?){13,19}\b"),
     "iban": re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b"),
     "street_address": re.compile(
@@ -410,6 +435,35 @@ class SandboxError(Exception):
     """Raised when a path escapes the workspace root."""
 
 
+def extract_pdf_text(path: Path) -> str:
+    """Pull the text layer out of a PDF.
+
+    Without this the worker receives raw PDF structure and cannot answer
+    anything about the document, which rules out the formats most personal
+    records arrive in. Extraction only, never rendering or script execution.
+
+    A scanned PDF has no text layer and yields nothing. That is reported
+    plainly rather than as an empty read, because silence would look like an
+    empty document instead of an unreadable one.
+    """
+    try:
+        from pypdf import PdfReader
+    except ImportError:
+        raise SandboxError(
+            "Reading PDFs needs pypdf. Install it, or convert the file to text."
+        )
+    try:
+        pages = [page.extract_text() or "" for page in PdfReader(str(path)).pages]
+    except Exception as exc:  # noqa: BLE001 - any parse failure is a read failure
+        raise SandboxError(f"Cannot parse PDF {path.name}: {exc}")
+    text = "\n".join(pages).strip()
+    if not text:
+        raise SandboxError(
+            f"{path.name} has no text layer, likely a scan. OCR it first."
+        )
+    return text
+
+
 @dataclass
 class Sandbox:
     """The single directory the local model may touch."""
@@ -430,7 +484,14 @@ class Sandbox:
         except OSError as exc:
             raise SandboxError(f"Cannot resolve path: {exc}")
         if not resolved.is_relative_to(self.root):
-            raise SandboxError(f"Path escapes the workspace: {relative}")
+            # The refusal is fed back to the model as input, so it should say
+            # what to do instead. A worker was observed burning an entire step
+            # budget on absolute paths because the error only said "no".
+            hint = relative.lstrip("/").split("/")[-1] or "."
+            raise SandboxError(
+                f"Path escapes the workspace: {relative}. Paths are relative to "
+                f"the workspace root, with no leading slash. Try {hint!r}."
+            )
         return resolved
 
     def list_dir(self, relative: str = ".") -> list[str]:
@@ -449,14 +510,17 @@ class Sandbox:
         return entries
 
     def read_text(self, relative: str) -> str:
-        """Read a bounded slice of a text file."""
+        """Read a bounded slice of a file, extracting text from PDFs."""
         target = self.resolve(relative)
         if not target.is_file():
             raise SandboxError(f"Not a file: {relative}")
-        try:
-            data = target.read_text(encoding="utf-8", errors="replace")
-        except OSError as exc:
-            raise SandboxError(f"Cannot read {relative}: {exc}")
+        if target.suffix.lower() == ".pdf":
+            data = extract_pdf_text(target)
+        else:
+            try:
+                data = target.read_text(encoding="utf-8", errors="replace")
+            except OSError as exc:
+                raise SandboxError(f"Cannot read {relative}: {exc}")
         return (
             data[:FILE_SLICE_CHARS] + "\n... truncated ..."
             if len(data) > FILE_SLICE_CHARS
@@ -560,6 +624,7 @@ def ollama_chat(
         "model": model,
         "prompt": prompt,
         "stream": False,
+        "keep_alive": KEEP_ALIVE,
         # Thinking-capable models (the qwen3 family, deepseek-r1 and similar)
         # turn reasoning ON by default when `think` is unset. The reasoning then
         # goes to a separate `thinking` field and `response` can come back
@@ -711,7 +776,7 @@ def granite_guardian_verdict(model: str, message: str) -> bool | None:
             {"role": "assistant", "content": message},
             {"role": "user", "content": GUARDIAN_BLOCK.format(criteria=GUARDIAN_CRITERIA)},
         ],
-        "stream": False,
+        "stream": False, "keep_alive": KEEP_ALIVE,
         "think": False,
         "options": {"temperature": 0},
     }
@@ -900,8 +965,12 @@ WORKER_SCHEMA: dict[str, Any] = {
 WORKER_PROMPT = """You are a local assistant working inside one directory. You
 answer questions from someone who cannot see these files.
 
+Every path is relative to the directory listed below. Never start a path with
+a slash and never write an absolute path: "W2.pdf" and "notes/w2.pdf" are
+valid, "/W2.pdf" and "/Users/me/W2.pdf" are not.
+
 Choose one action:
-- list: list a directory. Set path.
+- list: list a directory. Set path. Use "." for this directory.
 - read: read a file. Set path.
 - search: find files containing text. Set query.
 - write: write a file. Set path and content.
@@ -910,6 +979,9 @@ Choose one action:
 In your final answer, describe what you found in general terms. Do not include
 names, addresses, phone numbers, email addresses, account numbers, or
 credentials. Refer to people by role.
+
+Files in this directory:
+{files}
 
 Objective: {objective}
 Question: {question}
@@ -992,6 +1064,229 @@ def evaluate_session(session: Session, text: str) -> GuardVerdict:
     )
 
 
+MAX_JOBS_PER_ROUND = 12
+
+# Grammar-constrained shapes for extraction jobs. Asked for a number in prose,
+# a small model returns the number along with whatever sat beside it on the
+# form, and on a W-2 what sits beside box 1 is the employer EIN. The guard then
+# correctly withholds the whole answer and a legitimate figure is lost.
+# Constraining the decoder makes that class of answer unrepresentable rather
+# than merely discouraged.
+JOB_SHAPES: dict[str, dict[str, Any]] = {
+    "number": {
+        "type": "object",
+        "properties": {"value": {"type": "number"}},
+        "required": ["value"],
+    },
+    "digits": {
+        "type": "object",
+        "properties": {"value": {"type": "string", "pattern": "^[0-9-]{1,20}$"}},
+        "required": ["value"],
+    },
+    "line": {
+        "type": "object",
+        "properties": {"value": {"type": "string", "maxLength": 80}},
+        "required": ["value"],
+    },
+}
+
+JOB_PROMPT = """You are reading one document and answering one narrow question
+about it. Do not plan, do not choose tools, do not refer to other documents.
+
+Document:
+{document}
+
+Question: {instruction}
+
+Reply with the answer only. If the document does not contain it, reply exactly:
+NOT PRESENT
+"""
+
+
+def fill_field(sandbox: Sandbox, name: str, field: str, value: str) -> str:
+    """Replace the text after "field:" in a document, in place.
+
+    Used by jobs that move a value from one local document into another
+    without returning it. A taxpayer's SSN belongs on their 1040 and nowhere
+    near the caller, and there is no reason those two facts should conflict.
+    """
+    body = sandbox.read_text(name)
+    pattern = re.compile(rf"^(\s*{re.escape(field)}\s*:).*$", re.M)
+    if not pattern.search(body):
+        raise SandboxError(f"no field {field!r} in that document")
+    sandbox.write_text(name, pattern.sub(rf"\1 {value}", body, count=1))
+    return field
+
+
+def run_jobs(
+    session: Session, jobs: list[dict[str, Any]], on_step: StepCallback | None = None
+) -> dict[str, Any]:
+    """Execute independent single-shot jobs, one document each, then guard.
+
+    The decompose-execute-aggregate shape from the Minions protocol (Narayan
+    et al., ICML 2025), where a 3B local model reaches 93.4% of cloud-only
+    accuracy against 87% for a chat protocol. The agent loop this replaces
+    asked one small model to choose an action, choose a path, carry state
+    across turns and do arithmetic in a single call. Each job here asks it for
+    exactly one fact from exactly one document, with no history and no tools.
+
+    Two deliberate departures from the paper, both for privacy:
+
+    Jobs are structured data, never code. MinionS has the remote model emit
+    Python to build jobs. The remote model here is the untrusted party and
+    must never have code executed on its behalf.
+
+    The concatenation of a round is guarded, not only each result. Splitting a
+    protected value across jobs is a leak that the undivided protocol cannot
+    have: "912", "84" and "7731" each pass, and reassemble on the caller's
+    side into an SSN.
+    """
+
+    def note(action: str, detail: str) -> None:
+        if on_step:
+            on_step(action, detail)
+
+    if not jobs:
+        return envelope(session, "blocked", "", ["no jobs supplied"])
+    if len(jobs) > MAX_JOBS_PER_ROUND:
+        # A cap, because many narrow questions are how a caller fishes for a
+        # value the guard would refuse to release in one piece.
+        return envelope(
+            session, "blocked", "",
+            [f"too many jobs in one round: {len(jobs)} exceeds {MAX_JOBS_PER_ROUND}"],
+        )
+
+    try:
+        documents = sorted(
+            name for name in session.sandbox.list_dir(".") if not name.endswith("/")
+        )
+    except SandboxError as exc:
+        return envelope(session, "blocked", "", [f"cannot list workspace: {exc}"])
+
+    results: list[dict[str, Any]] = []
+    for index, job in enumerate(jobs):
+        doc_index = job.get("document")
+        instruction = str(job.get("extract", "")).strip()
+        target = job.get("into")
+        field = str(job.get("field", "")).strip()
+        literal = job.get("value")
+
+        # A literal supplied by the caller: its own text, so nothing to guard
+        # on the way in, and no source document to validate. Still bounded by
+        # the sandbox on the way out.
+        if literal is not None and isinstance(target, int):
+            if not 0 <= target < len(documents) or not field:
+                results.append({"job": index, "status": "error",
+                                "detail": "value needs a valid into and field"})
+                continue
+            try:
+                fill_field(session.sandbox, documents[target], field, str(literal))
+            except SandboxError as exc:
+                results.append({"job": index, "status": "error", "detail": str(exc)})
+                continue
+            note("write", f"{field} into document {target}")
+            results.append({"job": index, "status": "filled", "field": field})
+            continue
+
+        if not isinstance(doc_index, int) or not 0 <= doc_index < len(documents):
+            results.append({"job": index, "status": "error",
+                            "detail": f"no document {doc_index}"})
+            continue
+        if not instruction:
+            results.append({"job": index, "status": "error", "detail": "empty extract"})
+            continue
+
+        name = documents[doc_index]
+        note("read", name)
+        try:
+            body = session.sandbox.read_text(name)
+        except SandboxError as exc:
+            results.append({"job": index, "status": "error", "detail": str(exc)})
+            continue
+
+        shape = JOB_SHAPES.get(str(job.get("as", "")).lower())
+        try:
+            answer = ollama_chat(
+                session.worker_model,
+                JOB_PROMPT.format(document=body, instruction=instruction),
+                shape,
+            )
+            if shape is not None:
+                if not isinstance(answer, dict) or "value" not in answer:
+                    results.append({"job": index, "status": "error",
+                                    "detail": "model ignored the requested shape"})
+                    continue
+                answer = answer["value"]
+        except RuntimeError as exc:
+            results.append({"job": index, "status": "error",
+                            "detail": f"local model failed: {exc}"})
+            continue
+
+        answer = str(answer).strip()
+
+        # Fill mode. The value goes straight from one local document into
+        # another and is never returned, so the guard has nothing to inspect
+        # and the caller learns only that the field was filled.
+        if isinstance(target, int) and field:
+            # Never write the not-found sentinel into a document. Reporting
+            # "filled" for a field now containing NOT PRESENT is worse than
+            # reporting failure: the caller believes a form is complete and
+            # cannot look at it to find out otherwise.
+            if not answer or answer.upper().startswith("NOT PRESENT"):
+                note("refused", f"{field}: not found in that document")
+                results.append({"job": index, "status": "not_found", "field": field})
+                continue
+            if not 0 <= target < len(documents):
+                results.append({"job": index, "status": "error",
+                                "detail": f"no document {target}"})
+                continue
+            try:
+                fill_field(session.sandbox, documents[target], field, answer)
+            except SandboxError as exc:
+                results.append({"job": index, "status": "error", "detail": str(exc)})
+                continue
+            note("write", f"{field} into document {target}")
+            results.append({"job": index, "status": "filled", "field": field})
+            continue
+
+        verdict = evaluate_session(session, answer)
+        if verdict.approved:
+            note("approved", f"job {index}")
+            results.append({"job": index, "document": doc_index,
+                            "status": "ok", "value": answer})
+        else:
+            session.blocked += 1
+            note("blocked", f"job {index}: {'; '.join(verdict.concerns)[:60]}")
+            results.append({"job": index, "document": doc_index, "status": "withheld",
+                            "detail": sanitise_concerns(verdict.concerns)})
+
+    # The round as a whole. Individually harmless fragments become an
+    # identifier once the caller puts them back together.
+    combined = " ".join(str(r.get("value", "")) for r in results)
+    round_verdict = evaluate_session(session, combined) if combined.strip() else None
+    if round_verdict is not None and not round_verdict.approved:
+        note("blocked", "the round reassembles into protected content")
+        session.blocked += 1
+        return envelope(
+            session, "blocked", "",
+            ["the results are individually safe but reassemble into protected "
+             "content, so the whole round was withheld"],
+        )
+
+    session.exchanges += 1
+    trace("jobs", session=session.session_id, count=len(jobs),
+          withheld=sum(1 for r in results if r.get("status") == "withheld"))
+    return {
+        "session": session.session_id,
+        "status": "ok",
+        "results": results,
+        "note": (
+            "Each value was guarded on its own and the round was guarded as a "
+            "whole. Withheld entries carry no content."
+        ),
+    }
+
+
 def run_worker(
     session: Session, question: str, on_step: StepCallback | None = None
 ) -> dict[str, Any]:
@@ -1007,9 +1302,19 @@ def run_worker(
 
     history: list[str] = []
     draft = ""
+    try:
+        listing = "\n".join(session.sandbox.list_dir(".")) or "(empty)"
+    except SandboxError as exc:
+        listing = f"(unavailable: {exc})"
 
     for _ in range(MAX_WORKER_STEPS):
+        # The file list is given rather than discovered. The caller is not
+        # allowed to know these names, but the worker can already see them, so
+        # making it spend a step on `list` buys nothing and costs a step it
+        # does not have. A 0.8B worker observed spending its entire budget
+        # listing the same directory never reached the question at all.
         prompt = WORKER_PROMPT.format(
+            files=listing,
             objective=session.objective,
             question=question,
             history="\n".join(history) if history else "(nothing yet)",
@@ -2102,11 +2407,23 @@ def build_server(args: argparse.Namespace) -> Any:
         SESSIONS[session.session_id] = session
         counts = sandbox.stats()
         # Counts, never names.
+        try:
+            names = sorted(n for n in sandbox.list_dir(".") if not n.endswith("/"))
+        except SandboxError:
+            names = []
+        # Indices and extensions, never names. The caller needs to be able to
+        # address a document to decompose work over it; it does not need to
+        # know that one of them is called medical_records_2026.pdf.
+        documents = [
+            {"document": i, "kind": (Path(n).suffix.lstrip(".") or "file")}
+            for i, n in enumerate(names)
+        ]
         return {
             "session": session.session_id,
             "workspace": sandbox.root.name,
             "files": counts["files"],
             "directories": counts["directories"],
+            "documents": documents,
             "writes_enabled": sandbox.allow_writes,
             "protocol": (
                 "File and directory names are not disclosed. Ask questions with "
@@ -2231,6 +2548,62 @@ def build_server(args: argparse.Namespace) -> Any:
         if found is None:
             return {"status": "error", "message": "Unknown session."}
         return {"status": "closed", "exchanges": found.exchanges}
+
+    @mcp.tool(annotations=read_only)
+    def airlock_extract(session: str, jobs: list[dict[str, Any]]) -> dict[str, Any]:
+        """Extract specific facts from specific documents, one job per fact.
+
+        Prefer this over airlock_ask for anything with structure. You decide
+        what to extract and from which document; the local model only reads and
+        answers. It is a small model, and asking it to plan is what makes it
+        fail, so keep each job to one fact from one document.
+
+        Address documents by the index from airlock_open. Names are not
+        disclosed and are not needed.
+
+        Each value is screened on its own, and the round is screened as a
+        whole, so splitting a protected value across several jobs does not
+        release it.
+
+        A job takes one of three forms:
+
+            {"document": 1, "extract": "the value in box 1", "as": "number"}
+                read document 1, return the value if the guard allows it.
+                Always set "as" when the answer has a shape: "number" for
+                amounts, "digits" for identifiers, "line" for a short string.
+                It constrains the decoder, so the model cannot return the
+                figure bundled with whatever sat next to it on the page.
+
+            {"document": 1, "extract": "the employee SSN",
+             "into": 0, "field": "SSN"}
+                read document 1, write the value into document 0 next to
+                "SSN:", and return only that the field was filled. The value
+                never reaches you. Use this for anything identifying: you do
+                not need to see a taxpayer's SSN to put it on their return.
+
+            {"into": 0, "field": "1a", "value": "102650.00"}
+                write a value you computed yourself into document 0.
+
+        Args:
+            session: Session id from airlock_open.
+            jobs: Up to 12 jobs, each in one of the forms above.
+
+        Returns:
+            One result per job: ok with a value, filled, withheld, or error.
+        """
+        found = SESSIONS.get(session)
+        if found is None:
+            return {"status": "error", "message": "Unknown session."}
+        err_console.print(
+            Text.assemble(("\n  \u250c jobs    ", "bold cyan"),
+                          (f"{len(jobs)} extraction job(s)", ""),
+                          (f"   [{session[:8]}]", "dim")))
+        result = run_jobs(found, jobs, on_step=serve_reporter(session))
+        kept = sum(1 for r in result.get("results", []) if r.get("status") == "ok")
+        err_console.print(
+            Text.assemble(("  \u2514 sent    ", "bold green"),
+                          (f"{kept} of {len(jobs)} values released", "")))
+        return result
 
     @mcp.tool(annotations=read_only)
     def airlock_guard_check(text: str) -> dict[str, Any]:

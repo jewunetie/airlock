@@ -140,8 +140,9 @@ async def group_a(root: Path) -> None:
         # result directly yields pydantic (field, value) tuples, which is what
         # the first run of this suite tripped over.
         tools = {t.name: t for t in listed.tools}
-        expected = {"airlock_open", "airlock_ask", "airlock_close", "airlock_guard_check"}
-        check("four tools registered", set(tools) == expected, ",".join(sorted(tools)))
+        expected = {"airlock_open", "airlock_ask", "airlock_close",
+                    "airlock_extract", "airlock_guard_check"}
+        check("five tools registered", set(tools) == expected, ",".join(sorted(tools)))
 
         ask = tools.get("airlock_ask")
         if ask is None:
@@ -280,6 +281,20 @@ def group_b(root: Path) -> None:
     check("safe explanations survive sanitising", airlock.sanitise_concerns(safe) == safe)
 
 
+def group_b3() -> None:
+    """Decomposition must not become a way to smuggle a value out in pieces."""
+    print("\nB3. Split-across-jobs reconstruction")
+    fragments = ["912", "84", "7731"]
+    for f in fragments:
+        check(f"fragment {f!r} is harmless alone", not airlock.scan_pii_patterns(f))
+    joined = " ".join(fragments)
+    check("but the round reassembles into an identifier",
+          bool(airlock.scan_pii_patterns(joined)),
+          ",".join(sorted({x["rule"] for x in airlock.scan_pii_patterns(joined)})))
+    check("MAX_JOBS_PER_ROUND caps fishing", airlock.MAX_JOBS_PER_ROUND <= 20,
+          str(airlock.MAX_JOBS_PER_ROUND))
+
+
 def group_b2() -> None:
     """Worker-loop recovery, with the model stubbed so no Ollama is needed."""
     print("\nB2. Worker loop recovery")
@@ -415,6 +430,7 @@ def main() -> int:
         run_group("group A", group_a, True)
         run_group("group B", group_b, False)
         run_group("group B2", lambda _root: group_b2(), False)
+        run_group("group B3", lambda _root: group_b3(), False)
         run_group("group C", group_c, True)
     finally:
         # The workspace holds a symlink to a decoy secret outside it.

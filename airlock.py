@@ -1310,6 +1310,17 @@ def run_jobs(
     except SandboxError as exc:
         return envelope(session, "blocked", "", [f"cannot list workspace: {exc}"])
 
+    # Snapshotted here, before any job runs, not after the loop: a job can
+    # fill_field mid-round (reachable with --allow-writes) and overwrite the
+    # very document a fragment came from, erasing the evidence a post-loop
+    # scan would need. The identifiers present when the round began are
+    # exactly the ones its jobs could have extracted from, so this is the
+    # correct reading, not only the safer one.
+    try:
+        sources = source_identifiers(session.sandbox)
+    except SandboxError as exc:
+        return envelope(session, "blocked", "", [f"cannot read workspace: {exc}"])
+
     results: list[dict[str, Any]] = []
     for index, job in enumerate(jobs):
         doc_index = job.get("document")
@@ -1417,13 +1428,8 @@ def run_jobs(
     # PLAN-round-reassembly.md).
     combined = " ".join(str(r.get("value", "")) for r in results)
     round_verdict = evaluate_session(session, combined) if combined.strip() else None
-
-    try:
-        released = [str(r["value"]) for r in results if r.get("status") == "ok"]
-        reassembled = reassembles_identifier(released, source_identifiers(session.sandbox))
-    except SandboxError:
-        # Cannot confirm the round is safe: fail closed rather than approve.
-        reassembled = True
+    released = [str(r["value"]) for r in results if r.get("status") == "ok"]
+    reassembled = reassembles_identifier(released, sources)
 
     if reassembled or (round_verdict is not None and not round_verdict.approved):
         note("blocked", "the round reassembles into protected content")

@@ -220,13 +220,13 @@ def task3_wiring() -> None:
         finally:
             airlock.ollama_chat = real
 
-    def session_over(root):
+    def session_over(root, allow_writes=False):
         # use_presidio=False and guardian_model=None per task-3-brief.md, so
         # the stubbed model layer is the only model layer in play; the
         # deterministic scanners are not stubbed and still run for real.
         return airlock.Session(
             session_id="t3", objective="x",
-            sandbox=airlock.Sandbox(root=root, allow_writes=False),
+            sandbox=airlock.Sandbox(root=root, allow_writes=allow_writes),
             worker_model="stub-worker", guard_model="stub-guard",
             use_presidio=False, guardian_model=None,
         )
@@ -253,12 +253,15 @@ def task3_wiring() -> None:
         not any(fragment in payload for fragment in ("912", "84", "7731")),
     )
 
-    # Workspace unreadable during the check: one document a job actually
-    # reads, and a second the job never touches but source_identifiers must
-    # still scan (it walks every entry, not just the ones jobs referenced).
-    # Made unreadable after writing: list_dir needs no read permission on the
-    # file itself, only read_text does, so listing still succeeds and the
-    # failure surfaces inside the round-level check, not the job loop.
+    # Workspace unreadable during the check: one document the job would read,
+    # and a second it never touches but source_identifiers must still scan
+    # (it walks every entry, not just the ones jobs referenced). Made
+    # unreadable after writing: list_dir needs no read permission on the file
+    # itself, only read_text does, so listing still succeeds. source_identifiers
+    # is now snapshotted before the job loop runs at all (see the mid-round
+    # write case below for why), so this failure surfaces before the one job
+    # here ever executes, not "during" round-level scoring as the name might
+    # suggest; the round is still blocked either way, which is what matters.
     tmp2 = Path(tempfile.mkdtemp(prefix="airlock-round-guard-test3-"))
     (tmp2 / "doc0.txt").write_text("Just a benign note about scheduling.\n")
     secret_path = tmp2 / "doc1_secret.txt"
@@ -276,6 +279,34 @@ def task3_wiring() -> None:
         )
     finally:
         os.chmod(secret_path, 0o644)
+
+    # Mid-round write cannot erase the evidence. Reachable only with
+    # allow_writes=True: a job can fill_field over the very document a
+    # fragment came from, later in the same round. The identifiers present
+    # when the round BEGAN are what this must check against, since those are
+    # exactly what the round's jobs could have extracted from; scanning the
+    # workspace only after the loop would find the field already overwritten
+    # and see nothing to match the earlier fragments against.
+    tmp5 = Path(tempfile.mkdtemp(prefix="airlock-round-guard-test3-"))
+    (tmp5 / "record.txt").write_text("Notes\nssn: 912-84-7731\nFiled Monday.\n")
+    session = session_over(tmp5, allow_writes=True)
+    jobs = [
+        {"document": 0, "extract": "first three digits of the ssn field"},
+        {"document": 0, "extract": "an unrelated note"},
+        {"value": "redacted", "into": 0, "field": "ssn"},
+        {"document": 0, "extract": "next two digits of the ssn field"},
+        {"document": 0, "extract": "last four digits of the ssn field"},
+    ]
+    # Four worker calls: the third job is a literal fill (has "value" and an
+    # int "into"), which run_jobs services from the literal itself and never
+    # calls ollama_chat for.
+    answers = ["912", "some unrelated note", "84", "7731"]
+    result = run_with_stub(session, jobs, answers)
+    check(
+        "mid-round write cannot erase the evidence: round is still blocked",
+        result.get("status") == "blocked",
+        str(result.get("status")),
+    )
 
     # Same fragments, adjacent this time. The pre-existing
     # evaluate_session(combined) check already catches this arrangement
@@ -337,8 +368,8 @@ def main() -> int:
         print("failed:")
         for name in FAIL:
             print(f"  - {name}")
-    if total < 24:
-        print(f"\nWARNING: only {total} checks ran. Expected at least 24.")
+    if total < 25:
+        print(f"\nWARNING: only {total} checks ran. Expected at least 25.")
         print("Something did not collect. Treat this as a failure, not a pass.")
         return 1
     return 1 if FAIL else 0

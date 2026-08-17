@@ -120,7 +120,7 @@ in this file.
 ## Fix round 2: tiling vs overlap, and the value-distribution finding
 
 Status: done, all green. Closes Task 1.
-Commit: (see below), feat/cross-round-guard, not pushed.
+Commit: 34f674c (feat/cross-round-guard), not pushed.
 
 The coordinator's own head-to-head measurement (tiling 0.0%/0.5% vs overlap
 at 240/60 released values) showed model choice explains a small fraction of

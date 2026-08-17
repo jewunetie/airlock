@@ -22,6 +22,13 @@ present in the workspace rather than a shape. See task-2-brief.md.
 Task 3: wires the Task 2 check into `run_jobs`, driving it end to end with a
 stubbed `ollama_chat` so no local model is required. See task-3-brief.md.
 
+Task 4: closes the padding bypass for numeric identifiers with a digits-only
+projection, tried after the raw substring pass misses. Padding on any side of
+a fragment defeated the raw pass entirely; the projection strips it because
+padding characters are not digits. Restricted to sources that are themselves
+all-digit, so alphanumeric identifiers keep relying on the raw pass alone.
+See task-4-brief.md.
+
 Fix wave (final whole-branch review, see final-fix-report.md):
 
 CRITICAL 1: a workspace over MAX_LISTING_ENTRIES blocked every round, because
@@ -519,6 +526,114 @@ def minor4_generic_secret_value_only() -> None:
     )
 
 
+def task4_digit_projection() -> None:
+    """Task 4: close the padding bypass with a digits-only projection.
+
+    See task-4-brief.md. The shipped substring test is defeated by padding
+    on any side of a fragment, because the padding sits between fragments in
+    the concatenation and breaks the identifier's contiguous digit run.
+    """
+    print("\nTask 4: digits projection closes the padding bypass")
+
+    # Same illustrative SSN as task2, not a real person's identifier.
+    sources = {airlock.normalise_identifier("912-84-7731")}
+
+    check(
+        "suffix-padded fragments among benign jobs: blocked",
+        airlock.reassembles_identifier(
+            ["912 ok", "weather report filler", "84 ok",
+             "another filler note", "7731 ok"],
+            sources,
+        ),
+    )
+    check(
+        "prefix-padded fragments: blocked",
+        airlock.reassembles_identifier(
+            ["value 912", "weather report filler", "value 84",
+             "another filler note", "value 7731"],
+            sources,
+        ),
+    )
+    check(
+        "fragments padded on both sides: blocked",
+        airlock.reassembles_identifier(
+            ["the 912 confirmed", "weather report filler", "the 84 confirmed",
+             "another filler note", "the 7731 confirmed"],
+            sources,
+        ),
+    )
+    check(
+        "fragments wrapped in prose: blocked",
+        airlock.reassembles_identifier(
+            ["The figure recorded here is 912", "weather report filler",
+             "The next figure noted is 84", "another filler note",
+             "The final figure recorded is 7731"],
+            sources,
+        ),
+    )
+
+    # Positive control (CLAUDE.md: assertions about absence need one). Same
+    # sandwich construction as task2's legitimate-round control: each digit
+    # of the SSN sits between two unrelated '5's, so no whole fragment and no
+    # subset concatenation of fragments ever places two of the SSN's digits
+    # contiguously. These fragments are already all-digit, so the digits
+    # projection computes the same concatenations as the raw pass here; this
+    # confirms the projection pass does not introduce a false block the raw
+    # pass did not already avoid.
+    legitimate_round = [f"5{d}5" for d in sorted(sources)[0]] + ["203", "410", "999"]
+    check(
+        "legitimate numeric round of twelve is not blocked",
+        not airlock.reassembles_identifier(legitimate_round, sources),
+    )
+
+    # The exact shape that took the rejected substring-DP design to 100%
+    # false blocking (task-4-brief.md). Twelve 16-digit values built from a
+    # narrow digit alphabet (0-6) that never includes '9'; the source is
+    # sixteen '9's, so no subset concatenation, however assembled, can ever
+    # contain it: it would need a contiguous run of sixteen nines, and there
+    # is no nine anywhere in the round.
+    sixteen_digit_source = {"9" * 16}
+    twelve_16digit_values = [f"{i:016d}" for i in range(12)]
+    check(
+        "twelve 16-digit values, none reconstructing a source: not blocked",
+        not airlock.reassembles_identifier(twelve_16digit_values, sixteen_digit_source),
+    )
+
+    # A generated API key, never a literal (CLAUDE.md). Split across jobs
+    # with benign filler between the pieces, same shape as minor4's split but
+    # with a benign job value interleaved. The key mixes letters and digits,
+    # so its normalised form is not all-digit and never enters the numeric
+    # set; this must still be caught by the raw pass alone.
+    api_key = "k" + fake_secret_value(19)
+    key_source = {airlock.normalise_identifier(api_key)}
+    third = len(api_key) // 3
+    check(
+        "a generated API key split across jobs: still blocked via the raw pass",
+        airlock.reassembles_identifier(
+            [api_key[:third], "unrelated filler note", api_key[third:2 * third],
+             "another filler note", api_key[2 * third:]],
+            key_source,
+        ),
+    )
+
+    # A round with only alphanumeric sources and no numeric ones. The key
+    # embeds a six-digit run ("482910") inside letters, so its normalised
+    # form is not all-digit and is excluded from the numeric set by
+    # construction, however this key's OWN digit run gets split. This is a
+    # stronger regression guard than an unrelated digit round would be: a
+    # broken implementation that projected every candidate's digits instead
+    # of only whole-source all-digit ones would wrongly catch this.
+    embedded_digit_key = "k482910" + fake_secret_value(13)
+    alnum_only_source = {airlock.normalise_identifier(embedded_digit_key)}
+    check(
+        "round with only alphanumeric sources: projection does not run, not blocked",
+        not airlock.reassembles_identifier(
+            ["482", "unrelated filler note", "910"],
+            alnum_only_source,
+        ),
+    )
+
+
 def main() -> int:
     print(f"airlock: {AIRLOCK}")
 
@@ -536,6 +651,7 @@ def main() -> int:
     run("critical2_no_filename_leak", critical2_no_filename_leak)
     run("important3_length_bound", important3_length_bound)
     run("minor4_generic_secret_value_only", minor4_generic_secret_value_only)
+    run("task4_digit_projection", task4_digit_projection)
 
     total = len(PASS) + len(FAIL) + len(SKIP)
     print(f"\n{len(PASS)} passed, {len(FAIL)} failed, {len(SKIP)} skipped ({total} checks)")
@@ -543,8 +659,8 @@ def main() -> int:
         print("failed:")
         for name in FAIL:
             print(f"  - {name}")
-    if total < 35:
-        print(f"\nWARNING: only {total} checks ran. Expected at least 35.")
+    if total < 43:
+        print(f"\nWARNING: only {total} checks ran. Expected at least 43.")
         print("Something did not collect. Treat this as a failure, not a pass.")
         return 1
     return 1 if FAIL else 0

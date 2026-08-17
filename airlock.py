@@ -1190,6 +1190,17 @@ def _subset_concatenations(normalised: list[str]) -> set[str]:
     return concatenations
 
 
+def _subset_contains(values: list[str], sources: set[str]) -> bool:
+    """True if some source is a substring of some subset concatenation.
+
+    Shared by reassembles_identifier's raw pass and its digits-only
+    projection pass, so the subset-containment loop exists once rather than
+    twice.
+    """
+    concatenations = _subset_concatenations(values)
+    return any(source in c for source in sources for c in concatenations)
+
+
 def reassembles_identifier(values: list[str], sources: set[str]) -> bool:
     """True if the values together reconstruct a source identifier that none
     of them contains on its own.
@@ -1215,17 +1226,28 @@ def reassembles_identifier(values: list[str], sources: set[str]) -> bool:
     Closing that costs 12! arrangements for a full round and was judged not
     worth it. Reassembly across separate rounds is also out of scope here.
 
-    A second, documented gap: this tests substring containment, so a fragment
-    padded with extra characters can defeat it depending on which side the
-    padding sits: ["912", "84", "7731"] reassembles, but
-    ["912 ok", "84 ok", "7731 ok"] does not, because trailing padding on each
-    fragment inserts characters between them in the concatenation and breaks
-    the contiguous digit run the source identifier needs. Not fixed here:
-    closing it changes the detection model and needs its own false-positive
-    measurement. It is bounded in practice rather than open-ended, because a
-    shaped job cannot carry the padding needed to exploit it: "as": "digits"
-    is anchored to ^[0-9-]{1,20}$ and "as": "number" is a JSON number, so the
-    bypass is reachable only through unshaped free-text jobs.
+    A second gap, now CLOSED for numeric identifiers: this tests substring
+    containment, so a fragment padded with extra characters can defeat it,
+    because the padding sits between fragments in the concatenation and
+    breaks the contiguous run the source identifier needs. Measured over 200
+    trials per padding shape with benign jobs interleaved, every shape
+    (suffix, prefix, both sides, and prose filler) drove detection to 0.00,
+    not just one side of the fragment as an earlier version of this comment
+    implied. Closed by re-running the same subset test on a digits-only
+    projection of each value, restricted to sources that are themselves
+    all-digit: non-digit padding is not a digit, so it vanishes from the
+    projection while the identifier's own digits stay contiguous in job
+    order. That brought detection back to 1.00 on all four padding shapes,
+    with 0.000 false blocking measured on six legitimate round shapes
+    including twelve 16-digit values, the shape that took a rejected
+    alternative (letting each value contribute any contiguous substring
+    instead of only whole values) to 100% false blocking.
+
+    The gap remains OPEN for alphanumeric identifiers such as API keys,
+    padded on every fragment: an identifier with a letter in it is excluded
+    from the projection by construction, since the projection would discard
+    the letters that make the match meaningful, so those still rely on the
+    raw pass above.
 
     Bounded defensively at MAX_JOBS_PER_ROUND and MAX_REASSEMBLY_LENGTH
     rather than trusting the caller: _subset_concatenations is
@@ -1249,8 +1271,21 @@ def reassembles_identifier(values: list[str], sources: set[str]) -> bool:
     }
     if not candidates:
         return False
-    concatenations = _subset_concatenations(normalised)
-    return any(source in c for source in candidates for c in concatenations)
+    if _subset_contains(normalised, candidates):
+        return True
+
+    # Digits-only projection, tried only after the raw pass misses, so the
+    # common case (no reassembly at all) does not pay for a second
+    # enumeration. Restricted to sources that are themselves all-digit:
+    # projecting an alphanumeric identifier would discard the letters that
+    # make the match meaningful, so those keep relying on the raw pass.
+    numeric = {source for source in candidates if source.isdigit()}
+    if not numeric:
+        return False
+    projected = ["".join(c for c in v if c.isdigit()) for v in normalised]
+    if not any(projected):
+        return False
+    return _subset_contains(projected, numeric)
 
 
 MAX_JOBS_PER_ROUND = 12

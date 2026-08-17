@@ -397,6 +397,53 @@ PII_DETECTOR_MODEL = "LiquidAI/LFM2.5-Encoder-350M-PII-Detector"
 # under trust_remote_code=True below.
 PII_DETECTOR_REVISION = "b8c9cf3d2d6ae52501b35a27ba46f271449c9ce2"
 PII_DETECTOR_THRESHOLD = 0.5
+
+# Blocking policy for the detector's 40-type taxonomy. The Presidio layer
+# this replaced had BLOCKING_ENTITIES, a curated set with a one-line reason
+# for each exclusion (see git history before the swap: "DATE_TIME and URL
+# are deliberately excluded: they fire constantly on ordinary text and would
+# make the guard useless through false positives"). That concept was dropped
+# in the swap, and PLAN-liquid-guard.md's fix round 2 is the reason it is
+# back: scan_pii_model was blocking on ANY non-O label with no notion of
+# which ones warrant it or at what confidence, and 2.7% of bare
+# number-shaped job answers (measured: 8/300 sampled) false-flagged as
+# contact.postal_code, landing squarely on the tax-extraction workflow this
+# tool exists for.
+#
+# No entity type is excluded outright, unlike Presidio's set. Measurement
+# found no category here that fires on ordinary text the way DATE_TIME/URL
+# did: this taxonomy has no generic date/time label to begin with, and
+# sample URL-bearing sentences never triggered online.url at all. The
+# precision problem measured was confidence-level on one type, not
+# category-level noise, so the fix below is a per-entity threshold, not an
+# exclusion list. If a category-level problem is measured later, exclude it
+# here with the same one-sentence-justification bar this comment describes,
+# rather than lowering its threshold to the point of never firing.
+#
+# Also measured, and recorded rather than fixed: identity.person_name fires
+# on bare single common nouns that double as given names ("cherry" 0.90,
+# "kiwi" 0.96, "lemon" 0.64, "olive" 0.98), while business vocabulary and
+# short prose measured clean (0/27 sampled). This is why
+# tests/test_round_guard.py's twelve-item benign-round fixture uses
+# business/operational words rather than a fruit list: the detector was
+# doing its job on an unrepresentative fixture, not regressing. Narrow
+# enough, and rare enough in what a real extraction job returns, that it did
+# not meet the bar for a threshold override the way contact.postal_code did.
+#
+# Mirrors POLICY_LINTER_RULE_THRESHOLDS's shape on the linter side: a sparse
+# override dict, PII_DETECTOR_THRESHOLD as the default for every entity not
+# listed.
+PII_DETECTOR_ENTITY_THRESHOLDS: dict[str, float] = {
+    # Measured directly against this model (scratch script, not committed):
+    # bare context-free numbers that false-flag as a postal code score
+    # 0.524-0.565 (matches the 8/300 sweep above); real postal codes and
+    # addresses in surrounding context score 0.845-0.998. One real address
+    # in the sweep scored 0.000 (already a recall miss below any threshold
+    # considered, so raising this cannot cost that case further). 0.70 sits
+    # between the two measured clusters with margin on both sides.
+    "contact.postal_code": 0.70,
+}
+
 # max_length below (512 tokens) is a hard model limit. Measured against the
 # real tokenizer: ordinary English runs about 5 chars/token, but a dense
 # alphanumeric blob, the shape of the credentials PII_PATTERNS and
@@ -470,7 +517,10 @@ def _load_pii_detector(device: str = "auto") -> tuple[Any, Any, Any, str, dict[i
 
 
 def _scan_pii_region(chunk: str) -> list[str]:
-    """Score one region for entity types above PII_DETECTOR_THRESHOLD.
+    """Score one region for entity types above their threshold.
+
+    Each entity's confidence is checked against PII_DETECTOR_ENTITY_THRESHOLDS,
+    falling back to PII_DETECTOR_THRESHOLD for any entity not listed there.
 
     PII_CHUNK_CHARS assumes a measured worst-case ratio (~1.06 chars/token
     over ASCII identifier-shaped samples), but that is not a proven floor:
@@ -510,9 +560,11 @@ def _scan_pii_region(chunk: str) -> list[str]:
     found: list[str] = []
     for c, i in zip(conf.tolist(), ids.tolist()):
         label = id2label.get(i, "O")
-        if label == "O" or c < PII_DETECTOR_THRESHOLD:
+        if label == "O":
             continue
         entity = re.sub(r"^[BIES]-", "", label)
+        if c < PII_DETECTOR_ENTITY_THRESHOLDS.get(entity, PII_DETECTOR_THRESHOLD):
+            continue
         if entity not in found:
             found.append(entity)
     return found

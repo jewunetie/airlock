@@ -83,6 +83,24 @@ CLEAN_POLICY_TEXT = (
 # real model, not guessed.
 BORDERLINE_FINANCIAL_TEXT = "Money has been a bit tight lately with all the bills piling up."
 
+# PLAN-liquid-guard.md fix round 2: the exact tax-workflow defect. run_jobs
+# hands the guard str(answer).strip() for a "number"-shaped job, i.e. a bare,
+# context-free numeric string. Measured against the real model:
+# contact.postal_code = 0.545, inside the coordinator's measured
+# false-positive cluster (0.524-0.565, 8/300 sampled). Below the shipped
+# PII_DETECTOR_ENTITY_THRESHOLDS override of 0.70, above the flat
+# PII_DETECTOR_THRESHOLD of 0.5 the bug shipped at.
+PII_POSTAL_FALSE_POSITIVE_TEXT = "94250.0"
+# A real postal code with the surrounding context a genuine disclosure would
+# have. Measured: contact.postal_code = 0.911, inside the coordinator's
+# measured true-positive cluster (0.845-0.998). Above 0.70, so recall on an
+# actual postal-code disclosure must survive the same override that silences
+# the bare-number false positive above.
+PII_POSTAL_TRUE_POSITIVE_TEXT = (
+    "Please mail the refund check to zip code 94250, care of the Franchise "
+    "Tax Board."
+)
+
 # Filler long enough to push a trailing identifier past a single 512-token
 # window under the real PII detector tokenizer: measured at 642 tokens for
 # this exact filler, comfortably past the model's own truncation limit, so an
@@ -244,6 +262,61 @@ def policy_linter_cases(unavailable: str) -> None:
         check("per-rule threshold override: fires at 0.50", "rule1" in rules, ",".join(sorted(rules)))
     finally:
         airlock.POLICY_LINTER_RULE_THRESHOLDS = original
+
+
+def pii_entity_threshold_case(unavailable: str) -> None:
+    """PLAN-liquid-guard.md fix round 2: PII_DETECTOR_ENTITY_THRESHOLDS
+    exists because the flat PII_DETECTOR_THRESHOLD false-flagged 2.7% of
+    bare number-shaped job answers (measured 8/300) as contact.postal_code,
+    landing on the tax-extraction workflow test_tax_e2e.py exercises. Same
+    override-mechanism shape as policy_linter_cases's per-rule test above:
+    checks the shipped value, then proves the dict is read live rather than
+    the fix happening to work only at the one value committed.
+    """
+    print("\nPII detector: per-entity threshold override (fix round 2)")
+    if unavailable:
+        for name in (
+            "bare number false positive: silent at the shipped threshold",
+            "postal code in context: still fires at the shipped threshold",
+            "override mechanism: raising the threshold silences a real postal code",
+            "override mechanism: lowering the threshold reproduces the false positive",
+        ):
+            skip(name, unavailable)
+        return
+
+    rules = {f["rule"] for f in airlock.scan_pii_model(PII_POSTAL_FALSE_POSITIVE_TEXT)}
+    check(
+        "bare number false positive: silent at the shipped threshold",
+        "contact.postal_code" not in rules,
+        ",".join(sorted(rules)) or "none",
+    )
+
+    rules = {f["rule"] for f in airlock.scan_pii_model(PII_POSTAL_TRUE_POSITIVE_TEXT)}
+    check(
+        "postal code in context: still fires at the shipped threshold",
+        "contact.postal_code" in rules,
+        ",".join(sorted(rules)) or "none",
+    )
+
+    original = dict(airlock.PII_DETECTOR_ENTITY_THRESHOLDS)
+    try:
+        airlock.PII_DETECTOR_ENTITY_THRESHOLDS = {"contact.postal_code": 0.98}
+        rules = {f["rule"] for f in airlock.scan_pii_model(PII_POSTAL_TRUE_POSITIVE_TEXT)}
+        check(
+            "override mechanism: raising the threshold silences a real postal code",
+            "contact.postal_code" not in rules,
+            ",".join(sorted(rules)),
+        )
+
+        airlock.PII_DETECTOR_ENTITY_THRESHOLDS = {"contact.postal_code": 0.50}
+        rules = {f["rule"] for f in airlock.scan_pii_model(PII_POSTAL_FALSE_POSITIVE_TEXT)}
+        check(
+            "override mechanism: lowering the threshold reproduces the false positive",
+            "contact.postal_code" in rules,
+            ",".join(sorted(rules)),
+        )
+    finally:
+        airlock.PII_DETECTOR_ENTITY_THRESHOLDS = original
 
 
 def chunking_cases(unavailable: str) -> None:
@@ -786,6 +859,7 @@ def main() -> int:
     run("pii_detector_cases", pii_detector_cases, unavailable)
     run("containment_positive_control_case", containment_positive_control_case)
     run("policy_linter_cases", policy_linter_cases, unavailable)
+    run("pii_entity_threshold_case", pii_entity_threshold_case, unavailable)
     run("chunking_cases", chunking_cases, unavailable)
     run("prefix_derivation_case", prefix_derivation_case)
     run("fail_closed_case", fail_closed_case)
@@ -806,12 +880,13 @@ def main() -> int:
         print("failed:")
         for name in FAIL:
             print(f"  - {name}")
-    # Raised from 38 to 51: Task 4 adds check()'s formatting (2), the
+    # Raised from 38 to 51 (Task 4: check()'s formatting (2), the
     # banner/config-screen smoke case (4), and cmd_doctor's real encoder
-    # checks (7, gated on model+Ollama availability). Per CLAUDE.md, a suite
-    # that silently collects fewer checks reads like one that passed.
-    if total < 51:
-        print(f"\nWARNING: only {total} checks ran. Expected at least 51.")
+    # checks (7)), then to 55 (PLAN-liquid-guard.md fix round 2:
+    # pii_entity_threshold_case, 4 checks). Per CLAUDE.md, a suite that
+    # silently collects fewer checks reads like one that passed.
+    if total < 55:
+        print(f"\nWARNING: only {total} checks ran. Expected at least 55.")
         print("Something did not collect. Treat this as a failure, not a pass.")
         return 1
     # Skips are reported, not failed, per CLAUDE.md. But a run where every

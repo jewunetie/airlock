@@ -71,6 +71,7 @@ import textwrap
 import urllib.error
 import urllib.request
 import uuid
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
 from functools import lru_cache
@@ -1576,36 +1577,98 @@ def reassembles_identifier(values: list[str], sources: set[str]) -> bool:
     return _subset_contains(projected, numeric)
 
 
-def _fold_source_spans(
-    state: dict[str, set[int]], source: str, values: list[str], key: str | None = None
-) -> bool:
-    """Merge every occurrence of each value into one source's tracked spans.
+# Fix round 1 (coordinator review): plain coverage is not enough. State
+# never forgets across a session, so with no limit on how many pieces a
+# covering may use, a long enough benign session eventually covers some
+# workspace source by pure coincidence, and a long-lived session with no
+# eviction on SESSIONS would eventually block everything. Measured over 200
+# synthetic benign sessions per length before this bound existed (uncapped
+# piece count): 12 released values 0/200, 30 values 1/200 (0.5%), 60 values
+# 3/200 (1.5%), 240 values 23/200 (11.5%). The discriminator is how many
+# distinct pieces the cheapest covering needs: the real attack (three
+# fragments of one identifier) always needs exactly 3, while the false
+# positives at 240 values needed at least 6 pieces each (6, 14, 15 and 16
+# across the 23 sampled), and nothing coincidentally covered at 30 values in
+# 6 pieces or fewer. REASSEMBLY_PIECE_BOUND sits inside that gap: it catches
+# the 3-piece attack and, in that same measurement, did not fire on any
+# benign session at any length sampled.
+#
+# This project's own independent re-measurement (task-1-report.md, fix
+# round 1) used a different synthetic generator and got a materially
+# different picture: minimum coincidental piece counts clustered much lower
+# (commonly 4-7 rather than 6+), so the bound caught fewer of them. The
+# discriminator's size depends on how long a typical released value is
+# relative to a source's length, which this file cannot know in advance;
+# see that report for the numbers and the residual this leaves.
+REASSEMBLY_PIECE_BOUND = 5
 
-    `state[key]` (key defaults to `source` itself) holds a set of integers
-    that, read in sorted order two at a time, are the (start, end) bounds of
-    every maximal span of `source` already known reachable from values
-    released so far. Each new value is matched against every position it
-    occurs at in `source` (there may be none, one, or several); each match
-    becomes a candidate span, and all spans, old and new, are re-merged by
-    the ordinary interval-merge rule: two spans that touch or overlap become
-    one. Merging is commutative, so it does not matter what order the spans
-    arrived in, only which spans have arrived, which is what gives
-    advance_reassembly_state its order independence.
+
+def _min_pieces(edges: set[tuple[int, int]], target: int) -> int | None:
+    """Fewest edges needed to reach `target` from position 0.
+
+    `edges` is a directed graph on integer positions 0..target, where an
+    edge (start, end) means some released value matched source[start:end]
+    exactly. Every edge costs one piece, so plain BFS (not Dijkstra; no
+    weights to relax) finds the shortest path in edge count. Returns None
+    if `target` is not reachable from 0 with the edges given.
+
+    O(V + E) per call: V is at most len(source) + 1 and E is bounded by
+    _fold_source_edges' own bound, so this stays polynomial in source
+    length and released-value count, never exponential in either.
+    """
+    if target == 0:
+        return 0
+    adjacency: dict[int, list[int]] = {}
+    for start, end in edges:
+        adjacency.setdefault(start, []).append(end)
+    visited = {0}
+    frontier: deque[tuple[int, int]] = deque([(0, 0)])
+    while frontier:
+        pos, hops = frontier.popleft()
+        for nxt in adjacency.get(pos, ()):
+            if nxt == target:
+                return hops + 1
+            if nxt not in visited:
+                visited.add(nxt)
+                frontier.append((nxt, hops + 1))
+    return None
+
+
+def _fold_source_edges(
+    state: dict[str, set[int]], source: str, values: list[str], key: str | None = None
+) -> int | None:
+    """Discover new value/source matches and return the cheapest covering.
+
+    `state[key]` (key defaults to `source`) holds a set of integers that
+    each encode one discovered (start, end) edge: some released value
+    matched source[start:end] exactly, packed as `(start << 32) | end` so a
+    directed edge with two endpoints fits the `set[int]` shape without a
+    second collection. Each new value is matched against every position it
+    occurs at in `source` (there may be none, one, or several); every match
+    is folded into the edge set, old and new together, and
+    _min_pieces then finds the fewest edges needed to span the whole
+    source, or None if it cannot be spanned yet.
+
+    Order-independent by construction, same as the interval-merge design
+    this replaces: an edge is recorded by where it sits in `source`, not by
+    what already connects to it, so a value released before the piece that
+    would make it reachable is not discarded, only added, and a later value
+    can still complete a path through it.
 
     Shared by advance_reassembly_state's raw pass and its digits-only
-    projection pass; `key` lets the digit pass keep a separate span set from
+    projection pass; `key` lets the digit pass keep a separate edge set from
     the raw pass under the same source, since the two passes match different
-    projections of the same values and merging them would be meaningless.
+    projections of the same values.
 
-    Bounded rather than growing with how many values have been folded in:
-    every insertion either extends or merges into an existing span or is
-    discarded outright (no occurrence found), so the number of stored spans
-    for one source cannot exceed roughly its own length. State size tracks
-    identifier length, not session length.
+    Bounded, not growing with how many values have been folded in: distinct
+    (start, end) pairs for one source are capped by that source's own
+    length (at most roughly len(source) choose 2), so flooding a session
+    with many more values than the source has characters cannot grow this
+    past that geometric ceiling. State size tracks identifier length, not
+    session length.
     """
     state_key = key if key is not None else source
-    points = sorted(state.get(state_key, set()))
-    spans = [(points[i], points[i + 1]) for i in range(0, len(points), 2)]
+    edges = {(code >> 32, code & 0xFFFFFFFF) for code in state.get(state_key, set())}
     for value in values:
         if not value or len(value) > len(source):
             continue
@@ -1614,17 +1677,10 @@ def _fold_source_spans(
             idx = source.find(value, start)
             if idx == -1:
                 break
-            spans.append((idx, idx + len(value)))
+            edges.add((idx, idx + len(value)))
             start = idx + 1
-    spans.sort()
-    merged: list[tuple[int, int]] = []
-    for span_start, span_end in spans:
-        if merged and span_start <= merged[-1][1]:
-            merged[-1] = (merged[-1][0], max(merged[-1][1], span_end))
-        else:
-            merged.append((span_start, span_end))
-    state[state_key] = {n for span in merged for n in span}
-    return (0, len(source)) in merged
+    state[state_key] = {(s << 32) | e for s, e in edges}
+    return _min_pieces(edges, len(source))
 
 
 def advance_reassembly_state(
@@ -1632,16 +1688,17 @@ def advance_reassembly_state(
 ) -> bool:
     """Fold newly released values into per-source reachability.
 
-    Mutates state. Returns True when any source has become fully
-    reconstructible from everything released this session, not just this
-    round.
+    Mutates state. Returns True when any source has become reconstructible
+    from at most REASSEMBLY_PIECE_BOUND distinct pieces of everything
+    released this session, not just this round.
 
     reassembles_identifier above bounds one round: a caller issuing several
     rounds of one fragment each defeats it, because nothing carried released
     values forward from one call to the next. This closes that gap by
-    tracking, per source identifier, which contiguous spans of it are
-    demonstrably reachable from values released anywhere in the session so
-    far, and folding in each newly released value's matches as it arrives.
+    tracking, per source identifier, every discovered value/source match as
+    a directed edge between two positions in the source, and asking, each
+    time a new value arrives, for the cheapest (fewest-edge) way to span the
+    source end to end.
 
     Order-independent by construction, and deliberately so: the caller
     chooses what order to issue jobs in, and can reassemble whatever pieces
@@ -1653,12 +1710,23 @@ def advance_reassembly_state(
     the fragment that would make it reachable gets tested against a reach
     set that does not know about that fragment yet, and is never retried
     once the later fragment arrives, so a caller that releases the pieces of
-    an identifier in reverse order would defeat it. _fold_source_spans
-    avoids that by matching every new value against every position it
-    occurs in the source directly, independent of what has already been
-    reached, and merging the resulting spans; two spans merge if they touch,
-    regardless of which arrived first, so the reverse case above still
-    completes on its final fragment, same as the forward case.
+    an identifier in reverse order would defeat it. Recording every match as
+    an edge and re-running the shortest path avoids that: an edge's position
+    in the graph does not depend on when it arrived, so the reverse case
+    above still completes on its final fragment, same as the forward case.
+
+    Coverage alone is not the completion test, and that is deliberate (fix
+    round 1): unlike reassembles_identifier's single-round check, this state
+    accumulates for as long as the session runs, so with no limit on how
+    many pieces a covering may use, a long enough benign session eventually
+    covers some source by coincidence. REASSEMBLY_PIECE_BOUND catches a real
+    split (attackers pay a job and a round per extra fragment, so they keep
+    the count low) while giving coincidental, many-fragment coverage room to
+    occur without blocking. See the constant's own comment for the
+    measurement behind the number, and task-1-report.md fix round 1 for the
+    residual: an attacker who pads a split past the bound evades this
+    specific check, still one job and one round costlier per extra piece,
+    and still guarded round by round on the way out regardless.
 
     Applied twice per source, matching reassembles_identifier's own two
     passes: once against the raw released values, and, for a source that is
@@ -1670,11 +1738,12 @@ def advance_reassembly_state(
     that makes it meaningful.
 
     No exponential term: unlike keeping every released value and re-running
-    subset enumeration over the union (2**session length), a span set for
-    one source is bounded by roughly that source's own length regardless of
-    how many rounds or values the session has seen, so this scales with the
-    workspace's identifiers, not with session length. See
-    _fold_source_spans for the bound.
+    subset enumeration over the union (2**session length), the edge set for
+    one source is bounded by roughly that source's own length squared
+    regardless of how many rounds or values the session has seen, and
+    _min_pieces is O(V + E) over that same bounded graph, so both scale with
+    the workspace's identifiers, not with session length. See
+    _fold_source_edges for the state bound.
     """
     completed = False
     normalised = [normalise_identifier(v) for v in values]
@@ -1682,10 +1751,14 @@ def advance_reassembly_state(
     for source in sources:
         if not source:
             continue
-        if _fold_source_spans(state, source, normalised):
+        pieces = _fold_source_edges(state, source, normalised)
+        if pieces is not None and pieces <= REASSEMBLY_PIECE_BOUND:
             completed = True
         if source.isdigit():
-            if _fold_source_spans(state, source, projected, key="digits:" + source):
+            digit_pieces = _fold_source_edges(
+                state, source, projected, key="digits:" + source
+            )
+            if digit_pieces is not None and digit_pieces <= REASSEMBLY_PIECE_BOUND:
                 completed = True
     return completed
 

@@ -14,17 +14,27 @@
 reassembles_identifier bounds one round: a caller issuing three rounds of one
 fragment each defeats it, because Session carried counters, not released
 values, between rounds. advance_reassembly_state closes that by tracking, per
-source identifier, which contiguous spans of it are reachable from values
-released so far in the session, folding in each newly released value as it
-arrives. run_jobs runs it after the existing per-round check, so a round that
-completes a cross-session reconstruction blocks even though every round on
-its own, and every job in it, was individually clean.
+source identifier, every discovered value/source match as an edge between two
+positions, and asking for the cheapest way to span the source end to end.
+run_jobs runs it after the existing per-round check, so a round that completes
+a cross-session reconstruction in REASSEMBLY_PIECE_BOUND pieces or fewer
+blocks, even though every round on its own, and every job in it, was
+individually clean.
+
+Fix round 1 (coordinator review): the first cut tested coverage alone (any
+number of pieces), which never forgets across a session and so false-blocks
+more often the longer a session runs. REASSEMBLY_PIECE_BOUND, and the
+shortest-path search in _min_pieces/_fold_source_edges that computes the
+cheapest covering rather than merely whether one exists, are this round's
+fix. See task-1-report.md fix round 1 for the false-block-rate measurement
+behind the bound and its residual.
 """
 
 from __future__ import annotations
 
 import importlib.util
 import json
+import random
 import sys
 import tempfile
 from pathlib import Path
@@ -133,6 +143,114 @@ def unit_reverse_order_case() -> None:
     )
 
 
+def unit_middle_first_order_case() -> None:
+    """Third distinct ordering (fix round 1: "in all three orderings"),
+    completing natural (unit_natural_order_case) and reverse
+    (unit_reverse_order_case) above: the middle fragment first, then the
+    last, then the first.
+    """
+    print("\nUnit: same three fragments, middle-first round order")
+
+    state: dict[str, set[int]] = {}
+    sources = {airlock.normalise_identifier(SSN)}
+
+    r1 = airlock.advance_reassembly_state(state, ["84"], sources)
+    r2 = airlock.advance_reassembly_state(state, ["7731"], sources)
+    r3 = airlock.advance_reassembly_state(state, ["912"], sources)
+
+    check("first round (middle fragment) alone does not complete it", not r1)
+    check("second round still does not complete it", not r2)
+    check("third round completes it: a third distinct ordering", r3)
+
+
+def unit_many_pieces_no_block_case() -> None:
+    """Fix round 1, required case: a source covered only by many pieces
+    does not block. All nine digits of the SSN released one character at a
+    time, across nine rounds: fully coverable in principle (every position
+    gets its own one-character edge), but the cheapest covering needs nine
+    pieces, above REASSEMBLY_PIECE_BOUND (5), so this must not block. This
+    is the fix's stated residual, not a bug: an attacker who pads a split
+    past the bound evades this specific check, at the cost of a job and a
+    round per extra piece, and is still guarded round by round regardless.
+    """
+    print("\nUnit: a source covered only by many pieces does not block")
+
+    state: dict[str, set[int]] = {}
+    sources = {airlock.normalise_identifier(SSN)}
+    source = next(iter(sources))
+
+    blocked = False
+    for ch in source:
+        if airlock.advance_reassembly_state(state, [ch], sources):
+            blocked = True
+
+    check(
+        "nine single-character pieces do not block: minimum pieces (9) exceeds the bound (5)",
+        not blocked,
+    )
+
+
+BENIGN_WORDS = [
+    "forecast", "quarterly", "template", "summary", "agenda", "payroll",
+    "contract", "vendor", "documentation", "kitchen", "invoice", "headcount",
+]
+
+
+def _benign_value(rng: random.Random) -> str:
+    """One synthetic released value for the long-session regression control
+    below: a digit run of varied, realistic length 40% of the time (a box
+    number, an amount, a date fragment), an ordinary business word
+    otherwise. Calibrated in task-1-report.md fix round 1 against this
+    worktree's own advance_reassembly_state; not a copy of the coordinator's
+    unseen harness, which measured different numbers (see that report).
+    """
+    if rng.random() < 0.4:
+        length = rng.choices([1, 2, 3, 4, 5, 6, 7, 8], weights=[3, 4, 4, 3, 2, 2, 1, 1])[0]
+        lo = 0 if length == 1 else 10 ** (length - 1)
+        hi = 10 ** length - 1
+        return str(rng.randint(lo, hi))
+    return rng.choice(BENIGN_WORDS)
+
+
+def unit_long_benign_session_case() -> None:
+    """Fix round 1, required case: regression control for the false-block-
+    growth measurement. seed=0 against one freshly generated 9-digit source
+    was found, by search, to complete under the PRE-fix design (uncapped
+    piece count) at round 13 of 20, purely by coincidence, needing a
+    minimum of 8 pieces to do so once all 240 values are folded in.
+    Confirmed RED against the code committed before REASSEMBLY_PIECE_BOUND
+    existed (task-1-report.md fix round 1 records the transcript); the fix
+    must let it through, since 8 exceeds the bound of 5.
+
+    This one seed is a representative instance, not a statistical
+    guarantee: the aggregate false-block rate measured with this same
+    generator, reported in fix round 1, is nonzero at 60 and 240 released
+    values. That residual is stated there, not hidden by cherry-picking
+    this test to pass.
+    """
+    print("\nUnit: a long benign session (240 released values, 20 rounds) does not block")
+
+    rng = random.Random(0)
+    source_len = rng.choice([6, 7, 8, 9])
+    source = "".join(str(rng.randint(0, 9)) for _ in range(source_len))
+    sources = {source}
+    values = [_benign_value(rng) for _ in range(240)]
+
+    state: dict[str, set[int]] = {}
+    blocked_round = None
+    for r in range(20):
+        chunk = values[r * 12:(r + 1) * 12]
+        if airlock.advance_reassembly_state(state, chunk, sources):
+            blocked_round = r + 1
+            break
+
+    check(
+        "240 released values across 20 rounds: no false block",
+        blocked_round is None,
+        f"blocked at round {blocked_round}" if blocked_round else "clean",
+    )
+
+
 def unit_interleaved_benign_rounds_case() -> None:
     print("\nUnit: fragments split across rounds with benign rounds between")
 
@@ -180,26 +298,28 @@ def unit_bounded_work_case() -> None:
     """N released values must not grow work exponentially. Two distinct
     assertions, neither a wall-clock guess:
 
-    1. Call-count: advance_reassembly_state's own folding primitive is
+    1. Call-count: advance_reassembly_state's own folding primitive
+       (_fold_source_edges, which also runs the shortest-path search) is
        invoked exactly once per (round, source) pair, proven by counting
        calls across n rounds. 2**n would be astronomically larger than n for
        even a modest n; observing exactly n rules out any exponential term
        structurally, not by timing it.
-    2. State-size: the span set for one source cannot grow past roughly
-       twice its length, since every insertion either extends or merges an
-       existing span or is discarded, so flooding many more rounds than the
-       source has characters must not grow the stored state past that bound.
+    2. State-size: the edge set for one source cannot grow past the number
+       of distinct (start, end) pairs geometrically possible in a source of
+       its length, since every insertion either adds a genuinely new edge or
+       is discarded as a duplicate, so flooding many more rounds than the
+       source has characters must not grow the stored state without bound.
     """
     print("\nUnit: N released values do not grow work exponentially")
 
-    original = airlock._fold_source_spans
+    original = airlock._fold_source_edges
     calls = {"n": 0}
 
     def counting(*args, **kwargs):
         calls["n"] += 1
         return original(*args, **kwargs)
 
-    airlock._fold_source_spans = counting
+    airlock._fold_source_edges = counting
     try:
         state: dict[str, set[int]] = {}
         sources = {airlock.normalise_identifier(SSN)}
@@ -207,7 +327,7 @@ def unit_bounded_work_case() -> None:
         for i in range(n):
             airlock.advance_reassembly_state(state, [f"filler-{i}-noise"], sources)
     finally:
-        airlock._fold_source_spans = original
+        airlock._fold_source_edges = original
 
     # Two calls per round, not one: the lone source is all-digit, so both
     # advance_reassembly_state passes (raw, then digits-only) run every
@@ -223,14 +343,16 @@ def unit_bounded_work_case() -> None:
     state2: dict[str, set[int]] = {}
     # Many overlapping single-character "matches" (every digit of the source
     # appears somewhere in isolation), the shape most likely to inflate the
-    # span set if merging were not actually collapsing it.
+    # edge set if it were not actually bounded. Each position 0..len(source)-1
+    # can contribute at most one length-1 edge, so this specific stream
+    # produces exactly len(source) distinct edges, not one per round.
     for ch in source * 20:
         airlock.advance_reassembly_state(state2, [ch], sources)
     stored = state2.get(source, set())
     check(
-        "span set for one source stays bounded by its own length, not round count",
-        len(stored) <= 2 * len(source),
-        f"{len(stored)} ints stored for a {len(source)}-char source after 180 rounds",
+        "edge set for one source stays bounded by its own geometry, not round count",
+        len(stored) == len(source),
+        f"{len(stored)} edges stored for a {len(source)}-char source after 180 rounds",
     )
 
 
@@ -486,6 +608,9 @@ def main() -> int:
 
     run("unit_natural_order_case", unit_natural_order_case)
     run("unit_reverse_order_case", unit_reverse_order_case)
+    run("unit_middle_first_order_case", unit_middle_first_order_case)
+    run("unit_many_pieces_no_block_case", unit_many_pieces_no_block_case)
+    run("unit_long_benign_session_case", unit_long_benign_session_case)
     run("unit_interleaved_benign_rounds_case", unit_interleaved_benign_rounds_case)
     run("unit_unrelated_benign_values_case", unit_unrelated_benign_values_case)
     run("unit_bounded_work_case", unit_bounded_work_case)
@@ -503,8 +628,8 @@ def main() -> int:
         print("failed:")
         for name in FAIL:
             print(f"  - {name}")
-    if total < 37:
-        print(f"\nWARNING: only {total} checks ran. Expected at least 37.")
+    if total < 42:
+        print(f"\nWARNING: only {total} checks ran. Expected at least 42.")
         print("Something did not collect. Treat this as a failure, not a pass.")
         return 1
     return 1 if FAIL else 0

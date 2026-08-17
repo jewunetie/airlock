@@ -104,34 +104,6 @@ MAX_LISTING_ENTRIES = 200
 # Apple Silicon.
 DEFAULT_MODEL = "qwen3.5:0.8B"
 
-# The guard deliberately does not default to DEFAULT_MODEL. A general-purpose
-# model asked to judge whether text leaks private information is doing a job it
-# was not trained for, and the failure that matters here is a false approve,
-# which is a leak rather than a slowdown. Guard cost is also nearly all prefill,
-# since the verdict is a single token, so a larger guard is cheap.
-DEFAULT_GUARD_MODEL = "granite4.1-guardian:8b"
-
-# Presidio entities that block a message. DATE_TIME and URL are deliberately
-# excluded: they fire constantly on ordinary text and would make the guard
-# useless through false positives.
-BLOCKING_ENTITIES: set[str] = {
-    "PERSON",
-    "EMAIL_ADDRESS",
-    "PHONE_NUMBER",
-    "US_SSN",
-    "US_PASSPORT",
-    "US_DRIVER_LICENSE",
-    "US_BANK_NUMBER",
-    "CREDIT_CARD",
-    "IBAN_CODE",
-    "CRYPTO",
-    "MEDICAL_LICENSE",
-    "LOCATION",
-    "NRP",
-    "IP_ADDRESS",
-}
-PRESIDIO_THRESHOLD = 0.5
-
 # --------------------------------------------------------------------------
 # Layer 1: secrets and credentials  Two detectors in union, because
 # measurement showed neither is sufficient.
@@ -373,80 +345,13 @@ def scan_secrets(text: str) -> list[dict[str, str]]:
 
 
 # --------------------------------------------------------------------------
-# Layer 2: Presidio
-# --------------------------------------------------------------------------
-
-
-class PresidioUnavailable(Exception):
-    """Raised when Presidio or its language model cannot be loaded."""
-
-
-DEFAULT_SPACY_MODEL = "en_core_web_sm"
-
-
-@lru_cache(maxsize=2)
-def get_analyzer(spacy_model: str = DEFAULT_SPACY_MODEL) -> Any:
-    """Load the Presidio analyzer once per model and cache it.
-
-    Loading pulls a spaCy pipeline into memory and takes a few seconds, so it
-    happens lazily on first use rather than at import. Raises
-    PresidioUnavailable with actionable guidance if anything is missing, and
-    callers treat that as a block rather than a pass.
-    """
-    try:
-        from presidio_analyzer import AnalyzerEngine
-        from presidio_analyzer.nlp_engine import NlpEngineProvider
-    except ImportError as exc:
-        raise PresidioUnavailable(f"presidio-analyzer is not installed: {exc}")
-
-    try:
-        provider = NlpEngineProvider(
-            nlp_configuration={
-                "nlp_engine_name": "spacy",
-                "models": [{"lang_code": "en", "model_name": spacy_model}],
-            }
-        )
-        engine = provider.create_engine()
-        return AnalyzerEngine(nlp_engine=engine, supported_languages=["en"])
-    except Exception as exc:  # noqa: BLE001 - usually a missing spaCy model
-        raise PresidioUnavailable(
-            f"Presidio could not start with '{spacy_model}' ({exc}). Install it:\n"
-            f"  uv run --with spacy python -m spacy download {spacy_model}"
-        )
-
-
-def scan_pii(text: str, spacy_model: str = DEFAULT_SPACY_MODEL) -> list[dict[str, str]]:
-    """Find personally identifiable information using Presidio.
-
-    Only entities in BLOCKING_ENTITIES above the confidence threshold are
-    returned. The matched span is masked so that a finding never itself leaks
-    the value into logs or into the reply envelope.
-    """
-    analyzer = get_analyzer(spacy_model)
-    results = analyzer.analyze(text=text, language="en")
-    findings: list[dict[str, str]] = []
-    for result in results:
-        if result.entity_type not in BLOCKING_ENTITIES:
-            continue
-        if result.score < PRESIDIO_THRESHOLD:
-            continue
-        findings.append(
-            {
-                "rule": result.entity_type,
-                "masked": mask(text[result.start : result.end]),
-                "score": f"{result.score:.2f}",
-                "layer": "presidio",
-            }
-        )
-    return findings
-
-
-# --------------------------------------------------------------------------
-# Layer 2b: bidirectional encoder guards  Two 350M LiquidAI encoders: a PII
-# token classifier and a zero-shot policy linter for contextual sensitivity
-# that has no span to detect at all. Not wired into evaluate() yet; see
-# PLAN-liquid-guard.md. Scoring logic ported from eval/bakeoff.py's
-# PIIDetectorGuard and PolicyLinterGuard, not reinvented.
+# Layer 2: bidirectional encoder guards  Two 350M LiquidAI encoders, replacing
+# Presidio and the general-purpose guard model: a PII token classifier and a
+# zero-shot policy linter for contextual sensitivity that has no span to
+# detect at all. Wired into evaluate() below. Scoring logic ported from
+# eval/bakeoff.py's PIIDetectorGuard and PolicyLinterGuard, not reinvented.
+# See PLAN-liquid-guard.md for the evidence behind this replacement and the
+# trust_remote_code=True tradeoff it takes on.
 # --------------------------------------------------------------------------
 
 
@@ -1016,107 +921,8 @@ def ollama_chat(
 
 
 # --------------------------------------------------------------------------
-# Layer 3 and the combined guard
+# Guard verdict and the combined evaluator
 # --------------------------------------------------------------------------
-
-GUARD_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        "verdict": {"type": "string", "enum": ["approve", "revise"]},
-        "concerns": {"type": "array", "items": {"type": "string"}},
-        "instruction": {"type": "string"},
-    },
-    "required": ["verdict", "concerns", "instruction"],
-}
-
-GUARD_PROMPT = """You are a privacy guard. A message is about to leave a private
-computer for an external cloud AI service. Decide whether it is safe.
-
-Structured identifiers have already been checked by other tools. Your job is
-the judgement they cannot make. Reject the message if it reveals:
-- medical or health information about a specific person
-- financial circumstances, salary, debts, or account standing
-- private contents of personal correspondence
-- someone's employment problems, legal matters, or family situation
-- anything else a reasonable person would not want sent to a third party
-
-Approve if it describes work in general terms: file names, structure, counts,
-topics, or technical findings without personal detail.
-
-verdict: "approve" or "revise".
-concerns: short reasons, empty if approving.
-instruction: if revising, say exactly what to remove or generalise.
-
-Message:
----
-{message}
----
-"""
-
-
-# --------------------------------------------------------------------------
-# Optional layer 3a: IBM Granite Guardian  A purpose-built judging model
-# rather than a general instruct model, so it is a better shape for this
-# job.
-
-GUARDIAN_CRITERIA = (
-    "The text reveals private or sensitive information about a specific person. "
-    "This includes health or medical details, financial circumstances such as "
-    "salary, debts or account standing, employment problems, legal matters, "
-    "family situations, or the contents of private correspondence. "
-    "Descriptions of files, folder structure, counts, topics, or technical "
-    "findings that contain no personal detail do NOT meet this criterion."
-)
-
-GUARDIAN_BLOCK = """<guardian>/nothink
-
-### Criteria: {criteria}
-
-### Scoring Schema: If the last assistant's text meets the criteria, return 'yes'; otherwise, return 'no'.
-"""
-
-
-def granite_guardian_verdict(model: str, message: str) -> bool | None:
-    """Ask Granite Guardian whether a message reveals private information.
-
-    Returns True when flagged as sensitive, False when clean, and None when the
-    model could not be used, so the caller can fail closed rather than guess.
-
-    Uses the chat endpoint because the protocol requires the text under review
-    to be the final assistant message, with the criteria appended as the final
-    user message.
-    """
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "assistant", "content": message},
-            {"role": "user", "content": GUARDIAN_BLOCK.format(criteria=GUARDIAN_CRITERIA)},
-        ],
-        "stream": False, "keep_alive": KEEP_ALIVE,
-        "think": False,
-        "options": {"temperature": 0},
-    }
-    request = urllib.request.Request(
-        f"{OLLAMA_HOST}/api/chat",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT) as response:
-            body = json.loads(response.read().decode("utf-8"))
-    except Exception:  # noqa: BLE001 - caller fails closed on None
-        return None
-
-    text = (body.get("message") or {}).get("content", "") or ""
-    match = re.search(r"<score>\s*(yes|no)\s*</score>", text, re.I)
-    if match:
-        return match.group(1).lower() == "yes"
-    # Fall back to a bare yes/no if the tags are absent, but nothing looser:
-    # guessing from prose would defeat the point of a scoring model.
-    stripped = strip_thinking(text).strip().lower().rstrip(".")
-    if stripped in ("yes", "no"):
-        return stripped == "yes"
-    return None
 
 
 @dataclass
@@ -1135,19 +941,17 @@ class GuardVerdict:
         return self.decision == "approve"
 
 
-def evaluate(
-    message: str,
-    guard_model: str,
-    use_presidio: bool = True,
-    spacy_model: str = DEFAULT_SPACY_MODEL,
-    guardian_model: str | None = None,
-) -> GuardVerdict:
+def evaluate(message: str, linter_threshold: float = POLICY_LINTER_THRESHOLD) -> GuardVerdict:
     """Run every guard layer over a candidate message.
 
-    Layers run cheapest first and short-circuit, since a confirmed match needs
-    no further opinion. Any layer that cannot run blocks the message rather
-    than being skipped, so a missing dependency degrades into refusal rather
-    than into silent permissiveness.
+    Layers run cheapest and most certain first and short-circuit, since a
+    confirmed match needs no further opinion:
+
+        secrets -> pii-patterns -> pii-detector -> policy-linter
+
+    Any layer that cannot run blocks the message rather than being skipped, so
+    a missing dependency (here: torch/transformers, or a model that fails to
+    load) degrades into refusal rather than into silent permissiveness.
     """
     layers: list[str] = []
 
@@ -1166,8 +970,6 @@ def evaluate(
             layers_run=layers,
         )
 
-    # Structured identifiers always run, regardless of Presidio, so that
-    # disabling Presidio degrades coverage rather than removing it.
     pii_patterns = scan_pii_patterns(message)
     layers.append("pii-patterns")
     if pii_patterns:
@@ -1183,83 +985,68 @@ def evaluate(
             layers_run=layers,
         )
 
-    if use_presidio:
-        try:
-            pii = scan_pii(message, spacy_model)
-            layers.append("presidio")
-        except PresidioUnavailable as exc:
-            return GuardVerdict(
-                decision="block",
-                concerns=[f"PII detector unavailable: {exc}"],
-                instruction="Install the PII detector, or run with --no-presidio "
-                "to fall back to the model layer alone, accepting weaker detection.",
-                layers_run=layers,
-            )
-        if pii:
-            rules = sorted({f["rule"] for f in pii})
-            return GuardVerdict(
-                decision="revise",
-                concerns=[f"personal information detected: {r}" for r in rules],
-                instruction=(
-                    "Remove the following and describe it generally instead: "
-                    f"{', '.join(rules)}. Refer to people by role rather than name, "
-                    "and to places by type rather than name."
-                ),
-                findings=pii,
-                layers_run=layers,
-            )
-
-    # Layer 3a. A dedicated judging model, when configured, runs before the
-    # general model and short-circuits on a positive finding.
-    if guardian_model:
-        flagged = granite_guardian_verdict(guardian_model, message)
-        layers.append("guardian")
-        if flagged is None:
-            return GuardVerdict(
-                decision="block",
-                concerns=[f"guardian model '{guardian_model}' returned no usable score"],
-                instruction="Check the guardian model is installed and supports yes/no scoring.",
-                layers_run=layers,
-            )
-        if flagged:
-            return GuardVerdict(
-                decision="revise",
-                concerns=["guardian model judged this to reveal private information"],
-                # A scoring model returns no guidance, so the instruction is
-                # derived from the criteria it evaluated against.
-                instruction=(
-                    "Remove personal details about any individual: health, finances, "
-                    "employment or legal matters, family situation, or private "
-                    "correspondence. Describe the work in general terms instead."
-                ),
-                layers_run=layers,
-            )
-
     try:
-        result = ollama_chat(guard_model, GUARD_PROMPT.format(message=message), GUARD_SCHEMA)
-        layers.append("model")
-    except RuntimeError as exc:
+        pii_model = scan_pii_model(message)
+        layers.append("pii-detector")
+    except GuardModelUnavailable as exc:
         return GuardVerdict(
-            decision="block", concerns=[f"guard model unavailable: {exc}"], layers_run=layers
-        )
-    if not isinstance(result, dict):
-        return GuardVerdict(
-            decision="block", concerns=["guard returned bad payload"], layers_run=layers
-        )
-
-    verdict = str(result.get("verdict", "")).lower()
-    if verdict == "approve":
-        return GuardVerdict(decision="approve", layers_run=layers)
-    if verdict == "revise":
-        return GuardVerdict(
-            decision="revise",
-            concerns=[str(c) for c in result.get("concerns", [])],
-            instruction=str(result.get("instruction", "Remove sensitive details.")),
+            decision="block",
+            concerns=[f"PII detector unavailable: {exc}"],
+            instruction="Install torch and transformers so the PII detector encoder can load.",
             layers_run=layers,
         )
-    return GuardVerdict(
-        decision="block", concerns=[f"unrecognised verdict: {verdict!r}"], layers_run=layers
-    )
+    if pii_model:
+        rules = sorted({f["rule"] for f in pii_model})
+        return GuardVerdict(
+            decision="revise",
+            concerns=[f"personal information detected: {r}" for r in rules],
+            instruction=(
+                "Remove the following and describe it generally instead: "
+                f"{', '.join(rules)}. Refer to people by role rather than name, "
+                "and to places by type rather than name."
+            ),
+            findings=pii_model,
+            layers_run=layers,
+        )
+
+    # scan_policy() reads POLICY_LINTER_THRESHOLD as a module global at call
+    # time (by design, so the eval harness and tests can override it without
+    # a parameter on scan_policy itself). A caller-supplied linter_threshold
+    # is applied the same way: swapped in for the duration of this call and
+    # restored after, so a concurrent caller with a different session setting
+    # is never affected.
+    global POLICY_LINTER_THRESHOLD
+    previous_threshold = POLICY_LINTER_THRESHOLD
+    POLICY_LINTER_THRESHOLD = linter_threshold
+    try:
+        policy = scan_policy(message)
+        layers.append("policy-linter")
+    except GuardModelUnavailable as exc:
+        return GuardVerdict(
+            decision="block",
+            concerns=[f"policy linter unavailable: {exc}"],
+            instruction="Install torch and transformers so the policy linter encoder can load.",
+            layers_run=layers,
+        )
+    finally:
+        POLICY_LINTER_THRESHOLD = previous_threshold
+    if policy:
+        rules = sorted({f["rule"] for f in policy})
+        return GuardVerdict(
+            decision="revise",
+            concerns=[f"contextual policy concern detected: {r}" for r in rules],
+            # The linter returns a rule index, not guidance, so the
+            # instruction is derived from what the rule pool covers.
+            instruction=(
+                "Remove personal details about any individual: health, finances, "
+                "employment or legal matters, family situation, or private "
+                "correspondence. Describe the work in general terms instead."
+            ),
+            findings=policy,
+            layers_run=layers,
+        )
+
+    return GuardVerdict(decision="approve", layers_run=layers)
 
 
 # --------------------------------------------------------------------------
@@ -1331,10 +1118,7 @@ class Session:
     objective: str
     sandbox: Sandbox
     worker_model: str
-    guard_model: str
-    use_presidio: bool = True
-    spacy_model: str = DEFAULT_SPACY_MODEL
-    guardian_model: str | None = None
+    linter_threshold: float = POLICY_LINTER_THRESHOLD
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     exchanges: int = 0
     blocked: int = 0
@@ -1371,13 +1155,7 @@ def trace(event: str, **fields: Any) -> None:
 
 def evaluate_session(session: Session, text: str) -> GuardVerdict:
     """Run the guard using a session's configuration."""
-    return evaluate(
-        text,
-        session.guard_model,
-        session.use_presidio,
-        session.spacy_model,
-        session.guardian_model,
-    )
+    return evaluate(text, session.linter_threshold)
 
 
 # --------------------------------------------------------------------------
@@ -2106,11 +1884,14 @@ def banner(session_like: Any) -> None:
                     (f"{counts['files']} files, {counts['directories']} directories", ""),
                 ),
                 Text.assemble(("worker     ", "dim"), (session_like.worker_model, "cyan")),
-                Text.assemble(("guard      ", "dim"), (session_like.guard_model, "magenta")),
+                # lean: the guard is now two fixed encoders, not a selectable
+                # model, so there is nothing session-specific left to print
+                # here beyond the layer names themselves. A real per-layer
+                # status (loaded, threshold in use) is doctor/config screen
+                # territory, not this banner's.
                 Text.assemble(
                     ("layers     ", "dim"),
-                    ("secrets + presidio + model" if session_like.use_presidio
-                     else "secrets + model (presidio off)", ""),
+                    ("secrets + pii-patterns + pii-detector + policy-linter", "magenta"),
                 ),
                 Text.assemble(
                     ("writes     ", "dim"),
@@ -2187,18 +1968,10 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             "not installed. Only `serve` needs it, so the rest of airlock still works",
         )
 
-    if args.no_presidio:
-        check("pii detector", True, "disabled by --no-presidio (weaker detection)")
-    else:
-        try:
-            get_analyzer(args.spacy_model)
-            check("pii detector", True, "presidio ready")
-        except PresidioUnavailable as exc:
-            check("pii detector", False, str(exc).split("\n")[0])
-            console.print(
-                "\n[dim]  uv run --with spacy python -m spacy download en_core_web_lg[/dim]"
-            )
-            ok = False
+    # lean: no real load-and-probe check for the two guard encoders yet. That
+    # is Task 4's job (doctor, banner and the config screen); this task only
+    # has to keep doctor functional after Presidio's removal, not correct.
+    # The evaluate() cases below at least exercise both encoders indirectly.
 
     try:
         installed = ollama_models()
@@ -2257,13 +2030,12 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         want = tag.lower()
         return want in names or f"{want}:latest" in names or want.removesuffix(":latest") in names
 
-    guard_model = args.guard_model or args.model
+    # Only the worker still runs on Ollama; the guard is the two local
+    # encoders checked (indirectly, via the evaluate() cases below) rather
+    # than an installed Ollama tag.
     if not check("worker model", has(args.model), args.model):
         ok = False
         console.print(f"\n[dim]  ollama pull {args.model}[/dim]")
-    if not check("guard model", has(guard_model), guard_model):
-        ok = False
-        console.print(f"\n[dim]  ollama pull {guard_model}[/dim]")
 
     # The worker has to emit JSON matching WORKER_SCHEMA, and nothing above
     # checks that it can.
@@ -2300,10 +2072,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             ("allows safe text", "The folder contains twelve planning files.", True),
         ]
         for label, sample, should_pass in cases:
-            verdict = evaluate(
-                sample, guard_model, not args.no_presidio,
-                args.spacy_model, args.guardian_model,
-            )
+            verdict = evaluate(sample, args.linter_threshold)
             passed = verdict.approved == should_pass
             detail = f"{verdict.decision} via {' + '.join(verdict.layers_run)}"
             if not check(label, passed, detail):
@@ -2312,10 +2081,13 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                 # has no way to tell a real detection from a broken dependency.
                 for concern in verdict.concerns:
                     console.print(f"       [dim]{concern}[/dim]")
-                if verdict.decision == "block" and "model" not in verdict.layers_run:
+                if verdict.decision == "block":
+                    # block is only reachable via GuardModelUnavailable now;
+                    # the deterministic layers below it never block on their
+                    # own, only revise or pass through.
                     console.print(
-                        "       [dim]the deterministic layers passed this text; "
-                        "the failure is in the guard model call[/dim]"
+                        "       [dim]a guard encoder failed to load; see the "
+                        "concern above[/dim]"
                     )
 
     console.print()
@@ -2334,10 +2106,7 @@ def make_session(args: argparse.Namespace, objective: str) -> Session:
         objective=objective,
         sandbox=Sandbox(root=args.root, allow_writes=args.allow_writes),
         worker_model=args.model,
-        guard_model=args.guard_model or args.model,
-        use_presidio=not args.no_presidio,
-        spacy_model=args.spacy_model,
-        guardian_model=args.guardian_model,
+        linter_threshold=args.linter_threshold,
     )
 
 
@@ -2394,20 +2163,8 @@ SETTING_NOTES: dict[str, str] = {
         "JSON matching a fixed schema, and a model that cannot do that fails every step, "
         "so confirm with a question after changing it."
     ),
-    "guard": (
-        "Judges drafts the deterministic layers already passed, catching what regex "
-        "cannot describe. Errors and unparseable replies count as block, never approve."
-    ),
-    "guardian": (
-        "An optional second judge run before the guard, using its own yes/no scoring. "
-        "Aimed at health, financial, employment, legal and family circumstances."
-    ),
-    "presidio": (
-        "Recognises names, places and account numbers by reading context rather than "
-        "matching patterns. Turning it off leaves only the regex layers, which still "
-        "catch structured identifiers such as emails and card numbers but miss a name "
-        "in ordinary prose."
-    ),
+    # lean: no note for a "linter threshold" row yet, since the config screen
+    # does not offer one to edit here. That is Task 4's job; see its brief.
     "writes": (
         "Whether the local model may create or modify files in this workspace. Off by "
         "default. The sandbox boundary is unaffected either way: nothing outside the "
@@ -2540,9 +2297,6 @@ def _config_loop(session: Session, args: argparse.Namespace, notices: list[str])
     while True:
         rows = [
             ("worker", session.worker_model),
-            ("guard", session.guard_model),
-            ("guardian", session.guardian_model or "not set"),
-            ("presidio", "on" if session.use_presidio else "OFF, weaker detection"),
             ("writes", "enabled" if session.sandbox.allow_writes else "disabled"),
             ("trace", str(args.trace) if args.trace else "off"),
             ("objective", session.objective[:44]),
@@ -2551,7 +2305,7 @@ def _config_loop(session: Session, args: argparse.Namespace, notices: list[str])
             "settings",
             rows,
             footer=f"workspace {session.sandbox.root}  approval {args.approve}  "
-            f"spacy {session.spacy_model}",
+            f"linter threshold {session.linter_threshold}",
             start=cursor,
             notes=SETTING_NOTES,
         )
@@ -2569,22 +2323,6 @@ def _config_loop(session: Session, args: argparse.Namespace, notices: list[str])
                 notices.append(
                     f"[green]worker[/green] -> {picked}  [dim]ask something to confirm it "
                     "honours the JSON schema; installed and usable differ[/dim]"
-                )
-        elif name == "guard":
-            picked = pick_model("guard", session.guard_model, allow_none=False)
-            if picked:
-                session.guard_model = args.guard_model = picked
-        elif name == "guardian":
-            picked = pick_model("guardian", session.guardian_model, allow_none=True)
-            if picked is not False:
-                session.guardian_model = args.guardian_model = picked
-        elif name == "presidio":
-            session.use_presidio = not session.use_presidio
-            args.no_presidio = not session.use_presidio
-            if not session.use_presidio:
-                notices.append(
-                    "[yellow]Presidio off.[/yellow] [dim]Names and places are no longer "
-                    "recognised. Structured identifiers are still checked.[/dim]"
                 )
         elif name == "writes":
             if session.sandbox.allow_writes:
@@ -2628,7 +2366,6 @@ def render_mcp_help(args: argparse.Namespace) -> None:
                     "run", "--script", str(script),
                     "serve", "--root", str(root),
                     "--model", args.model,
-                    "--guard-model", args.guard_model,
                 ],
             }
         }
@@ -2752,10 +2489,7 @@ def cmd_ask(args: argparse.Namespace) -> int:
 
 def cmd_guard(args: argparse.Namespace) -> int:
     """Test whether a piece of text would pass the guard."""
-    verdict = evaluate(
-        args.text, args.guard_model or args.model, not args.no_presidio,
-        args.spacy_model, args.guardian_model,
-    )
+    verdict = evaluate(args.text, args.linter_threshold)
     colour = {"approve": "green", "revise": "yellow", "block": "red"}[verdict.decision]
     console.print(
         Panel(
@@ -2951,8 +2685,6 @@ def build_server(args: argparse.Namespace) -> Any:
             "client ask."
         )
 
-    guard_model = args.guard_model or args.model
-    use_presidio = not args.no_presidio
     mcp = MCPServer("airlock")
 
     # Annotations are computed here, not hardcoded, because whether asking a
@@ -3005,10 +2737,7 @@ def build_server(args: argparse.Namespace) -> Any:
             objective=objective.strip(),
             sandbox=sandbox,
             worker_model=args.model,
-            guard_model=guard_model,
-            use_presidio=use_presidio,
-            spacy_model=args.spacy_model,
-            guardian_model=args.guardian_model,
+            linter_threshold=args.linter_threshold,
         )
         SESSIONS[session.session_id] = session
         counts = sandbox.stats()
@@ -3223,7 +2952,7 @@ def build_server(args: argparse.Namespace) -> Any:
         Args:
             text: The text to evaluate.
         """
-        verdict = evaluate(text, guard_model, use_presidio, args.spacy_model, args.guardian_model)
+        verdict = evaluate(text, args.linter_threshold)
         return {
             "decision": verdict.decision,
             "approved": verdict.approved,
@@ -3265,9 +2994,9 @@ def offer_repairs(args: argparse.Namespace) -> bool:
         console.print("\n[dim]Not installed? https://ollama.com/download[/dim]")
         return False
 
-    wanted = [("worker", args.model), ("guard", args.guard_model)]
-    if args.guardian_model:
-        wanted.append(("guardian", args.guardian_model))
+    # Only the worker still runs on Ollama; the guard encoders come from
+    # Hugging Face and are not something `ollama pull` can fix.
+    wanted = [("worker", args.model)]
     missing = [(role, tag) for role, tag in wanted if tag not in installed]
     if not missing:
         return False
@@ -3352,26 +3081,13 @@ def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False, argument_default=argparse.SUPPRESS)
     common.add_argument("--root", type=Path, help="Workspace directory (default: .).")
     common.add_argument("--model", help=f"Local worker model (default: {DEFAULT_MODEL}).")
-    common.add_argument(
-        "--guard-model",
-        help=f"Guard model (default: {DEFAULT_GUARD_MODEL}). Pass --guard-model "
-        "with the worker tag to run both roles on one model.",
-    )
     common.add_argument("--allow-writes", action="store_true", help="Let the model write files.")
     common.add_argument(
-        "--no-presidio",
-        action="store_true",
-        help="Skip the PII layer. Faster to start, materially weaker detection.",
-    )
-    common.add_argument(
-        "--spacy-model",
-        help=f"spaCy pipeline behind Presidio (default: {DEFAULT_SPACY_MODEL}). "
-        "Use en_core_web_lg for better name recall at ~400MB.",
-    )
-    common.add_argument(
-        "--guardian-model",
-        help="Optional dedicated judging model (for example granite4.1-guardian:8b) "
-        "run before the general guard model, using its native yes/no scoring.",
+        "--linter-threshold",
+        type=float,
+        help=f"Score above which the policy linter's contextual rules revise a "
+        f"message (default: {POLICY_LINTER_THRESHOLD}). The PII detector's threshold "
+        "and the per-rule overrides are constants, not flags, until measured otherwise.",
     )
     common.add_argument(
         "--trace",
@@ -3433,11 +3149,8 @@ def build_parser() -> argparse.ArgumentParser:
 CLI_DEFAULTS: dict[str, Any] = {
     "root": Path("."),
     "model": DEFAULT_MODEL,
-    "guard_model": DEFAULT_GUARD_MODEL,
     "allow_writes": False,
-    "no_presidio": False,
-    "spacy_model": DEFAULT_SPACY_MODEL,
-    "guardian_model": None,
+    "linter_threshold": POLICY_LINTER_THRESHOLD,
     "trace": None,
     "approve": "hint-writes",
     "objective": "Help the user understand and work with the files in this directory.",

@@ -47,6 +47,17 @@ projection exits early on a hit). That is the real cost a caller can still
 impose today; whether it matches the comment's pre-bound figure is exactly
 the question this answers.
 
+Section 3: what the cost actually scales with
+----------------------------------------------
+Section 2 alone invites the reading that every round costs seconds. It does
+not, and believing otherwise is how the MAX_REASSEMBLY_LENGTH comment first
+went wrong: it blamed total length when the work is 2**len(values) subsets
+times the number of candidate sources. Identifier COUNT is the other half,
+and a real workspace holds very few. This measures the curve and then anchors
+it by building a workspace out of three ordinary documents and asking
+source_identifiers how many identifiers they actually yield, rather than
+assuming a number.
+
 Usage:  ./reassembly_residuals.py [--airlock PATH] [--trials 300]
 """
 
@@ -59,6 +70,7 @@ import random
 import statistics
 import string
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -226,6 +238,102 @@ def measure_worst_case_cost(a, args) -> dict:
             "all_s": times}
 
 
+# --------------------------------------------------------------------------
+# Section 3: what the cost actually scales with
+# --------------------------------------------------------------------------
+# Section 2 times one pathological point. On its own that figure invites the
+# reading that every round costs seconds, which is wrong and was how the
+# MAX_REASSEMBLY_LENGTH comment first went astray: it blamed total length
+# alone. The work is 2**len(values) subsets times the number of candidate
+# sources, so identifier COUNT is the other half, and a real workspace holds
+# very few. This measures the curve and anchors it on a workspace built from
+# ordinary documents rather than an assumed number.
+
+SCALING_COUNTS = (1, 5, 50, 200, 400)
+
+# Three documents of the shape airlock is actually pointed at. Deliberately
+# ordinary: the point is how many identifiers ordinary files yield, so nothing
+# here is contrived to inflate or deflate the count.
+REALISTIC_DOCUMENTS = {
+    "w2.txt": (
+        "Employer EIN 31-7729104\n"
+        "Box 1 wages 48250.00\n"
+        "Employee SSN 912-84-7731\n"
+        "Address 44 Oakfield Road\n"
+    ),
+    "notes.txt": (
+        "Quarterly planning notes.\n"
+        "Contact jane.doe@example.com or 555-0148.\n"
+        "Account number: 8829930041\n"
+    ),
+    "1040.txt": "ssn: \nwages: \nein: \n",
+}
+
+
+def shaped_round(rng: random.Random, a) -> list[str]:
+    """A round of MAX_JOBS_PER_ROUND answers at the JOB_SHAPES "line" ceiling.
+
+    80 characters is the maxLength that shape allows, so this is the largest
+    round a caller can produce without resorting to unshaped free-text jobs.
+    """
+    return [
+        "".join(rng.choice(DIGITS) for _ in range(80))
+        for _ in range(a.MAX_JOBS_PER_ROUND)
+    ]
+
+
+def measure_cost_scaling(a, args, tmp_root: Path) -> dict:
+    console.print("[bold]Cost scaling: a shaped round against a growing "
+                  "workspace identifier set[/bold]")
+    rng = random.Random(args.seed)
+    values = shaped_round(rng, a)
+
+    table = Table(box=None, pad_edge=False)
+    table.add_column("workspace identifiers", justify="right")
+    table.add_column("mean ms", justify="right")
+
+    per_count: dict[str, float] = {}
+    for count in SCALING_COUNTS:
+        sources = non_matching_sources(rng, count=count, length=12)
+        reps = max(args.reps, 5)
+        times = []
+        for _ in range(reps):
+            t0 = time.perf_counter()
+            blocked = a.reassembles_identifier(values, sources)
+            times.append(time.perf_counter() - t0)
+        assert blocked is False, "a source matched, so the timing exited early"
+        ms = statistics.mean(times) * 1000
+        per_count[str(count)] = ms
+        table.add_row(str(count), f"{ms:.0f}")
+    console.print(table)
+
+    # The anchor. Without it the table above is unmoored: a reader has no way
+    # to know whether 400 identifiers is typical or absurd.
+    for name, body in REALISTIC_DOCUMENTS.items():
+        (tmp_root / name).write_text(body, encoding="utf-8")
+    sandbox = a.Sandbox(root=tmp_root, allow_writes=False)
+    realistic = a.source_identifiers(sandbox)
+    times = []
+    for _ in range(max(args.reps, 5)):
+        t0 = time.perf_counter()
+        a.reassembles_identifier(values, realistic)
+        times.append(time.perf_counter() - t0)
+    realistic_ms = statistics.mean(times) * 1000
+
+    console.print(
+        f"\n{len(REALISTIC_DOCUMENTS)} ordinary documents yield "
+        f"[bold]{len(realistic)}[/bold] identifiers, so the same round costs "
+        f"[bold]{realistic_ms:.0f}ms[/bold]"
+    )
+    console.print("[dim]Machine-specific, like section 2. The shape of the "
+                  "curve is the portable part, not the absolute values.[/dim]\n")
+    return {"values": len(values), "value_chars": 80,
+            "by_source_count_ms": per_count,
+            "realistic_documents": len(REALISTIC_DOCUMENTS),
+            "realistic_identifiers": len(realistic),
+            "realistic_ms": realistic_ms}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--airlock", type=Path, default=DEFAULT_AIRLOCK)
@@ -243,12 +351,15 @@ def main() -> int:
 
     floor_results = measure_floor_residual(a, args, prose_pool)
     cost_results = measure_worst_case_cost(a, args)
+    with tempfile.TemporaryDirectory() as tmp:
+        scaling_results = measure_cost_scaling(a, args, Path(tmp))
 
     out = HERE / "results" / "reassembly_residuals.json"
     out.parent.mkdir(exist_ok=True)
     out.write_text(json.dumps({
         "airlock": str(args.airlock), "trials": args.trials, "seed": args.seed,
         "floor_residual": floor_results, "worst_case_cost": cost_results,
+        "cost_scaling": scaling_results,
     }, indent=2))
     console.print(f"wrote {out}")
     return 0

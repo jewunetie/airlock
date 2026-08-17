@@ -123,14 +123,27 @@ exactly the `MAX_REASSEMBLY_LENGTH` ceiling (4,000 characters total, so the
 length check does not short-circuit) against 400 non-matching workspace
 identifiers (so neither the raw pass nor the digits projection exits early
 on a hit). This run measured a mean of 4.452 seconds (median 4.416 seconds)
-over 5 reps, matching the figure now in `airlock.py`'s comment. Cost scales
-with identifier count, not only length: a shaped round (twelve 80-character
-values, well under the ceiling) against a realistic handful of workspace
-identifiers costs tens of milliseconds, not seconds; this script does not
-vary identifier count itself, so that scaling claim was checked separately
-against the real functions and is stated qualitatively in the comment rather
-than pinned to a script-reproduced figure. Re-measure the ceiling timing
-before trusting it on your own machine; see "Sandbox versus Apple Silicon"
+over 5 reps, matching the figure now in `airlock.py`'s comment.
+
+That number on its own is misleading, and the third section exists to stop it
+being read as typical. The work is `2**len(values)` subsets times the number
+of candidate sources, so identifier COUNT is as much the driver as total
+length. Blaming length alone is exactly how the `MAX_REASSEMBLY_LENGTH`
+comment first went wrong. Measured, for a shaped round of twelve 80-character
+values well under the ceiling:
+
+| workspace identifiers | 1 | 5 | 50 | 200 | 400 |
+|---|---|---|---|---|---|
+| cost per round | 10ms | 22ms | 153ms | 608ms | 1230ms |
+
+The anchor is the part that matters. The script builds a workspace from three
+ordinary documents (a W-2, some planning notes, a blank 1040) and asks
+`source_identifiers` how many identifiers they actually yield rather than
+assuming a count. The answer is 5, so the same round costs 17ms. The
+400-identifier figures are pathological, not representative.
+
+Re-measure on your own machine before trusting any absolute timing here; the
+shape of the curve is the portable part. See "Sandbox versus Apple Silicon"
 below.
 
 `tests/test_round_guard.py`'s `important3_length_bound` remains the

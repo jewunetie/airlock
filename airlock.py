@@ -1107,8 +1107,11 @@ MIN_REASSEMBLY_LENGTH = 6
 # eval/reassembly_residuals.py measured a mean of 4.452s (median 4.416s) over
 # 5 reps. A round of shaped jobs cannot approach that ceiling: twelve
 # "line"-shaped answers (JOB_SHAPES maxLength 80) sum to at most 960
-# characters, and a realistic workspace of a few ordinary documents yields a
-# handful of identifiers, costing tens of milliseconds, not seconds.
+# characters, and identifier count is what actually decides the rest: the same
+# script measured 10ms at one identifier, 153ms at fifty and 1230ms at four
+# hundred, and a workspace built from three ordinary documents yields five
+# identifiers, so that round costs 17ms. The four-hundred figures above are
+# pathological rather than representative.
 # FILE_SLICE_CHARS, the size of a single document slice, is a generous
 # ceiling for a whole round that leaves realistic traffic untouched while
 # still bounding unshaped free-text answers.

@@ -4,9 +4,9 @@
 # dependencies = [
 #     # Bounded both sides on purpose; see CLAUDE.md before widening.
 #     "mcp[cli]>=2.0.0,<2.1.0",
+#     "torch>=2.13.0,<2.14.0",
+#     "transformers>=5.15.0,<5.16.0",
 #     "rich>=13.7",
-#     "presidio-analyzer>=2.2",
-#     "spacy>=3.7",
 #     "detect-secrets>=1.5",
 #     "pypdf>=5.0",
 # ]
@@ -35,23 +35,28 @@ README.md for the architecture and CLAUDE.md for design notes.
 
 The guard, and why it is layered
 --------------------------------
-Three layers, cheapest and most certain first:
+Four layers, cheapest and most certain first:
 
 1. Regular expressions for secrets and credentials. API keys, private key
    blocks, and JWTs have rigid formats, so a pattern match is effectively
-   exact. Presidio does not ship recognizers for these, so this layer is not
-   redundant.
+   exact.
 
-2. Microsoft Presidio for personally identifiable information. This is the
-   part regular expressions genuinely cannot do: recognising that a string is
-   a person's name or a home location requires named-entity recognition.
-   Presidio also validates structured identifiers with checksums.
+2. Regular expressions for structured PII: email, phone, SSN, credit card,
+   IBAN, street address, date of birth. Deterministic and independent of the
+   model layers below, so it still runs if either is unavailable.
 
-3. A local language model for contextual sensitivity, such as health or
-   financial disclosure written in prose that names no identifier at all.
+3. A local encoder model (LiquidAI's LFM2.5-Encoder-350M-PII-Detector) for
+   PII a fixed pattern cannot express: names, locations, and identifier types
+   outside layer 2's list, recognised from context rather than shape.
 
-No layer can overrule an earlier one. Any layer failing blocks the message,
-because a guard that cannot evaluate must never approve.
+4. A local encoder model (LiquidAI's LFM2.5-Encoder-350M-Policy-Linter) for
+   contextual sensitivity, such as health or financial disclosure written in
+   prose that names no identifier at all.
+
+Layers 3 and 4 load through `trust_remote_code=True` and are pinned to a
+fixed revision; see README.md and CLAUDE.md before changing either. No layer
+can overrule an earlier one. Any layer failing blocks the message, because a
+guard that cannot evaluate must never approve.
 """
 
 from __future__ import annotations
@@ -241,7 +246,8 @@ def _luhn_ok(digits: str) -> bool:
 
 
 def scan_pii_patterns(text: str) -> list[dict[str, str]]:
-    """Find structured personal identifiers. Always runs, Presidio or not."""
+    """Find structured personal identifiers. Always runs, regardless of the
+    model layers below."""
     findings: list[dict[str, str]] = []
     for name, pattern in PII_PATTERNS.items():
         for match in pattern.finditer(text):

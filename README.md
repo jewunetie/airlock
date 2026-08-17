@@ -41,21 +41,30 @@ On a `revise` verdict the worker redrafts against the guard's stated concern and
 
 ## The guard
 
-Five layers run in order. Any one of them can stop a message. The deterministic layers run first because they are fast, exact, and not persuadable.
+Four layers run in order. Any one of them can stop a message. The deterministic layers run first because they are fast, exact, and not persuadable.
 
 | Layer | Mechanism | Catches |
 |---|---|---|
 | `secrets` | Regex plus `detect-secrets` named detectors | API keys, tokens, private keys, credentials |
 | `pii-patterns` | Local regex, always runs | Email, phone, SSN, credit card, IBAN, street address, date of birth |
-| `presidio` | Microsoft Presidio with spaCy NER | Names, locations, passports, licences, bank and crypto accounts, IP addresses |
-| `guardian` | A purpose-built judging model, optional | Health, financial, employment, legal, and family circumstances |
-| `model` | The general guard model, JSON-constrained | Anything the earlier layers do not encode |
+| `pii-detector` | [LiquidAI LFM2.5-Encoder-350M-PII-Detector](https://huggingface.co/LiquidAI/LFM2.5-Encoder-350M-PII-Detector), a 350M token classifier | Names, locations, and 40 PII types the pattern layer above cannot express, including health, legal, and credential identifiers |
+| `policy-linter` | [LiquidAI LFM2.5-Encoder-350M-Policy-Linter](https://huggingface.co/LiquidAI/LFM2.5-Encoder-350M-Policy-Linter), a 350M zero-shot rule scorer | Medical, financial, legal, immigration, and confidential-business disclosure written in prose that names no identifier at all |
 
 Two design decisions are worth naming, because both are deliberate and both cost something.
 
-**The guard fails closed.** If the guard model errors, times out, or returns an unparseable payload, the verdict is `block`, not `approve`. A guard that approves on error is worse than no guard, because it produces confidence rather than a leak you would notice.
+**The guard fails closed.** If either encoder cannot load, times out, or a call to it fails, the verdict is `block`, not `approve`. A guard that approves on error is worse than no guard, because it produces confidence rather than a leak you would notice.
 
-**`pii-patterns` always runs, including with `--no-presidio`.** This layer duplicates part of Presidio's coverage on purpose. An earlier version delegated all PII detection to Presidio, and running with Presidio disabled then approved a message containing an email address and a phone number. Structured identifiers are now checked deterministically no matter how the tool is configured.
+**`pii-patterns` always runs.** This layer duplicates part of the PII detector's coverage on purpose, and does not depend on torch or transformers being installed at all. An earlier version delegated all PII detection to a single model layer, and running with that layer disabled approved a message containing an email address and a phone number. Structured identifiers are now checked deterministically no matter what happens to the model layers below.
+
+### A supply-chain tradeoff: `trust_remote_code=True`
+
+Both encoders use custom architectures with no standard-library equivalent, so loading either executes code from its Hugging Face repository at load time. Presidio, the layer these replace, required nothing of the sort. This is a real tradeoff taken on inside a privacy tool, mitigated but not eliminated: both models are pinned to a specific revision (`PII_DETECTOR_REVISION`, `POLICY_LINTER_REVISION` in `airlock.py`), each verified against the Hugging Face API before being written into the file, so a later push to either repository cannot silently change what runs on your machine.
+
+### What is, and is not, independently benchmarked
+
+The PII-Detector is benchmarked by its authors on six public PII corpora and scores best on five of six. The Policy Linter has **no published benchmarks**; Liquid's own release post describes both fine-tunes as "proof-of-concept demonstrations... not formally evaluated research contributions." The only evidence for the policy linter's behaviour is this project's own `eval/` harness, run against a synthetic dataset built for this project, not an external corpus.
+
+That harness's numbers should be read as an upper bound, not as expected field performance: the PII-Detector scored 1.00 precision on `eval/dataset.jsonl`, against 0.428 and 0.236 on the two hardest public corpora it is benchmarked on. The synthetic set is easier than real text, on purpose, to isolate what was being tested. See `eval/README.md` for what each script measures.
 
 ## MCP tools
 
@@ -137,14 +146,13 @@ Tool annotations are computed at startup from `--allow-writes`, so
 ## Requirements
 
 - [uv](https://docs.astral.sh/uv/)
-- [Ollama](https://ollama.com/) running locally
-- Two local models, a worker and a guard
+- [Ollama](https://ollama.com/) running locally, for the worker model
+- `torch` and `transformers`, for the two guard encoders
 
 Dependencies are declared inline in `airlock.py` using PEP 723, so `uv` resolves them on first run. There is nothing to install beforehand.
 
 ```sh
 ollama pull qwen3.5:0.8b               # worker
-ollama pull granite4.1-guardian:8b     # guard
 ```
 
 **Do not use an `-mlx` tag for the worker.** MLX is the faster backend on Apple
@@ -154,16 +162,23 @@ returns the bare string `answer`, so every step fails and no session completes.
 The plain tag on the same machine, same Ollama, same prompt, honours the schema.
 
 The entire worker loop is schema-constrained JSON, so correctness settles this
-over speed. The guard model is unaffected, since its verdict is a single token.
+over speed.
 
 `doctor` checks for exactly this, and is worth re-running whenever you change
-tags:
+the worker tag:
 
 ```
  fail  worker emits valid JSON  Model returned unparseable JSON. First 200 chars: 'answer'
 ```
 
-Any Ollama model works for either role. Defaults are set in `airlock.py` and overridden with `--model` and `--guard-model`.
+Any Ollama model works for the worker role. The default is set in `airlock.py` and overridden with `--model`.
+
+The guard's two encoders are not Ollama models. They are downloaded once from
+Hugging Face on first load, roughly 350MB each (~700MB total), then cached
+locally like any other Hugging Face model. `doctor` reports whether each is
+already cached before triggering that download. See [A supply-chain
+tradeoff](#a-supply-chain-tradeoff-trust_remote_codetrue) above before relying
+on this in an environment where executing third-party model code is a concern.
 
 ## Quickstart
 
@@ -213,8 +228,7 @@ Claude Desktop, in `claude_desktop_config.json`:
       "command": "uv",
       "args": [
         "run", "--script", "/absolute/path/to/airlock.py",
-        "serve", "--root", "/absolute/path/to/private-directory",
-        "--guardian-model", "granite4.1-guardian:8b"
+        "serve", "--root", "/absolute/path/to/private-directory"
       ]
     }
   }
@@ -242,7 +256,7 @@ the directory is never operated on invisibly:
   │ guard    checking (attempt 1)
   │ revise   credential detected: aws_secret_access_key
   │ guard    checking (attempt 2)
-  │ approved secrets + pii-patterns + model
+  │ approved secrets + pii-patterns + pii-detector + policy-linter
   └ sent    The directory holds four files across two folders: planning
             notes and a human resources folder. No further detail.
 ```
@@ -281,9 +295,9 @@ Writes are off by default and require `--allow-writes`.
 Read this section before relying on airlock for anything that matters.
 
 - **Not audited.** One author, no external security review.
-- **The LLM layers are probabilistic.** A model asked to judge whether text leaks private information will sometimes be wrong, and can be talked out of a correct judgment by adversarial phrasing. Treat the `guardian` and `model` layers as defence in depth on top of the deterministic layers, never as the primary control.
-- **NER misses names.** Presidio's default spaCy pipeline is `en_core_web_sm`, which trades recall for size. Unusual names, transliterations, and names in unexpected contexts get through. `--spacy-model en_core_web_lg` improves recall at roughly 400MB.
-- **English only.** Both the patterns and the NER models assume English text and mostly United States identifier formats.
+- **The model layers are probabilistic.** A model asked to recognise PII or judge contextual sensitivity will sometimes be wrong, and can be talked out of a correct judgment by adversarial phrasing. Treat `pii-detector` and `policy-linter` as defence in depth on top of the deterministic layers, never as the primary control.
+- **Recall isn't perfect, and the policy linter's is unmeasured against real text.** The PII detector is benchmarked best on five of six public PII corpora, not all six, and even its best published scores are well under perfect recall. The policy linter has no published benchmark at all; see [What is, and is not, independently benchmarked](#what-is-and-is-not-independently-benchmarked) above.
+- **English only.** Both the pattern layer and the two encoders assume English text and mostly United States identifier formats.
 - **The guard sees the reply, not the reasoning.** It inspects what the worker proposes to send. It does not audit how the worker arrived at it.
 - **A determined local model is not the threat model.** airlock guards against incidental disclosure: a helpful local model quoting a file that happens to contain a phone number. It is not built to contain a local model actively trying to exfiltrate data.
 - **Side channels are unaddressed.** Message timing, length, and the pattern of refusals all leak a little information about the contents of the directory.

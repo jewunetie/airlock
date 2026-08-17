@@ -57,8 +57,32 @@ confidence.
 
 **Deterministic layers run before model layers,** and must not be reachable
 only through an optional dependency. `pii-patterns` duplicates part of
-Presidio on purpose: an earlier version delegated all PII detection to
-Presidio, and `--no-presidio` then approved an email and a phone number.
+`pii-detector` on purpose: an earlier version delegated all PII detection to
+a single model layer, and disabling that layer then approved an email and a
+phone number.
+
+**`trust_remote_code=True` is an accepted tradeoff, not an oversight.** Both
+guard encoders (`pii-detector`, `policy-linter`) use custom architectures and
+execute code from their Hugging Face repository at load time. Presidio,
+which they replaced, required nothing of the sort. Mitigated by pinning
+`PII_DETECTOR_REVISION` and `POLICY_LINTER_REVISION`, each verified against
+the Hugging Face API rather than guessed, not eliminated. State this plainly
+in README.md as well; it is a real supply-chain risk taken on inside a
+privacy tool and must not be buried in a call-site comment.
+
+**The Policy Linter has no published benchmark.** Liquid's own release post
+calls both fine-tunes "proof-of-concept demonstrations... not formally
+evaluated research contributions." The PII-Detector, by contrast, is
+benchmarked on six public corpora and is best on five. The only evidence for
+the Policy Linter is this project's own `eval/`, on a synthetic dataset built
+for this project. A later reader must not assume it was measured externally;
+it was not, and `PLAN-liquid-guard.md` records the evidence gap in full.
+
+**`eval/`'s numbers are an upper bound, not field performance.** The
+PII-Detector scored 1.00 precision on `eval/dataset.jsonl` against 0.428 and
+0.236 on the hardest public corpora it is actually benchmarked on. The
+synthetic set is markedly easier than real text. Say so wherever an `eval/`
+number is cited, so nobody reads it as expected accuracy in the wild.
 
 **Everything outbound passes through `envelope`.** It is the single choke
 point, which is why concern sanitising happens there. Guard explanations are
@@ -74,6 +98,17 @@ metadata. `airlock_open` once returned a directory listing and gave away
 the stream and drops the client. Use `err_console`. `print(..., file=sys.stderr)`
 is also fine; `console.print` is not.
 
+## Known weaknesses
+
+**Policy linter rule 5 (confidential business) is the noisy rule.** Measured
+twice independently in `eval/bakeoff.py`'s runs: it fires on ordinary business
+vocabulary alone (`shipment`, `inventory`, `ledger` each trip it with no other
+context) and accounted for 52% of the bake-off's false positives. It stays at
+a low threshold anyway, per `PLAN-liquid-guard.md`'s operating-point note,
+because it is also the only rule that catches the hardest contextual cases.
+This wants the rule reworded, not the threshold retuned; raising the
+threshold enough to quiet it would also cost the recall it exists for.
+
 ## Things that look like bugs and are not
 
 `check()` renders through `Text.assemble`, which does not parse rich markup.
@@ -85,9 +120,6 @@ enum value, so every step fails. `doctor` probes for this.
 
 `detect-secrets` entropy plugins are filtered out deliberately. They assume
 source code; on prose they fire on nearly every sentence.
-
-Presidio's spaCy model is named explicitly. Left to its default it downloads
-`en_core_web_lg`, roughly 400MB, even when a smaller one is present.
 
 ## Testing conventions
 

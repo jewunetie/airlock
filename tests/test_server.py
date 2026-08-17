@@ -381,11 +381,21 @@ async def group_c(root: Path) -> None:
         payload = res.structured_content or {}
 
         # A containment assertion is vacuous when there was nothing to
-        # contain, so report inconclusive rather than pass.
+        # contain, so report inconclusive rather than pass. Every check this
+        # early return bypasses gets its own skip(): CLAUDE.md's low-total
+        # guard exists because a suite that silently collects fewer checks
+        # reads exactly like one that passed, and a `return` here skips not
+        # just the three checks right below but the entire second ask() call
+        # too.
         if worker_failed(payload):
             why = "; ".join(payload.get("guard", {}).get("concerns", []))[:80]
-            skip("receipt withholds content", f"INCONCLUSIVE, worker never ran: {why}")
-            skip("disclosure path returns content", "same")
+            reason = f"INCONCLUSIVE, worker never ran: {why}"
+            skip("receipt withholds content", reason)
+            skip("receipt says work was performed", reason)
+            skip("receipt has no message field", reason)
+            skip("disclosure_request returns an envelope", reason)
+            skip("guard still blocks identifiers on disclosure", reason)
+            skip("an approved reply actually carried content", reason)
             return
 
         blob = json.dumps(payload)
@@ -405,7 +415,11 @@ async def group_c(root: Path) -> None:
         payload2 = res2.structured_content or {}
         check("disclosure_request returns an envelope", "status" in payload2)
         if worker_failed(payload2):
-            skip("guard blocks identifiers on disclosure", "INCONCLUSIVE, worker never ran")
+            # Two checks follow below, not one: both need a skip(), or this
+            # path silently collects one fewer check than a successful run
+            # does, the exact undercount the low-total guard exists to catch.
+            skip("guard still blocks identifiers on disclosure", "INCONCLUSIVE, worker never ran")
+            skip("an approved reply actually carried content", "INCONCLUSIVE, worker never ran")
             return
         blob2 = json.dumps(payload2)
         hard_leaks = [s for s in ("123-45-6789", "jane.doe@example-corp.com") if s in blob2]

@@ -33,6 +33,7 @@ import importlib.util
 import secrets
 import string
 import sys
+import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -593,6 +594,51 @@ def worker_step_exhaustion_case() -> None:
     )
 
 
+def jobs_empty_answer_case() -> None:
+    """Fix round 3: the same fail-open worker_step_exhaustion_case pins for
+    run_worker, found in run_jobs and reported (not fixed) in fix round 2,
+    now closed here per the coordinator's explicit instruction. An unshaped
+    extraction job whose worker answer is an empty string used to be handed
+    to the guard anyway; evaluate("") approves, since an empty string trips
+    none of the four layers, so the job was recorded status=="ok" with an
+    empty value, the same status a genuine extraction gets. The fix matches
+    the vocabulary the fill-mode branch a few lines above already uses for
+    exactly this case (empty or "NOT PRESENT"): not_found, not ok. No model
+    needed: with the fix, this path returns before evaluate_session is ever
+    called, which this case also demonstrates by never installing a real
+    guard.
+    """
+    print("\nrun_jobs: an empty extraction answer is not_found, never a guarded ok")
+
+    tmp = Path(tempfile.mkdtemp(prefix="jobs-empty-answer-"))
+    (tmp / "doc0.txt").write_text("irrelevant content\n")
+    session = airlock.Session(
+        session_id="jobs-empty",
+        objective="x",
+        sandbox=airlock.Sandbox(root=tmp, allow_writes=False),
+        worker_model="stub-worker",
+    )
+    original = airlock.ollama_chat
+    airlock.ollama_chat = lambda model, prompt, schema=None: ""
+    try:
+        result = airlock.run_jobs(session, [{"document": 0, "extract": "the value in box 1"}])
+    finally:
+        airlock.ollama_chat = original
+
+    results = result.get("results") or []
+    job = results[0] if results else {}
+    check(
+        "an empty answer is reported not_found, not ok",
+        job.get("status") == "not_found",
+        str(job),
+    )
+    check(
+        "an empty answer never carries a released value",
+        "value" not in job,
+        str(job),
+    )
+
+
 def main() -> int:
     print(f"airlock: {AIRLOCK}")
 
@@ -619,6 +665,7 @@ def main() -> int:
     run("chunk_text_step_guard_case", chunk_text_step_guard_case)
     run("dense_non_ascii_truncation_case", dense_non_ascii_truncation_case, unavailable)
     run("worker_step_exhaustion_case", worker_step_exhaustion_case)
+    run("jobs_empty_answer_case", jobs_empty_answer_case)
 
     total = len(PASS) + len(FAIL) + len(SKIP)
     print(f"\n{len(PASS)} passed, {len(FAIL)} failed, {len(SKIP)} skipped ({total} checks)")
@@ -626,11 +673,11 @@ def main() -> int:
         print("failed:")
         for name in FAIL:
             print(f"  - {name}")
-    # Raised from 33 to 36: fix round 2 adds 3 worker-step-exhaustion cases,
+    # Raised from 36 to 38: fix round 3 adds 2 run_jobs empty-answer cases,
     # which need no model and always run, per CLAUDE.md: a suite that
     # silently collects fewer checks reads like one that passed.
-    if total < 36:
-        print(f"\nWARNING: only {total} checks ran. Expected at least 36.")
+    if total < 38:
+        print(f"\nWARNING: only {total} checks ran. Expected at least 38.")
         print("Something did not collect. Treat this as a failure, not a pass.")
         return 1
     # Skips are reported, not failed, per CLAUDE.md. But a run where every

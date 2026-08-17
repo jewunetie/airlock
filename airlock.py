@@ -1698,6 +1698,19 @@ def run_jobs(
             results.append({"job": index, "status": "filled", "field": field})
             continue
 
+        # Same failure the fill-mode branch above already guards against:
+        # the worker found nothing to extract. An empty string trips none of
+        # the four guard layers, so handing it to evaluate_session would get
+        # a trivial approve and release status=="ok" with an empty value --
+        # the same "the guard approved this text" standing in for "the
+        # operation succeeded" conflation run_worker's step-exhaustion path
+        # had (see task-2-report.md fix round 2). not_found, matching the
+        # vocabulary above, rather than a guarded, empty "ok".
+        if not answer or answer.upper().startswith("NOT PRESENT"):
+            note("refused", f"job {index}: not found in that document")
+            results.append({"job": index, "document": doc_index, "status": "not_found"})
+            continue
+
         verdict = evaluate_session(session, answer)
         if verdict.approved:
             note("approved", f"job {index}")

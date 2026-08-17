@@ -385,12 +385,30 @@ def task3_wiring() -> None:
     # benign, non-numeric jobs over a workspace containing an SSN none of
     # them touches must not be blocked, or the check would be blocking every
     # round rather than reassembly specifically.
+    #
+    # Not bare fruit names: an earlier version of this fixture used twelve
+    # fruit words, and the real PII detector (unlike the old Presidio guard)
+    # flagged four of them ("cherry", "kiwi", "lemon", "olive") as
+    # identity.person_name, because each one is also a plausible given name.
+    # That was the detector doing its job on an unrepresentative fixture, not
+    # a guard regression. Business/operational vocabulary is a closer
+    # approximation of what a real extraction job actually returns
+    # (invoice numbers, headcounts, short factual lines), but is not
+    # automatically safe either: the policy linter's rule5 (confidential
+    # business information) fires on some individually-clean business nouns
+    # once joined into one string (measured: "shipment", "inventory" and
+    # "ledger" each individually trip rule5 outright, and several other
+    # combinations that are clean word-by-word still trip rule5 once
+    # combined; see task-2-report.md fix round 2). The twelve words below
+    # were verified clean both individually and as the joined round-level
+    # string the guard actually evaluates, against the real models, not
+    # assumed from the word list alone.
     tmp4 = Path(tempfile.mkdtemp(prefix="airlock-round-guard-test3-"))
     (tmp4 / "record.txt").write_text("Client SSN is 912-84-7731, filed Monday.\n")
     session = session_over(tmp4)
     jobs = [{"document": 0, "extract": f"question {i}"} for i in range(12)]
-    answers = ["apple", "banana", "cherry", "date", "fig", "grape",
-               "honey", "kiwi", "lemon", "mango", "nectarine", "olive"]
+    answers = ["forecast", "quarterly", "template", "summary", "agenda", "payroll",
+               "contract", "vendor", "documentation", "kitchen", "invoice", "headcount"]
     result = run_with_stub(session, jobs, answers)
     check(
         "twelve benign jobs over an untouched SSN: round is ok",

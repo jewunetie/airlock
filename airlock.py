@@ -1823,7 +1823,20 @@ def run_worker(
             result = f"refused: {exc}"
         history.append(f"{action} -> {result[:600]}")
     else:
-        draft = "I could not finish within the allowed number of steps."
+        # Step budget exhausted with no answer. This must not fall through to
+        # the guard: a fixed, code-written fallback string is not model
+        # output, but it is well-formed prose, and the guard would correctly
+        # approve it as harmless, at which point the caller reads
+        # status=="approved" as "the operation succeeded" when the worker
+        # never actually answered at all. That conflation is the bug, not
+        # anything the guard does; block here, the same way an explicit empty
+        # answer already does one line below, rather than let a "the guard
+        # approved this text" result stand in for "the operation succeeded".
+        return envelope(
+            session, "blocked", "",
+            ["the local model could not finish within the allowed number of "
+             "steps and produced no answer"],
+        )
 
     if not draft:
         return envelope(session, "blocked", "", ["the local model produced no answer"])

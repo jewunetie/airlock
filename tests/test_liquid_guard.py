@@ -543,6 +543,56 @@ def dense_non_ascii_truncation_case(unavailable: str) -> None:
     )
 
 
+def worker_step_exhaustion_case() -> None:
+    """Fix round 2 defect: run_worker's step-exhaustion path used to set a
+    fixed diagnostic string ("I could not finish...") as `draft` and fall
+    through to the guard, one line above a check that already blocks an
+    explicit empty answer. The guard correctly approves that string, since
+    it is harmless prose, and the caller then reads status=="approved" for a
+    run in which the worker never produced an answer at all: the guard doing
+    its job got conflated with the operation having succeeded. Pinned
+    directly against run_worker here rather than depending on
+    tests/test_server.py's stub arrangement (that suite's version of this
+    check depended on an accidental coupling: the exhausted stub also fed
+    worker-shaped output to the guard's own call, which failed to parse as a
+    verdict and blocked for the wrong reason). No model needed: with the fix,
+    this path returns before evaluate_session is ever called, which this
+    case also demonstrates by never installing a real guard.
+    """
+    print("\nrun_worker: step-exhaustion is blocked, not approved as harmless prose")
+
+    session = airlock.Session(
+        session_id="exhaustion-test",
+        objective="x",
+        sandbox=airlock.Sandbox(root=HERE.parent, allow_writes=False),
+        worker_model="stub-worker",
+    )
+    # Always a valid, schema-compliant action that never sets draft, so the
+    # loop runs out MAX_WORKER_STEPS times without ever breaking.
+    original = airlock.ollama_chat
+    airlock.ollama_chat = lambda model, prompt, schema=None: {"action": "list", "path": "."}
+    try:
+        result = airlock.run_worker(session, "what is here?")
+    finally:
+        airlock.ollama_chat = original
+
+    check(
+        "step exhaustion is reported blocked, not approved",
+        result.get("status") == "blocked",
+        str(result.get("status")),
+    )
+    check(
+        "step exhaustion carries no message content",
+        not result.get("message"),
+        repr(result.get("message")),
+    )
+    check(
+        "step exhaustion names the cause, distinct from the empty-answer path",
+        any("step" in c.lower() for c in result.get("guard_concerns", [])),
+        ",".join(result.get("guard_concerns", [])) or "no concerns",
+    )
+
+
 def main() -> int:
     print(f"airlock: {AIRLOCK}")
 
@@ -568,6 +618,7 @@ def main() -> int:
     run("cli_parser_cases", cli_parser_cases)
     run("chunk_text_step_guard_case", chunk_text_step_guard_case)
     run("dense_non_ascii_truncation_case", dense_non_ascii_truncation_case, unavailable)
+    run("worker_step_exhaustion_case", worker_step_exhaustion_case)
 
     total = len(PASS) + len(FAIL) + len(SKIP)
     print(f"\n{len(PASS)} passed, {len(FAIL)} failed, {len(SKIP)} skipped ({total} checks)")
@@ -575,12 +626,11 @@ def main() -> int:
         print("failed:")
         for name in FAIL:
             print(f"  - {name}")
-    # Raised from 29 to 33: fix round 1 adds 2 _chunk_text step-guard cases
-    # and 2 dense-non-ASCII truncation cases, all of which run (or are
-    # explicitly SKIPped and still counted) every time, per CLAUDE.md: a
-    # suite that silently collects fewer checks reads like one that passed.
-    if total < 33:
-        print(f"\nWARNING: only {total} checks ran. Expected at least 33.")
+    # Raised from 33 to 36: fix round 2 adds 3 worker-step-exhaustion cases,
+    # which need no model and always run, per CLAUDE.md: a suite that
+    # silently collects fewer checks reads like one that passed.
+    if total < 36:
+        print(f"\nWARNING: only {total} checks ran. Expected at least 36.")
         print("Something did not collect. Treat this as a failure, not a pass.")
         return 1
     # Skips are reported, not failed, per CLAUDE.md. But a run where every

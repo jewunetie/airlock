@@ -505,6 +505,41 @@ def evaluate_fail_closed_cases() -> None:
         airlock._load_policy_linter.cache_clear()
 
 
+def evaluate_default_threshold_case() -> None:
+    """A bare evaluate(text) call must read POLICY_LINTER_THRESHOLD at call
+    time, not at import time.
+
+    `def evaluate(..., linter_threshold: float = POLICY_LINTER_THRESHOLD)`
+    binds the default when airlock.py is first imported, so a later change to
+    the module global (as evaluate_fail_closed_cases above and eval/'s
+    harness both make) would be invisible to any caller that omits the
+    argument. scan_pii_model and scan_policy are stubbed so this is a pure
+    call-boundary check: no real model load, runs unconditionally.
+    """
+    print("\nevaluate(): linter_threshold default reads the current global, not the import-time one")
+
+    original_scan_pii_model = airlock.scan_pii_model
+    original_scan_policy = airlock.scan_policy
+    original_threshold = airlock.POLICY_LINTER_THRESHOLD
+    seen: dict[str, object] = {}
+    airlock.scan_pii_model = lambda text: []
+    airlock.scan_policy = lambda text, threshold=None: (seen.__setitem__("threshold", threshold), [])[1]
+    # A value nothing in this codebase would pick by coincidence, so the
+    # assertion cannot pass by accident.
+    airlock.POLICY_LINTER_THRESHOLD = 0.13579
+    try:
+        airlock.evaluate(CLEAN_POLICY_TEXT)
+        check(
+            "bare call passes the threshold current at call time",
+            seen.get("threshold") == 0.13579,
+            f"scan_policy received {seen.get('threshold')!r}",
+        )
+    finally:
+        airlock.scan_pii_model = original_scan_pii_model
+        airlock.scan_policy = original_scan_policy
+        airlock.POLICY_LINTER_THRESHOLD = original_threshold
+
+
 def cli_parser_cases() -> None:
     """Task 3 section of the plan: the removed flags, --linter-threshold
     (wired through, and range-validated per the final fix wave), and what
@@ -890,6 +925,7 @@ def main() -> int:
     run("fail_closed_case", fail_closed_case)
     run("rewired_evaluate_cases", rewired_evaluate_cases, unavailable)
     run("evaluate_fail_closed_cases", evaluate_fail_closed_cases)
+    run("evaluate_default_threshold_case", evaluate_default_threshold_case)
     run("cli_parser_cases", cli_parser_cases)
     run("chunk_text_step_guard_case", chunk_text_step_guard_case)
     run("dense_non_ascii_truncation_case", dense_non_ascii_truncation_case, unavailable)
@@ -909,11 +945,12 @@ def main() -> int:
     # banner/config-screen smoke case (4), and cmd_doctor's real encoder
     # checks (7)), then to 55 (PLAN-liquid-guard.md fix round 2:
     # pii_entity_threshold_case, 4 checks), then to 61 (final fix wave:
-    # cli_parser_cases' --linter-threshold range validation, 6 checks). Per
+    # cli_parser_cases' --linter-threshold range validation, 6 checks), then
+    # to 62 (cleanup: evaluate_default_threshold_case, 1 check). Per
     # CLAUDE.md, a suite that silently collects fewer checks reads like one
     # that passed.
-    if total < 61:
-        print(f"\nWARNING: only {total} checks ran. Expected at least 61.")
+    if total < 62:
+        print(f"\nWARNING: only {total} checks ran. Expected at least 62.")
         print("Something did not collect. Treat this as a failure, not a pass.")
         return 1
     # Skips are reported, not failed, per CLAUDE.md. But a run where every

@@ -11,7 +11,19 @@
 
     A  privacy-filter   openai/privacy-filter alone
     B  layered          privacy-filter first, granite on whatever it cleared
-    C  granite          granite4.1-guardian alone, the current architecture
+    C  granite          granite4.1-guardian alone, via its native scoring
+                        protocol (GUARDIAN_CRITERIA + GUARDIAN_BLOCK,
+                        reading <score>yes</score>)
+
+Config C is NOT the configuration airlock.py ever shipped. When this bake-off
+ran, airlock.py called granite as a general judging model with GUARD_PROMPT
+and GUARD_SCHEMA, a different mode in which granite performs differently
+(spot-checked: native scoring caught 2 of 4 contextual cases, GUARD_PROMPT
+caught 4 of 4). The comparison against granite's shipped configuration was
+never run; treat config C's results as evidence about granite's native
+scoring mode only. See PLAN-liquid-guard.md for the full account. airlock.py
+no longer uses granite at all, so config C also no longer reflects "the
+current architecture" in any sense.
 
 Positive class is "block". Precision, recall and F1 are computed with respect
 to blocking, so recall is the fraction of genuinely sensitive messages caught

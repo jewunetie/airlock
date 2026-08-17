@@ -345,6 +345,28 @@ def group_b2() -> None:
         airlock.ollama_chat = real
 
 
+# Every check group_c performs on a run that completes, in order. Each early
+# return below must skip() everything in this list not already recorded via
+# check(), so a suite that exits early collects exactly as many checks as one
+# that runs to completion. CLAUDE.md: a suite that silently collects fewer
+# checks reads exactly like one that passed.
+GROUP_C_CHECKS = [
+    "airlock_open returns a session",
+    "receipt withholds content",
+    "receipt says work was performed",
+    "receipt has no message field",
+    "disclosure_request returns an envelope",
+    "guard still blocks identifiers on disclosure",
+    "an approved reply actually carried content",
+]
+
+
+def skip_remaining_group_c(done: int, reason: str) -> None:
+    """skip() every GROUP_C_CHECKS entry from index `done` onward."""
+    for name in GROUP_C_CHECKS[done:]:
+        skip(name, reason)
+
+
 async def group_c(root: Path) -> None:
     print("\nC. Whole loop through the MCP client (needs Ollama)")
     # Skip, not crash, on either missing prerequisite. Group A already reports
@@ -353,23 +375,22 @@ async def group_c(root: Path) -> None:
     try:
         from mcp import Client
     except ImportError as exc:
-        skip("receipt withholds content", f"no MCP SDK: {exc}"[:60])
-        skip("disclosure_request returns content", "same")
+        skip_remaining_group_c(0, f"no MCP SDK: {exc}"[:60])
         return
 
     try:
         airlock.ollama_models()
     except RuntimeError as exc:
-        skip("receipt withholds content", str(exc)[:60])
-        skip("disclosure_request returns content", "same")
+        skip_remaining_group_c(0, str(exc)[:60])
         return
 
     server = airlock.build_server(make_args(root))
     async with Client(server) as client:
         opened = (await client.call_tool("airlock_open", {"objective": "Describe this folder."}))
         session = (opened.structured_content or {}).get("session")
-        check("airlock_open returns a session", bool(session))
+        check(GROUP_C_CHECKS[0], bool(session))
         if not session:
+            skip_remaining_group_c(1, "airlock_open returned no session")
             return
 
         res = await client.call_tool(
@@ -388,12 +409,7 @@ async def group_c(root: Path) -> None:
         if worker_failed(payload):
             why = "; ".join(payload.get("guard", {}).get("concerns", []))[:80]
             reason = f"INCONCLUSIVE, worker never ran: {why}"
-            skip("receipt withholds content", reason)
-            skip("receipt says work was performed", reason)
-            skip("receipt has no message field", reason)
-            skip("disclosure_request returns an envelope", reason)
-            skip("guard still blocks identifiers on disclosure", reason)
-            skip("an approved reply actually carried content", reason)
+            skip_remaining_group_c(1, reason)
             return
 
         blob = json.dumps(payload)
@@ -411,13 +427,12 @@ async def group_c(root: Path) -> None:
             },
         )
         payload2 = res2.structured_content or {}
-        check("disclosure_request returns an envelope", "status" in payload2)
+        check(GROUP_C_CHECKS[4], "status" in payload2)
         if worker_failed(payload2):
             # Two checks follow below, not one: both need a skip(), or this
             # path silently collects one fewer check than a successful run
             # does, the exact undercount the low-total guard exists to catch.
-            skip("guard still blocks identifiers on disclosure", "INCONCLUSIVE, worker never ran")
-            skip("an approved reply actually carried content", "INCONCLUSIVE, worker never ran")
+            skip_remaining_group_c(5, "INCONCLUSIVE, worker never ran")
             return
         blob2 = json.dumps(payload2)
         hard_leaks = [s for s in ("123-45-6789", "jane.doe@example-corp.com") if s in blob2]
@@ -428,6 +443,94 @@ async def group_c(root: Path) -> None:
             bool(str(payload2.get("message", "")).strip()),
             f"{len(str(payload2.get('message','')))} chars",
         )
+
+
+async def group_c_prereq_counts(root: Path) -> None:
+    """Every group_c prerequisite guard must skip exactly what a completed
+    run would have checked, not fewer. Drives group_c three times under
+    synthetic failures (SDK missing, Ollama unreachable, session absent) so
+    the invariant is asserted behaviourally, not just read off the source.
+    """
+    print("\nC-prereqs. group_c early returns account for every check")
+
+    async def run_and_count() -> int:
+        # These drives of group_c are synthetic probes of its early-return
+        # accounting, not real results, so pop what they add back out of the
+        # global lists after counting. Otherwise the absent-session probe's
+        # deliberately-induced "no session" would show up as a real suite
+        # failure, and the other two would double the real group C's tally.
+        before = (len(PASS), len(FAIL), len(SKIP))
+        await group_c(root)
+        after = (len(PASS), len(FAIL), len(SKIP))
+        total = sum(a - b for a, b in zip(after, before))
+        del PASS[before[0]:]
+        del FAIL[before[1]:]
+        del SKIP[before[2]:]
+        return total
+
+    # Missing SDK: sys.modules[name] = None is the documented way to make
+    # `from mcp import Client` raise ImportError without needing mcp absent
+    # from the environment (it is a declared dependency of this script).
+    had_mcp = "mcp" in sys.modules
+    real_mcp = sys.modules.get("mcp")
+    sys.modules["mcp"] = None
+    try:
+        n = await run_and_count()
+        check("missing-SDK path accounts for every check", n == len(GROUP_C_CHECKS),
+              f"{n} of {len(GROUP_C_CHECKS)}")
+    finally:
+        if had_mcp:
+            sys.modules["mcp"] = real_mcp
+        else:
+            del sys.modules["mcp"]
+
+    # Unreachable Ollama: same prerequisite-guard shape, different exception.
+    real_ollama_models = airlock.ollama_models
+    airlock.ollama_models = lambda: (_ for _ in ()).throw(RuntimeError("no ollama"))
+    try:
+        n = await run_and_count()
+        check("unreachable-Ollama path accounts for every check", n == len(GROUP_C_CHECKS),
+              f"{n} of {len(GROUP_C_CHECKS)}")
+    finally:
+        airlock.ollama_models = real_ollama_models
+
+    # Absent session: let the SDK import and the Ollama check succeed, but
+    # replace Client with a stub whose call_tool returns no "session" key, so
+    # `if not session: return` fires. Needs the real mcp package importable
+    # (it is, per the dependency block above), so restore it first.
+    try:
+        from mcp import Client as _RealClient  # noqa: F401 - proves it imports
+    except ImportError:
+        skip("absent-session path accounts for every check", "no MCP SDK to drive this with")
+        return
+
+    class _FakeResult:
+        structured_content = {}  # no "session" key -> falsy session
+
+    class _NoSessionClient:
+        def __init__(self, _server: object) -> None:
+            pass
+
+        async def __aenter__(self) -> "_NoSessionClient":
+            return self
+
+        async def __aexit__(self, *_exc: object) -> bool:
+            return False
+
+        async def call_tool(self, _name: str, _args: dict) -> _FakeResult:
+            return _FakeResult()
+
+    real_client = sys.modules["mcp"].Client
+    real_ollama_models = airlock.ollama_models
+    airlock.ollama_models = lambda: ["stub-model"]
+    sys.modules["mcp"].Client = _NoSessionClient
+    try:
+        n = await run_and_count()
+        check("absent-session path accounts for every check", n == len(GROUP_C_CHECKS),
+              f"{n} of {len(GROUP_C_CHECKS)}")
+    finally:
+        sys.modules["mcp"].Client = real_client
+        airlock.ollama_models = real_ollama_models
 
 
 def main() -> int:
@@ -453,6 +556,7 @@ def main() -> int:
         run_group("group B2", lambda _root: group_b2(), False)
         run_group("group B3", lambda _root: group_b3(), False)
         run_group("group C", group_c, True)
+        run_group("group C prereqs", group_c_prereq_counts, True)
     finally:
         # The workspace holds a symlink to a decoy secret outside it.
         shutil.rmtree(root.parent, ignore_errors=True)
@@ -463,8 +567,8 @@ def main() -> int:
         print("failed:")
         for name in FAIL:
             print(f"  - {name}")
-    if total < 40:
-        print(f"\nWARNING: only {total} checks ran. Expected around 50.")
+    if total < 45:
+        print(f"\nWARNING: only {total} checks ran. Expected around 54.")
         print("Something did not collect. Treat this as a failure, not a pass.")
         return 1
     return 1 if FAIL else 0

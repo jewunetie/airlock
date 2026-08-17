@@ -1097,7 +1097,7 @@ class GuardVerdict:
         return self.decision == "approve"
 
 
-def evaluate(message: str, linter_threshold: float = POLICY_LINTER_THRESHOLD) -> GuardVerdict:
+def evaluate(message: str, linter_threshold: float | None = None) -> GuardVerdict:
     """Run every guard layer over a candidate message.
 
     Layers run cheapest and most certain first and short-circuit, since a
@@ -1108,7 +1108,16 @@ def evaluate(message: str, linter_threshold: float = POLICY_LINTER_THRESHOLD) ->
     Any layer that cannot run blocks the message rather than being skipped, so
     a missing dependency (here: torch/transformers, or a model that fails to
     load) degrades into refusal rather than into silent permissiveness.
+
+    linter_threshold defaults to None rather than to POLICY_LINTER_THRESHOLD
+    directly: a default bound to the module global at import time would freeze
+    whatever value was current then, so a bare evaluate(text) call would keep
+    using that stale value even after something changes the global at
+    runtime (the eval harness and tests both do). Resolving None here instead
+    reads the global at call time.
     """
+    if linter_threshold is None:
+        linter_threshold = POLICY_LINTER_THRESHOLD
     layers: list[str] = []
 
     secrets = scan_secrets(message)

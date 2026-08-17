@@ -1345,9 +1345,12 @@ def run_jobs(
             [f"too many jobs in one round: {len(jobs)} exceeds {MAX_JOBS_PER_ROUND}"],
         )
 
+    truncated_marker = f"... truncated at {MAX_LISTING_ENTRIES}"
     try:
         documents = sorted(
-            name for name in session.sandbox.list_dir(".") if not name.endswith("/")
+            name
+            for name in session.sandbox.list_dir(".")
+            if not name.endswith("/") and name != truncated_marker
         )
     except SandboxError as exc:
         # The concern is a FIXED string, never str(exc): a SandboxError can
@@ -2635,8 +2638,13 @@ def build_server(args: argparse.Namespace) -> Any:
         SESSIONS[session.session_id] = session
         counts = sandbox.stats()
         # Counts, never names.
+        truncated_marker = f"... truncated at {MAX_LISTING_ENTRIES}"
         try:
-            names = sorted(n for n in sandbox.list_dir(".") if not n.endswith("/"))
+            names = sorted(
+                n
+                for n in sandbox.list_dir(".")
+                if not n.endswith("/") and n != truncated_marker
+            )
         except SandboxError:
             names = []
         # Indices and extensions, never names. The caller needs to be able to

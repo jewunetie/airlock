@@ -411,10 +411,12 @@ def critical1_large_workspace() -> None:
     session = session_over(tmp)
     jobs = [{"document": 0, "extract": "what does the note say"}]
     result = run_with_stub(session, jobs, ["a benign one-line answer"])
+    results = result.get("results", [])
+    first_status = results[0].get("status") if results else None
     check(
-        "a round over the same large workspace is not blocked",
-        result.get("status") == "ok",
-        str(result.get("status")),
+        "a round over the same large workspace succeeds, not just avoids block",
+        result.get("status") == "ok" and first_status == "ok",
+        f"round={result.get('status')} job0={first_status}",
     )
 
 

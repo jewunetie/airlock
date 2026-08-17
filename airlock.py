@@ -442,6 +442,220 @@ def scan_pii(text: str, spacy_model: str = DEFAULT_SPACY_MODEL) -> list[dict[str
 
 
 # --------------------------------------------------------------------------
+# Layer 2b: bidirectional encoder guards  Two 350M LiquidAI encoders: a PII
+# token classifier and a zero-shot policy linter for contextual sensitivity
+# that has no span to detect at all. Not wired into evaluate() yet; see
+# PLAN-liquid-guard.md. Scoring logic ported from eval/bakeoff.py's
+# PIIDetectorGuard and PolicyLinterGuard, not reinvented.
+# --------------------------------------------------------------------------
+
+
+class GuardModelUnavailable(Exception):
+    """Raised when a guard encoder cannot be loaded or run."""
+
+
+PII_DETECTOR_MODEL = "LiquidAI/LFM2.5-Encoder-350M-PII-Detector"
+# Pinned so a later change to the model repo cannot silently alter what runs
+# under trust_remote_code=True below.
+PII_DETECTOR_REVISION = "b8c9cf3d2d6ae52501b35a27ba46f271449c9ce2"
+PII_DETECTOR_THRESHOLD = 0.5
+
+
+def resolve_device(choice: str = "auto") -> str:
+    """Pick a torch device: MPS on Apple Silicon, then CUDA, then CPU.
+
+    Ported from eval/bakeoff.py's resolve_device. Both encoders are
+    single-forward-pass models with no MLX build, so MPS is the free win on a
+    Mac and CPU is the only universal fallback.
+    """
+    import torch
+
+    if choice != "auto":
+        return choice
+    if torch.backends.mps.is_available():
+        return "mps"
+    if torch.cuda.is_available():
+        return "cuda"
+    return "cpu"
+
+
+@lru_cache(maxsize=1)
+def _load_pii_detector(device: str = "auto") -> tuple[Any, Any, Any, str, dict[int, str]]:
+    """Load the PII token classifier once and cache it.
+
+    trust_remote_code=True executes code from the model repository at load
+    time: a bespoke bidirectional backbone with a BIOES token-classification
+    head, for which no standard-architecture equivalent exists. That is an
+    accepted supply-chain risk recorded in PLAN-liquid-guard.md and README.md,
+    not one to reconsider quietly at this call site. The revision above is
+    pinned so a later push to the repo cannot change what that code does.
+    """
+    try:
+        import torch
+        from transformers import AutoModelForTokenClassification, AutoTokenizer
+    except ImportError as exc:
+        raise GuardModelUnavailable(f"torch/transformers not installed: {exc}")
+    try:
+        resolved = resolve_device(device)
+        tok = AutoTokenizer.from_pretrained(
+            PII_DETECTOR_MODEL, revision=PII_DETECTOR_REVISION, trust_remote_code=True
+        )
+        model = (
+            AutoModelForTokenClassification.from_pretrained(
+                PII_DETECTOR_MODEL, revision=PII_DETECTOR_REVISION, trust_remote_code=True
+            )
+            .eval()
+            .to(resolved)
+        )
+    except Exception as exc:  # noqa: BLE001 - any load failure fails closed
+        raise GuardModelUnavailable(f"PII detector could not load: {exc}")
+    raw = model.config.id2label
+    id2label = (
+        {int(k): v for k, v in raw.items()} if isinstance(raw, dict) else dict(enumerate(raw))
+    )
+    return torch, model, tok, resolved, id2label
+
+
+def scan_pii_model(text: str) -> list[dict[str, str]]:
+    """Entity types found by the PII detector, above threshold.
+
+    Returns findings shaped like the other scanners: rule, masked, layer.
+    The model's own output is a per-token entity label, not a reconstructed
+    span, so there is no matched text to mask in the first place; "masked"
+    mirrors scan_secrets_library's "detected" for the same reason. Raises
+    GuardModelUnavailable on any load or inference failure rather than
+    returning an empty list, so a caller cannot mistake "could not run" for
+    "found nothing".
+    """
+    try:
+        torch, model, tok, device, id2label = _load_pii_detector()
+        enc = tok(text, return_tensors="pt", truncation=True, max_length=512)
+        enc = {k: v.to(device) for k, v in enc.items()}
+        with torch.no_grad():
+            logits = model(**enc).logits.float().cpu()
+        conf, ids = logits.softmax(-1)[0].max(-1)
+    except GuardModelUnavailable:
+        raise
+    except Exception as exc:  # noqa: BLE001 - inference failure fails closed too
+        raise GuardModelUnavailable(f"PII detector inference failed: {exc}")
+
+    found: list[str] = []
+    for c, i in zip(conf.tolist(), ids.tolist()):
+        label = id2label.get(i, "O")
+        if label == "O" or c < PII_DETECTOR_THRESHOLD:
+            continue
+        entity = re.sub(r"^[BIES]-", "", label)
+        if entity not in found:
+            found.append(entity)
+    return [{"rule": entity, "masked": "detected", "layer": "pii:model"} for entity in found]
+
+
+POLICY_LINTER_MODEL = "LiquidAI/LFM2.5-Encoder-350M-Policy-Linter"
+POLICY_LINTER_REVISION = "2a56cb94a7083a90263ea5270523ccc10e7ce8af"
+POLICY_LINTER_THRESHOLD = 0.70
+# Rule 1 (financial hardship) and rule 4 (immigration) raised above the
+# global threshold: measured at 40 and 24 false positives respectively at a
+# global 0.70. Rule 5 (confidential business) deliberately stays low; see the
+# operating-point note in PLAN-liquid-guard.md.
+POLICY_LINTER_RULE_THRESHOLDS: dict[int, float] = {1: 0.98, 4: 0.98}
+
+# Free-text rules, scored per token, zero-shot. Order is the rule index used
+# in findings ("rule0" .. "rule5") and ported verbatim from eval/bakeoff.py.
+# Identifier rules are deliberately absent: the linter measures poorly on
+# exact identifiers, that coverage belongs to scan_pii_model.
+CONTEXTUAL_RULES: list[str] = [
+    "Flag disclosure of a medical condition, diagnosis, treatment, or mental health.",
+    "Flag disclosure of financial hardship, debt, bankruptcy, or inability to pay.",
+    "Flag disclosure of a lawsuit, legal dispute, settlement, or investigation.",
+    "Flag disclosure of addiction, recovery, or substance use.",
+    "Flag disclosure of immigration or visa status.",
+    "Flag confidential business information such as unannounced acquisitions or a customer leaving.",
+]
+
+
+@lru_cache(maxsize=1)
+def _load_policy_linter(device: str = "auto") -> tuple[Any, Any, Any, str, str]:
+    """Load the policy linter once and cache it.
+
+    Same accepted risk as _load_pii_detector: trust_remote_code=True runs
+    code from the model repository (a GLiNER-style rule-matching head), taken
+    on deliberately and recorded in PLAN-liquid-guard.md and README.md, and
+    pinned to a fixed revision for the same reason.
+    """
+    try:
+        import torch
+        from transformers import AutoModel, AutoTokenizer
+    except ImportError as exc:
+        raise GuardModelUnavailable(f"torch/transformers not installed: {exc}")
+    try:
+        resolved = resolve_device(device)
+        tok = AutoTokenizer.from_pretrained(
+            POLICY_LINTER_MODEL, revision=POLICY_LINTER_REVISION, trust_remote_code=True
+        )
+        model = (
+            AutoModel.from_pretrained(
+                POLICY_LINTER_MODEL, revision=POLICY_LINTER_REVISION, trust_remote_code=True
+            )
+            .eval()
+            .to(resolved)
+        )
+    except Exception as exc:  # noqa: BLE001 - any load failure fails closed
+        raise GuardModelUnavailable(f"policy linter could not load: {exc}")
+    prefix = "Policy:\n" + "\n".join(f"- {r}" for r in CONTEXTUAL_RULES) + "\n\nText:\n"
+    return torch, model, tok, resolved, prefix
+
+
+def scan_policy(text: str) -> list[dict[str, str]]:
+    """Rules the policy linter scores above their threshold.
+
+    Reads POLICY_LINTER_THRESHOLD and POLICY_LINTER_RULE_THRESHOLDS as module
+    globals at call time, not as bound defaults, so a caller overriding either
+    constant (as the eval harness and tests do) takes effect immediately.
+    Rule-pool construction is ported unchanged from eval/bakeoff.py's
+    PolicyLinterGuard.decide: each rule's pooled span has to land on that
+    rule's own tokens inside the prompt prefix, not on the input text, which
+    is fiddly and already measured there. Raises GuardModelUnavailable rather
+    than returning empty on any failure, matching scan_pii_model.
+    """
+    try:
+        torch, model, tok, device, prefix = _load_policy_linter()
+        full = prefix + text
+        enc = tok(
+            full, return_offsets_mapping=True, return_tensors="pt", truncation=True, max_length=2048
+        )
+        offsets = enc.pop("offset_mapping")[0].tolist()
+        pool = torch.zeros(1, len(CONTEXTUAL_RULES), len(offsets))
+        pos = len("Policy:\n")
+        for ri, rule in enumerate(CONTEXTUAL_RULES):
+            start = pos + 2
+            end = start + len(rule)
+            idx = [i for i, (a, b) in enumerate(offsets) if a < end and b > start and a != b]
+            if idx:
+                pool[0, ri, idx] = 1 / len(idx)
+            pos = end + 1
+        enc = {k: v.to(device) for k, v in enc.items()}
+        pool = pool.to(device)
+        with torch.no_grad():
+            probs = model(**enc, rule_pool=pool)["logits"].float().sigmoid()[0].cpu()
+    except GuardModelUnavailable:
+        raise
+    except Exception as exc:  # noqa: BLE001 - inference failure fails closed too
+        raise GuardModelUnavailable(f"policy linter inference failed: {exc}")
+
+    text_start = len(prefix)
+    keep = [i for i, (a, b) in enumerate(offsets) if b > text_start and a != b]
+    if not keep:
+        return []
+    sub = probs[keep]
+    found = [
+        ri
+        for ri in range(len(CONTEXTUAL_RULES))
+        if float(sub[:, ri].max()) > POLICY_LINTER_RULE_THRESHOLDS.get(ri, POLICY_LINTER_THRESHOLD)
+    ]
+    return [{"rule": f"rule{ri}", "masked": "detected", "layer": "policy:model"} for ri in found]
+
+
+# --------------------------------------------------------------------------
 # Filesystem sandbox  There is no established Python library for this.
 
 

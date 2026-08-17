@@ -14,3 +14,7 @@ decisions*.json
 
 # macOS
 .DS_Store
+
+# Eval measurement outputs. Machine-specific timings that churn on every
+# run, and the figures that matter are written up in eval/README.md.
+eval/results/

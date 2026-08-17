@@ -282,7 +282,14 @@ def group_b(root: Path) -> None:
 
 
 def group_b3() -> None:
-    """Decomposition must not become a way to smuggle a value out in pieces."""
+    """Decomposition must not become a way to smuggle a value out in pieces.
+
+    This only exercises fragments joined adjacent, via scan_pii_patterns
+    directly, never run_jobs itself. It does not cover fragments scattered
+    among benign job results, which is the arrangement that actually defeats
+    the shape-based scanners; see the round-level tests driving run_jobs in
+    tests/test_round_guard.py (PLAN-round-reassembly.md) for that coverage.
+    """
     print("\nB3. Split-across-jobs reconstruction")
     fragments = ["912", "84", "7731"]
     for f in fragments:

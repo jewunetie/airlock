@@ -1408,10 +1408,24 @@ def run_jobs(
                             "detail": sanitise_concerns(verdict.concerns)})
 
     # The round as a whole. Individually harmless fragments become an
-    # identifier once the caller puts them back together.
+    # identifier once the caller puts them back together. Two independent
+    # checks, since each catches what the other misses: evaluate_session
+    # catches semantic reassembly with no fixed identifier, and the
+    # source-anchored check below catches a workspace identifier
+    # reconstructed from job results even when scattered among benign ones,
+    # which evaluate_session's shape-based scanners need adjacent to see (see
+    # PLAN-round-reassembly.md).
     combined = " ".join(str(r.get("value", "")) for r in results)
     round_verdict = evaluate_session(session, combined) if combined.strip() else None
-    if round_verdict is not None and not round_verdict.approved:
+
+    try:
+        released = [str(r["value"]) for r in results if r.get("status") == "ok"]
+        reassembled = reassembles_identifier(released, source_identifiers(session.sandbox))
+    except SandboxError:
+        # Cannot confirm the round is safe: fail closed rather than approve.
+        reassembled = True
+
+    if reassembled or (round_verdict is not None and not round_verdict.approved):
         note("blocked", "the round reassembles into protected content")
         session.blocked += 1
         return envelope(

@@ -18,11 +18,16 @@ Task 2: source-anchored identifier reassembly detection. `reassembles_identifier
 catches a protected value split across job results even when benign job
 results sit between the fragments, by matching against identifiers actually
 present in the workspace rather than a shape. See task-2-brief.md.
+
+Task 3: wires the Task 2 check into `run_jobs`, driving it end to end with a
+stubbed `ollama_chat` so no local model is required. See task-3-brief.md.
 """
 
 from __future__ import annotations
 
 import importlib.util
+import json
+import os
 import sys
 import tempfile
 from pathlib import Path
@@ -189,6 +194,129 @@ def task2_reassembly() -> None:
     )
 
 
+def task3_wiring() -> None:
+    print("\nTask 3: wiring the source-anchored check into run_jobs")
+
+    def stub_ollama(answers):
+        """Serves both callers run_jobs drives per round: the worker (unshaped
+        here, since these jobs set no "as") and the guard's model layer
+        (GUARD_SCHEMA). The guard always approves, so only the deterministic
+        scanners and the new source-anchored check can block a round below.
+        """
+        it = iter(answers)
+
+        def stub(model, prompt, schema=None):
+            if schema is airlock.GUARD_SCHEMA:
+                return {"verdict": "approve", "concerns": [], "instruction": ""}
+            return next(it)
+
+        return stub
+
+    def run_with_stub(session, jobs, answers):
+        real = airlock.ollama_chat
+        try:
+            airlock.ollama_chat = stub_ollama(answers)
+            return airlock.run_jobs(session, jobs)
+        finally:
+            airlock.ollama_chat = real
+
+    def session_over(root):
+        # use_presidio=False and guardian_model=None per task-3-brief.md, so
+        # the stubbed model layer is the only model layer in play; the
+        # deterministic scanners are not stubbed and still run for real.
+        return airlock.Session(
+            session_id="t3", objective="x",
+            sandbox=airlock.Sandbox(root=root, allow_writes=False),
+            worker_model="stub-worker", guard_model="stub-guard",
+            use_presidio=False, guardian_model=None,
+        )
+
+    # Scattered fragments: three job results carry the SSN's groups, with
+    # benign job results between them. This is the arrangement the plan's own
+    # measurement shows the pre-existing evaluate_session(combined) check
+    # misses (PLAN-round-reassembly.md's placement table: 0.00 detection at
+    # 9 filler jobs).
+    tmp = Path(tempfile.mkdtemp(prefix="airlock-round-guard-test3-"))
+    (tmp / "record.txt").write_text("Client SSN is 912-84-7731, filed Monday.\n")
+    session = session_over(tmp)
+    jobs = [{"document": 0, "extract": f"question {i}"} for i in range(5)]
+    answers = ["912", "some notes about the weather", "84", "another line of text", "7731"]
+    result = run_with_stub(session, jobs, answers)
+    payload = json.dumps(result)
+    check(
+        "scattered SSN fragments: round is blocked",
+        result.get("status") == "blocked",
+        str(result.get("status")),
+    )
+    check(
+        "scattered SSN fragments: no fragment reaches the serialised payload",
+        not any(fragment in payload for fragment in ("912", "84", "7731")),
+    )
+
+    # Workspace unreadable during the check: one document a job actually
+    # reads, and a second the job never touches but source_identifiers must
+    # still scan (it walks every entry, not just the ones jobs referenced).
+    # Made unreadable after writing: list_dir needs no read permission on the
+    # file itself, only read_text does, so listing still succeeds and the
+    # failure surfaces inside the round-level check, not the job loop.
+    tmp2 = Path(tempfile.mkdtemp(prefix="airlock-round-guard-test3-"))
+    (tmp2 / "doc0.txt").write_text("Just a benign note about scheduling.\n")
+    secret_path = tmp2 / "doc1_secret.txt"
+    secret_path.write_text("irrelevant content\n")
+    os.chmod(secret_path, 0o000)
+    try:
+        session = session_over(tmp2)
+        jobs = [{"document": 0, "extract": "what does the note say"}]
+        answers = ["A benign one-line answer."]
+        result = run_with_stub(session, jobs, answers)
+        check(
+            "workspace unreadable during the check: round is blocked, not approved",
+            result.get("status") == "blocked",
+            str(result.get("status")),
+        )
+    finally:
+        os.chmod(secret_path, 0o644)
+
+    # Same fragments, adjacent this time. The pre-existing
+    # evaluate_session(combined) check already catches this arrangement
+    # (shape scanners work fine when the groups sit next to each other, per
+    # the plan's own measurement); this confirms the new check does not
+    # regress it.
+    tmp3 = Path(tempfile.mkdtemp(prefix="airlock-round-guard-test3-"))
+    (tmp3 / "record.txt").write_text("Client SSN is 912-84-7731, filed Monday.\n")
+    session = session_over(tmp3)
+    jobs = [{"document": 0, "extract": f"question {i}"} for i in range(5)]
+    answers = ["912", "84", "7731", "some notes", "another line"]
+    result = run_with_stub(session, jobs, answers)
+    check(
+        "adjacent SSN fragments: round is blocked",
+        result.get("status") == "blocked",
+        str(result.get("status")),
+    )
+
+    # Positive control (CLAUDE.md: assertions about absence need one). Twelve
+    # benign, non-numeric jobs over a workspace containing an SSN none of
+    # them touches must not be blocked, or the check would be blocking every
+    # round rather than reassembly specifically.
+    tmp4 = Path(tempfile.mkdtemp(prefix="airlock-round-guard-test3-"))
+    (tmp4 / "record.txt").write_text("Client SSN is 912-84-7731, filed Monday.\n")
+    session = session_over(tmp4)
+    jobs = [{"document": 0, "extract": f"question {i}"} for i in range(12)]
+    answers = ["apple", "banana", "cherry", "date", "fig", "grape",
+               "honey", "kiwi", "lemon", "mango", "nectarine", "olive"]
+    result = run_with_stub(session, jobs, answers)
+    check(
+        "twelve benign jobs over an untouched SSN: round is ok",
+        result.get("status") == "ok",
+        str(result.get("status")),
+    )
+    check(
+        "twelve benign jobs over an untouched SSN: all twelve results present",
+        len(result.get("results", [])) == 12,
+        str(len(result.get("results", []))),
+    )
+
+
 def main() -> int:
     print(f"airlock: {AIRLOCK}")
 
@@ -201,6 +329,7 @@ def main() -> int:
 
     run("task1_labelled_ein", task1_labelled_ein)
     run("task2_reassembly", task2_reassembly)
+    run("task3_wiring", task3_wiring)
 
     total = len(PASS) + len(FAIL) + len(SKIP)
     print(f"\n{len(PASS)} passed, {len(FAIL)} failed, {len(SKIP)} skipped ({total} checks)")
@@ -208,8 +337,8 @@ def main() -> int:
         print("failed:")
         for name in FAIL:
             print(f"  - {name}")
-    if total < 18:
-        print(f"\nWARNING: only {total} checks ran. Expected at least 18.")
+    if total < 24:
+        print(f"\nWARNING: only {total} checks ran. Expected at least 24.")
         print("Something did not collect. Treat this as a failure, not a pass.")
         return 1
     return 1 if FAIL else 0

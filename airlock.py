@@ -454,11 +454,52 @@ class GuardModelUnavailable(Exception):
     """Raised when a guard encoder cannot be loaded or run."""
 
 
+def _chunk_text(text: str, window: int, overlap: int) -> list[str]:
+    """Slide a `window`-character window over `text` with `overlap` shared
+    between consecutive chunks, covering every character at least once.
+
+    Handing a whole document to a tokenizer's own truncation makes everything
+    past the cut invisible, and an empty finding list looks identical to a
+    clean scan: the same fail-open shape GuardModelUnavailable exists to
+    prevent for a failed load, just relocated to input length. Both guard
+    scanners return entity types or rule indices rather than spans, so a
+    union of per-chunk findings is correct with no stitching. The overlap
+    exists so a value straddling a chunk boundary still lands whole inside at
+    least one chunk, as long as that value is shorter than the overlap.
+    """
+    if len(text) <= window:
+        return [text]
+    step = window - overlap
+    chunks: list[str] = []
+    pos = 0
+    while True:
+        chunks.append(text[pos : pos + window])
+        if pos + window >= len(text):
+            break
+        pos += step
+    return chunks
+
+
 PII_DETECTOR_MODEL = "LiquidAI/LFM2.5-Encoder-350M-PII-Detector"
 # Pinned so a later change to the model repo cannot silently alter what runs
 # under trust_remote_code=True below.
 PII_DETECTOR_REVISION = "b8c9cf3d2d6ae52501b35a27ba46f271449c9ce2"
 PII_DETECTOR_THRESHOLD = 0.5
+# max_length below (512 tokens) is a hard model limit. Measured against the
+# real tokenizer: ordinary English runs about 5 chars/token, but a dense
+# alphanumeric blob, the shape of the credentials PII_PATTERNS and
+# SECRET_PATTERNS already look for, can run as low as ~1 char/token. Sizing
+# the window off the friendly ratio would silently reintroduce truncation on
+# exactly the content this scanner most needs to see. 500 stays under 512
+# tokens even at that measured worst case.
+PII_CHUNK_CHARS = 500
+# Longer than the longest credential shape this project's own tests exercise
+# (tests/test_server.py's CREDENTIAL_SHAPES: "dop_v1_" + 64 hex chars = 71
+# chars), with margin, so a credential split by a chunk boundary still lands
+# whole inside at least one chunk. An unbounded-length secret (SECRET_PATTERNS'
+# generic_secret_assignment has no upper bound) can still exceed this; that
+# residual is inherent to any finite overlap, not something this bound closes.
+PII_CHUNK_OVERLAP_CHARS = 200
 
 
 def resolve_device(choice: str = "auto") -> str:
@@ -519,6 +560,13 @@ def _load_pii_detector(device: str = "auto") -> tuple[Any, Any, Any, str, dict[i
 def scan_pii_model(text: str) -> list[dict[str, str]]:
     """Entity types found by the PII detector, above threshold.
 
+    Scans in overlapping PII_CHUNK_CHARS-character windows rather than
+    handing the whole text to the tokenizer's own truncation: max_length=512
+    tokens is roughly 2000 characters of ordinary English and far less for
+    dense identifier-shaped text, and everything past a silent truncation cut
+    would be indistinguishable from "found nothing" to a caller. Findings are
+    entity types, not spans, so unioning across chunks needs no stitching.
+
     Returns findings shaped like the other scanners: rule, masked, layer.
     The model's own output is a per-token entity label, not a reconstructed
     span, so there is no matched text to mask in the first place; "masked"
@@ -527,26 +575,27 @@ def scan_pii_model(text: str) -> list[dict[str, str]]:
     returning an empty list, so a caller cannot mistake "could not run" for
     "found nothing".
     """
-    try:
-        torch, model, tok, device, id2label = _load_pii_detector()
-        enc = tok(text, return_tensors="pt", truncation=True, max_length=512)
-        enc = {k: v.to(device) for k, v in enc.items()}
-        with torch.no_grad():
-            logits = model(**enc).logits.float().cpu()
-        conf, ids = logits.softmax(-1)[0].max(-1)
-    except GuardModelUnavailable:
-        raise
-    except Exception as exc:  # noqa: BLE001 - inference failure fails closed too
-        raise GuardModelUnavailable(f"PII detector inference failed: {exc}")
-
     found: list[str] = []
-    for c, i in zip(conf.tolist(), ids.tolist()):
-        label = id2label.get(i, "O")
-        if label == "O" or c < PII_DETECTOR_THRESHOLD:
-            continue
-        entity = re.sub(r"^[BIES]-", "", label)
-        if entity not in found:
-            found.append(entity)
+    for chunk in _chunk_text(text, PII_CHUNK_CHARS, PII_CHUNK_OVERLAP_CHARS):
+        try:
+            torch, model, tok, device, id2label = _load_pii_detector()
+            enc = tok(chunk, return_tensors="pt", truncation=True, max_length=512)
+            enc = {k: v.to(device) for k, v in enc.items()}
+            with torch.no_grad():
+                logits = model(**enc).logits.float().cpu()
+            conf, ids = logits.softmax(-1)[0].max(-1)
+        except GuardModelUnavailable:
+            raise
+        except Exception as exc:  # noqa: BLE001 - inference failure fails closed too
+            raise GuardModelUnavailable(f"PII detector inference failed: {exc}")
+
+        for c, i in zip(conf.tolist(), ids.tolist()):
+            label = id2label.get(i, "O")
+            if label == "O" or c < PII_DETECTOR_THRESHOLD:
+                continue
+            entity = re.sub(r"^[BIES]-", "", label)
+            if entity not in found:
+                found.append(entity)
     return [{"rule": entity, "masked": "detected", "layer": "pii:model"} for entity in found]
 
 
@@ -572,15 +621,42 @@ CONTEXTUAL_RULES: list[str] = [
     "Flag confidential business information such as unannounced acquisitions or a customer leaving.",
 ]
 
+# max_length=2048 tokens, minus the rule prefix (measured 92 tokens for the
+# rules above) and a little headroom. Same worst-case-ratio reasoning as
+# PII_CHUNK_CHARS: dense text can run near 1 char/token under this tokenizer
+# too, so 1800 stays under budget even then, not only at ordinary English's
+# ~5 chars/token.
+POLICY_CHUNK_CHARS = 1800
+# A single disclosure sentence runs well under this; sized generously so one
+# is never split across a chunk boundary with only a fragment on each side.
+POLICY_CHUNK_OVERLAP_CHARS = 400
+
+
+def _policy_prefix() -> str:
+    """Build the rule-listing prefix from the live CONTEXTUAL_RULES.
+
+    Deliberately not cached. scan_policy's pool construction already reads
+    CONTEXTUAL_RULES live on every call, computing each rule's character
+    offsets from scratch; a prefix string baked once at load time and reused
+    forever would drift the moment CONTEXTUAL_RULES changed after that first
+    load, misaligning the pool's offsets against a prefix that no longer
+    matches, with no error raised. One function both scan_policy and
+    _load_policy_linter's docstring can point to is cheaper than proving the
+    two can never disagree.
+    """
+    return "Policy:\n" + "\n".join(f"- {r}" for r in CONTEXTUAL_RULES) + "\n\nText:\n"
+
 
 @lru_cache(maxsize=1)
-def _load_policy_linter(device: str = "auto") -> tuple[Any, Any, Any, str, str]:
+def _load_policy_linter(device: str = "auto") -> tuple[Any, Any, Any, str]:
     """Load the policy linter once and cache it.
 
     Same accepted risk as _load_pii_detector: trust_remote_code=True runs
     code from the model repository (a GLiNER-style rule-matching head), taken
     on deliberately and recorded in PLAN-liquid-guard.md and README.md, and
-    pinned to a fixed revision for the same reason.
+    pinned to a fixed revision for the same reason. Returns no prefix: that is
+    _policy_prefix()'s job, computed fresh on every call rather than cached
+    alongside the model, so it can never go stale relative to CONTEXTUAL_RULES.
     """
     try:
         import torch
@@ -601,12 +677,20 @@ def _load_policy_linter(device: str = "auto") -> tuple[Any, Any, Any, str, str]:
         )
     except Exception as exc:  # noqa: BLE001 - any load failure fails closed
         raise GuardModelUnavailable(f"policy linter could not load: {exc}")
-    prefix = "Policy:\n" + "\n".join(f"- {r}" for r in CONTEXTUAL_RULES) + "\n\nText:\n"
-    return torch, model, tok, resolved, prefix
+    return torch, model, tok, resolved
 
 
 def scan_policy(text: str) -> list[dict[str, str]]:
     """Rules the policy linter scores above their threshold.
+
+    Scans in overlapping POLICY_CHUNK_CHARS-character windows for the same
+    reason scan_pii_model does: max_length=2048 tokens minus the rule prefix
+    leaves headroom for ordinary English but far less for dense text, and a
+    silent truncation is indistinguishable from a clean scan. Findings are
+    rule indices, not spans, so unioning across chunks needs no stitching.
+    Each chunk gets its own rule prefix prepended and its own pool built
+    against that chunk's own token offsets, because the pool's positions are
+    computed from the prefix-plus-chunk string, not from the whole document.
 
     Reads POLICY_LINTER_THRESHOLD and POLICY_LINTER_RULE_THRESHOLDS as module
     globals at call time, not as bound defaults, so a caller overriding either
@@ -617,42 +701,46 @@ def scan_policy(text: str) -> list[dict[str, str]]:
     is fiddly and already measured there. Raises GuardModelUnavailable rather
     than returning empty on any failure, matching scan_pii_model.
     """
-    try:
-        torch, model, tok, device, prefix = _load_policy_linter()
-        full = prefix + text
-        enc = tok(
-            full, return_offsets_mapping=True, return_tensors="pt", truncation=True, max_length=2048
-        )
-        offsets = enc.pop("offset_mapping")[0].tolist()
-        pool = torch.zeros(1, len(CONTEXTUAL_RULES), len(offsets))
-        pos = len("Policy:\n")
-        for ri, rule in enumerate(CONTEXTUAL_RULES):
-            start = pos + 2
-            end = start + len(rule)
-            idx = [i for i, (a, b) in enumerate(offsets) if a < end and b > start and a != b]
-            if idx:
-                pool[0, ri, idx] = 1 / len(idx)
-            pos = end + 1
-        enc = {k: v.to(device) for k, v in enc.items()}
-        pool = pool.to(device)
-        with torch.no_grad():
-            probs = model(**enc, rule_pool=pool)["logits"].float().sigmoid()[0].cpu()
-    except GuardModelUnavailable:
-        raise
-    except Exception as exc:  # noqa: BLE001 - inference failure fails closed too
-        raise GuardModelUnavailable(f"policy linter inference failed: {exc}")
+    found: set[int] = set()
+    for chunk in _chunk_text(text, POLICY_CHUNK_CHARS, POLICY_CHUNK_OVERLAP_CHARS):
+        try:
+            torch, model, tok, device = _load_policy_linter()
+            prefix = _policy_prefix()
+            full = prefix + chunk
+            enc = tok(
+                full, return_offsets_mapping=True, return_tensors="pt", truncation=True, max_length=2048
+            )
+            offsets = enc.pop("offset_mapping")[0].tolist()
+            pool = torch.zeros(1, len(CONTEXTUAL_RULES), len(offsets))
+            pos = len("Policy:\n")
+            for ri, rule in enumerate(CONTEXTUAL_RULES):
+                start = pos + 2
+                end = start + len(rule)
+                idx = [i for i, (a, b) in enumerate(offsets) if a < end and b > start and a != b]
+                if idx:
+                    pool[0, ri, idx] = 1 / len(idx)
+                pos = end + 1
+            enc = {k: v.to(device) for k, v in enc.items()}
+            pool = pool.to(device)
+            with torch.no_grad():
+                probs = model(**enc, rule_pool=pool)["logits"].float().sigmoid()[0].cpu()
+        except GuardModelUnavailable:
+            raise
+        except Exception as exc:  # noqa: BLE001 - inference failure fails closed too
+            raise GuardModelUnavailable(f"policy linter inference failed: {exc}")
 
-    text_start = len(prefix)
-    keep = [i for i, (a, b) in enumerate(offsets) if b > text_start and a != b]
-    if not keep:
-        return []
-    sub = probs[keep]
-    found = [
-        ri
-        for ri in range(len(CONTEXTUAL_RULES))
-        if float(sub[:, ri].max()) > POLICY_LINTER_RULE_THRESHOLDS.get(ri, POLICY_LINTER_THRESHOLD)
+        text_start = len(prefix)
+        keep = [i for i, (a, b) in enumerate(offsets) if b > text_start and a != b]
+        if not keep:
+            continue
+        sub = probs[keep]
+        for ri in range(len(CONTEXTUAL_RULES)):
+            if float(sub[:, ri].max()) > POLICY_LINTER_RULE_THRESHOLDS.get(ri, POLICY_LINTER_THRESHOLD):
+                found.add(ri)
+    return [
+        {"rule": f"rule{ri}", "masked": "detected", "layer": "policy:model"}
+        for ri in sorted(found)
     ]
-    return [{"rule": f"rule{ri}", "masked": "detected", "layer": "policy:model"} for ri in found]
 
 
 # --------------------------------------------------------------------------

@@ -71,6 +71,27 @@ CLEAN_POLICY_TEXT = (
 # real model, not guessed.
 BORDERLINE_FINANCIAL_TEXT = "Money has been a bit tight lately with all the bills piling up."
 
+# Filler long enough to push a trailing identifier past a single 512-token
+# window under the real PII detector tokenizer: measured at 642 tokens for
+# this exact filler, comfortably past the model's own truncation limit, so an
+# identifier placed after it is invisible to a single untruncated call and
+# must be caught by chunking instead. See task-1-report.md fix round 1 for
+# the probe that measured this.
+PII_OVERFLOW_FILLER = (
+    "The quarterly report was filed on time and everyone was pleased with "
+    "the outcome. " * 40
+)
+PII_OVERFLOW_TEXT = PII_OVERFLOW_FILLER + SSN_TEXT
+
+# Filler measured at 2042 tokens under the policy linter tokenizer, past the
+# 2048-token budget even before the 92-token rule prefix is added, so a
+# disclosure placed after it is invisible to a single untruncated call.
+POLICY_OVERFLOW_FILLER = (
+    "The README describes how to set up the development environment and "
+    "run the test suite. " * 120
+)
+POLICY_OVERFLOW_TEXT = POLICY_OVERFLOW_FILLER + MEDICAL_TEXT
+
 
 def models_available() -> str:
     """Try a real call through both guards. Empty string if both work,
@@ -127,6 +148,30 @@ def pii_detector_cases(unavailable: str) -> None:
     )
 
 
+def containment_positive_control_case() -> None:
+    """Positive control for "detector findings never carry the raw span"
+    (CLAUDE.md: assertions about absence need one). That check cannot fail as
+    written, because scan_pii_model's real findings only ever carry the
+    literal "masked": "detected" marker, never a captured value. A hand-built
+    finding that DOES carry the raw span must trip the identical assertion,
+    or the check above proves nothing about the guarantee it claims to test.
+    No model needed, so this runs unconditionally rather than being gated
+    behind model availability like the checks it backs up.
+    """
+    print("\nPositive control: the containment check can actually fail")
+
+    poisoned = [{"rule": "identity.ssn", "masked": "912-84-7731", "layer": "pii:model"}]
+    poisoned_leaked = [
+        v for f in poisoned for v in f.values()
+        if v in (SSN_TEXT, EMAIL_TEXT, "912-84-7731", "jane.doe@example.com")
+    ]
+    check(
+        "positive control: a hand-built span-carrying finding is caught by the same check",
+        poisoned_leaked != [],
+        ",".join(poisoned_leaked) or "not caught",
+    )
+
+
 def policy_linter_cases(unavailable: str) -> None:
     print("\nPolicy linter: contextual rules above threshold")
     if unavailable:
@@ -134,7 +179,8 @@ def policy_linter_cases(unavailable: str) -> None:
             "linter flags a medical disclosure",
             "linter flags an unannounced acquisition",
             "linter is clean on a benign file description",
-            "per-rule threshold override is honoured",
+            "per-rule threshold override: silent at 0.98",
+            "per-rule threshold override: fires at 0.50",
         ):
             skip(name, unavailable)
         return
@@ -165,6 +211,62 @@ def policy_linter_cases(unavailable: str) -> None:
         check("per-rule threshold override: fires at 0.50", "rule1" in rules, ",".join(sorted(rules)))
     finally:
         airlock.POLICY_LINTER_RULE_THRESHOLDS = original
+
+
+def chunking_cases(unavailable: str) -> None:
+    print("\nChunking: a value past a single window is still found, not truncated away")
+    if unavailable:
+        for name in (
+            "PII detector: an SSN past a single window is still found",
+            "policy linter: a disclosure past a single window is still found",
+        ):
+            skip(name, unavailable)
+        return
+
+    rules = {f["rule"] for f in airlock.scan_pii_model(PII_OVERFLOW_TEXT)}
+    check(
+        "PII detector: an SSN past a single window is still found",
+        any(r.split(".")[0] == "identity" for r in rules),
+        ",".join(sorted(rules)) or "no findings, truncated away",
+    )
+
+    rules = {f["rule"] for f in airlock.scan_policy(POLICY_OVERFLOW_TEXT)}
+    check(
+        "policy linter: a disclosure past a single window is still found",
+        "rule0" in rules,
+        ",".join(sorted(rules)) or "no findings, truncated away",
+    )
+
+
+def prefix_derivation_case() -> None:
+    """Minor fix: _load_policy_linter must not cache a prefix string baked
+    from CONTEXTUAL_RULES at first load. scan_policy's pool construction
+    already reads CONTEXTUAL_RULES live on every call; a prefix frozen at
+    load time would drift from that the moment CONTEXTUAL_RULES changes,
+    misaligning the offsets with no error. _policy_prefix() must be the one
+    place both read, computed fresh, so there is nothing to cache and nothing
+    that can go stale. No model needed: this is a pure string check.
+    """
+    print("\nMinor: the rule prefix is derived fresh, never a stale cached copy")
+
+    original = list(airlock.CONTEXTUAL_RULES)
+    try:
+        first = airlock._policy_prefix()
+        check(
+            "prefix reflects the current CONTEXTUAL_RULES",
+            "medical condition" in first,
+            first[:60],
+        )
+
+        airlock.CONTEXTUAL_RULES = ["Flag disclosure of a favourite colour."]
+        second = airlock._policy_prefix()
+        check(
+            "prefix rebuilds immediately after CONTEXTUAL_RULES changes",
+            "favourite colour" in second and "medical condition" not in second,
+            second[:60],
+        )
+    finally:
+        airlock.CONTEXTUAL_RULES = original
 
 
 def fail_closed_case() -> None:
@@ -204,7 +306,10 @@ def main() -> int:
         print(f"\nmodels unavailable, skipping model-dependent cases: {unavailable}")
 
     run("pii_detector_cases", pii_detector_cases, unavailable)
+    run("containment_positive_control_case", containment_positive_control_case)
     run("policy_linter_cases", policy_linter_cases, unavailable)
+    run("chunking_cases", chunking_cases, unavailable)
+    run("prefix_derivation_case", prefix_derivation_case)
     run("fail_closed_case", fail_closed_case)
 
     total = len(PASS) + len(FAIL) + len(SKIP)
@@ -213,10 +318,20 @@ def main() -> int:
         print("failed:")
         for name in FAIL:
             print(f"  - {name}")
-    if total < 9:
-        print(f"\nWARNING: only {total} checks ran. Expected at least 9.")
+    if total < 15:
+        print(f"\nWARNING: only {total} checks ran. Expected at least 15.")
         print("Something did not collect. Treat this as a failure, not a pass.")
         return 1
+    # Skips are reported, not failed, per CLAUDE.md. But a run where every
+    # model-backed case skipped has verified nothing about either guard, and
+    # that must not read like a quiet pass in a log a human is skimming.
+    if unavailable:
+        print(
+            "\n" + "!" * 70
+            + "\nNO MODEL-BACKED CHECK RAN. Every PII/policy-linter case was "
+            "skipped.\nThis run verified nothing about either guard's actual "
+            f"behaviour.\nReason: {unavailable}\n" + "!" * 70
+        )
     return 1 if FAIL else 0
 
 

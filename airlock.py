@@ -1074,6 +1074,107 @@ def evaluate_session(session: Session, text: str) -> GuardVerdict:
     )
 
 
+# --------------------------------------------------------------------------
+# Round-level reassembly guard. See PLAN-round-reassembly.md.
+#
+# A caller can split a protected value across several jobs and scatter benign
+# jobs between the fragments; the shape-based scanners above miss that
+# because they need the fragments adjacent. This anchors on the identifiers
+# actually present in the workspace instead, so it matches a known value
+# rather than a shape and survives dilution and interleaving.
+# --------------------------------------------------------------------------
+
+MIN_REASSEMBLY_LENGTH = 6
+
+
+def normalise_identifier(value: str) -> str:
+    """Lowercase alphanumerics only, for separator-independent comparison.
+
+    "912-84-7731" and "912 84 7731" both normalise to "912847731".
+    """
+    return "".join(ch for ch in value.lower() if ch.isalnum())
+
+
+def _document_identifiers(text: str) -> set[str]:
+    """Normalised identifiers found in one document's text.
+
+    Deliberately re-walks PII_PATTERNS, SECRET_PATTERNS and
+    CONTEXT_SECRET_PATTERNS directly rather than calling scan_pii_patterns or
+    scan_secrets: those return mask(value) by design, and this needs the raw
+    value to normalise. The caller (source_identifiers) must keep this
+    private and never let a raw or normalised value escape into a return
+    value, concern, receipt, trace record, or exception message.
+
+    detect-secrets is excluded on purpose, a coverage limit rather than an
+    oversight: its finds have no fixed span to recover reliably, and are the
+    class least likely to be reconstructed from constrained job answers.
+    """
+    values: list[str] = []
+    for name, pattern in PII_PATTERNS.items():
+        for match in pattern.finditer(text):
+            value = match.group(0)
+            if name == "credit_card" and not _luhn_ok(value):
+                continue
+            values.append(value)
+    for pattern in SECRET_PATTERNS.values():
+        values.extend(match.group(0) for match in pattern.finditer(text))
+    for pattern in CONTEXT_SECRET_PATTERNS.values():
+        for match in pattern.finditer(text):
+            # These rules match a label plus the value; only the value is the
+            # identifier. Patterns with no capture group have none to prefer.
+            values.append(match.group(1) if pattern.groups else match.group(0))
+    return {
+        normalised
+        for value in values
+        if len(normalised := normalise_identifier(value)) >= MIN_REASSEMBLY_LENGTH
+    }
+
+
+def source_identifiers(sandbox: Sandbox) -> set[str]:
+    """Normalised identifiers present in the workspace documents.
+
+    Holds raw protected values. Never returned to a caller, never logged,
+    never placed in a concern. Raises SandboxError, which the caller turns
+    into a block.
+    """
+    sources: set[str] = set()
+    for entry in sandbox.list_dir("."):
+        if entry.endswith("/"):
+            continue
+        sources |= _document_identifiers(sandbox.read_text(entry))
+    return sources
+
+
+def _is_subsequence(needle: str, haystack: str) -> bool:
+    """True if needle's characters occur in haystack in order, gaps allowed."""
+    haystack_iter = iter(haystack)
+    return all(ch in haystack_iter for ch in needle)
+
+
+def reassembles_identifier(values: list[str], sources: set[str]) -> bool:
+    """True if the values together reconstruct a source identifier that none
+    of them contains on its own.
+
+    Benign job results routinely sit between the fragments, since that costs
+    a caller nothing and is exactly how the round-level shape check upstream
+    was defeated (see PLAN-round-reassembly.md). So this does not require the
+    fragments adjacent: a source identifier counts as reconstructed once its
+    characters appear, in order, somewhere across the round's normalised
+    values concatenated in job order, with any amount of other content
+    interleaved.
+    """
+    normalised = [normalise_identifier(v) for v in values]
+    concatenation = "".join(normalised)
+    for source in sources:
+        if len(source) < MIN_REASSEMBLY_LENGTH:
+            continue
+        if any(source in v for v in normalised):
+            continue
+        if _is_subsequence(source, concatenation):
+            return True
+    return False
+
+
 MAX_JOBS_PER_ROUND = 12
 
 # Grammar-constrained shapes for extraction jobs. Asked for a number in prose,

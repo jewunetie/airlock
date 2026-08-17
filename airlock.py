@@ -1284,6 +1284,12 @@ class Session:
     exchanges: int = 0
     blocked: int = 0
     revisions: int = 0
+    # Cross-round reassembly state. Keyed per normalised source identifier
+    # (see advance_reassembly_state), so this is bounded by the workspace's
+    # identifier count, not by how many rounds the session has run. Holds
+    # only integer offsets into each source, never the fragments themselves;
+    # see advance_reassembly_state's docstring for why that is enough.
+    reassembly_state: dict[str, set[int]] = field(default_factory=dict)
 
 
 SESSIONS: dict[str, Session] = {}
@@ -1479,7 +1485,10 @@ def reassembles_identifier(values: list[str], sources: set[str]) -> bool:
     Residual, stated rather than implied: this preserves job order and does
     not permute, so a caller that issues its jobs out of order defeats it.
     Closing that costs 12! arrangements for a full round and was judged not
-    worth it. Reassembly across separate rounds is also out of scope here.
+    worth it. Reassembly across separate rounds was also out of scope here;
+    that gap is now CLOSED by advance_reassembly_state below, which run_jobs
+    calls after this function on every round, so a caller spreading one
+    fragment per round no longer escapes either check.
 
     A second gap, now CLOSED for numeric identifiers: this tests substring
     containment, so a fragment padded with extra characters can defeat it,
@@ -1565,6 +1574,120 @@ def reassembles_identifier(values: list[str], sources: set[str]) -> bool:
     if not any(projected):
         return False
     return _subset_contains(projected, numeric)
+
+
+def _fold_source_spans(
+    state: dict[str, set[int]], source: str, values: list[str], key: str | None = None
+) -> bool:
+    """Merge every occurrence of each value into one source's tracked spans.
+
+    `state[key]` (key defaults to `source` itself) holds a set of integers
+    that, read in sorted order two at a time, are the (start, end) bounds of
+    every maximal span of `source` already known reachable from values
+    released so far. Each new value is matched against every position it
+    occurs at in `source` (there may be none, one, or several); each match
+    becomes a candidate span, and all spans, old and new, are re-merged by
+    the ordinary interval-merge rule: two spans that touch or overlap become
+    one. Merging is commutative, so it does not matter what order the spans
+    arrived in, only which spans have arrived, which is what gives
+    advance_reassembly_state its order independence.
+
+    Shared by advance_reassembly_state's raw pass and its digits-only
+    projection pass; `key` lets the digit pass keep a separate span set from
+    the raw pass under the same source, since the two passes match different
+    projections of the same values and merging them would be meaningless.
+
+    Bounded rather than growing with how many values have been folded in:
+    every insertion either extends or merges into an existing span or is
+    discarded outright (no occurrence found), so the number of stored spans
+    for one source cannot exceed roughly its own length. State size tracks
+    identifier length, not session length.
+    """
+    state_key = key if key is not None else source
+    points = sorted(state.get(state_key, set()))
+    spans = [(points[i], points[i + 1]) for i in range(0, len(points), 2)]
+    for value in values:
+        if not value or len(value) > len(source):
+            continue
+        start = 0
+        while True:
+            idx = source.find(value, start)
+            if idx == -1:
+                break
+            spans.append((idx, idx + len(value)))
+            start = idx + 1
+    spans.sort()
+    merged: list[tuple[int, int]] = []
+    for span_start, span_end in spans:
+        if merged and span_start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], span_end))
+        else:
+            merged.append((span_start, span_end))
+    state[state_key] = {n for span in merged for n in span}
+    return (0, len(source)) in merged
+
+
+def advance_reassembly_state(
+    state: dict[str, set[int]], values: list[str], sources: set[str]
+) -> bool:
+    """Fold newly released values into per-source reachability.
+
+    Mutates state. Returns True when any source has become fully
+    reconstructible from everything released this session, not just this
+    round.
+
+    reassembles_identifier above bounds one round: a caller issuing several
+    rounds of one fragment each defeats it, because nothing carried released
+    values forward from one call to the next. This closes that gap by
+    tracking, per source identifier, which contiguous spans of it are
+    demonstrably reachable from values released anywhere in the session so
+    far, and folding in each newly released value's matches as it arrives.
+
+    Order-independent by construction, and deliberately so: the caller
+    chooses what order to issue jobs in, and can reassemble whatever pieces
+    it receives in whatever order it likes once they are off the guard's
+    sandbox, so this must not assume that the fragment which completes an
+    identifier is the one released last. A pure prefix walk (start at
+    position 0, extend forward only when a value continues the next
+    unclaimed span) does not have that property: a value released before
+    the fragment that would make it reachable gets tested against a reach
+    set that does not know about that fragment yet, and is never retried
+    once the later fragment arrives, so a caller that releases the pieces of
+    an identifier in reverse order would defeat it. _fold_source_spans
+    avoids that by matching every new value against every position it
+    occurs in the source directly, independent of what has already been
+    reached, and merging the resulting spans; two spans merge if they touch,
+    regardless of which arrived first, so the reverse case above still
+    completes on its final fragment, same as the forward case.
+
+    Applied twice per source, matching reassembles_identifier's own two
+    passes: once against the raw released values, and, for a source that is
+    itself all-digit, again against each value's digits-only projection
+    under a distinct key, so cross-round numeric padding is closed the same
+    way single-round padding already is. A source with a letter in it keeps
+    relying on the raw pass alone, for the same reason reassembles_identifier
+    does: projecting away the letters would discard the part of the match
+    that makes it meaningful.
+
+    No exponential term: unlike keeping every released value and re-running
+    subset enumeration over the union (2**session length), a span set for
+    one source is bounded by roughly that source's own length regardless of
+    how many rounds or values the session has seen, so this scales with the
+    workspace's identifiers, not with session length. See
+    _fold_source_spans for the bound.
+    """
+    completed = False
+    normalised = [normalise_identifier(v) for v in values]
+    projected = ["".join(ch for ch in v if ch.isdigit()) for v in normalised]
+    for source in sources:
+        if not source:
+            continue
+        if _fold_source_spans(state, source, normalised):
+            completed = True
+        if source.isdigit():
+            if _fold_source_spans(state, source, projected, key="digits:" + source):
+                completed = True
+    return completed
 
 
 MAX_JOBS_PER_ROUND = 12
@@ -1828,6 +1951,31 @@ def run_jobs(
         return envelope(
             session, "blocked", "",
             ["the results are individually safe but reassemble into protected "
+             "content, so the whole round was withheld"],
+        )
+
+    # Cross-round reassembly. reassembles_identifier above only bounds this
+    # round; a caller issuing one fragment per round across many rounds
+    # defeats it entirely, since nothing before this point carried released
+    # values forward from one call to the next. advance_reassembly_state
+    # does, keyed by source identifier so its cost tracks the workspace, not
+    # session length. Any error here blocks rather than approves or raises,
+    # the same rule every guard layer in this file follows: a check that
+    # cannot run must never stand in for a check that ran and passed.
+    try:
+        session_reassembled = advance_reassembly_state(
+            session.reassembly_state, released, sources
+        )
+    except Exception:  # noqa: BLE001 - a tracking failure must not approve by default
+        session_reassembled = True
+
+    if session_reassembled:
+        note("blocked", "the round completes a reassembly begun in an earlier round")
+        session.blocked += 1
+        return envelope(
+            session, "blocked", "",
+            ["the results are individually safe but combine with values "
+             "released earlier in this session to reconstruct protected "
              "content, so the whole round was withheld"],
         )
 

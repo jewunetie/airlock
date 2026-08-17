@@ -151,6 +151,121 @@ permanent regression control for this: it asserts the bound fires on an
 oversized round and that a realistic round stays under it. It checks the
 logic, not the timing; `reassembly_residuals.py` is what checks the timing.
 
+## Real-corpus validation
+
+Every threshold above was tuned on `dataset.jsonl`, generated for this
+project. That set is measurably easier than reality: the PII detector scores
+1.00 precision on it against 0.428 and 0.236 on the hardest corpora its own
+model card reports (SPY and MAPA). Until this section existed, the guard's
+real-world precision and recall were unknown.
+
+```
+uv run --script eval/public_corpora.py
+```
+
+Downloads four public annotated PII corpora from Hugging Face (no
+authentication needed) and runs airlock's real `evaluate()`, the full stack
+(`scan_secrets` -> `scan_pii_patterns` -> PII-Detector -> Policy-Linter), not
+the encoders alone. That distinction matters: the PII-Detector's own model
+card numbers cover the encoder in isolation, and nobody had measured the
+combination airlock actually ships until this script existed.
+
+**Corpora**, all public, unauthenticated, English-filtered (each is
+multilingual; airlock's patterns and rules are English, so every loader
+filters to English, or the closest field a corpus offers, and the script
+states what it filtered):
+
+| corpus | filter applied |
+|---|---|
+| `ai4privacy/pii-masking-300k` | `language == "English"` |
+| `nvidia/Nemotron-PII` | `locale == "us"` (no separate language field; `intl` rows dropped) |
+| `gretelai/synthetic_pii_finance_multilingual` | `language == "English"` |
+| `mattmdjaga/text-anonymization-benchmark-val-test` (community mirror of TAB) | none needed; text is English-language ECHR case judgments |
+
+**SPY and MAPA, the two hardest corpora on the PII-Detector's model card, are
+not publicly obtainable and are not measured here.** SPY is the harder of
+the two (0.428 precision on the model card). Its absence means the numbers
+below are not directly comparable to the model card's full table, and are
+plausibly optimistic relative to what SPY would show: this project's own
+`dataset.jsonl` was already shown to be easier than the model card's hardest
+corpora, and the same gap likely exists between these four corpora and SPY.
+
+**The label mapping is the crux of this measurement**, so it lives in
+`public_corpora.py` as data (`AI4PRIVACY_BLOCK`/`_EXCLUDE`,
+`NEMOTRON_BLOCK`/`_EXCLUDE`, `GRETEL_BLOCK`/`_EXCLUDE`, and TAB's
+`identifier_type == "DIRECT"` rule), not buried in a conditional. Each label
+carries a one-line reason. Broadly: direct identifiers (name, email, phone,
+national id, address, account/card number, date of birth) and credentials
+are BLOCK; generic time/date, generic URLs, generic organisation and
+geography names, and bare sensitive-category words (gender, political view,
+ethnicity, religion, sexuality) with no identifying context are EXCLUDE, the
+last group for the same reason `airlock.py` has no rule for them: a
+single word like "Christian" or "Spanish" carries no identifying context and
+blocking on it would just be noise, distinct from the Policy Linter's rules,
+which fire on *disclosure in prose* rather than on a bare demographic word. A
+record's gold label is `block` if it contains at least one BLOCK-set span,
+`approve` otherwise, so negatives come from the same corpus and distribution
+as positives rather than from imported clean text. The script asserts every
+label actually seen in the sample has a mapping decision, so an unmapped
+label fails loudly instead of silently counting as `approve`.
+
+**Sample**: 250 records per corpus (all 127 for TAB, which has only 127 in
+its `test` split), seed 20260817 (same seed `build_dataset.py` uses, for the
+same reason: fixed, so the sample is identical across runs). Selection is
+`datasets`' own seeded `shuffle().select()`, deterministic given the seed.
+
+**Results** (this run; re-run to reproduce, network and the two encoders'
+cached weights required):
+
+| corpus | n | gold block/approve | precision | recall | f1 | false negatives |
+|---|---|---|---|---|---|---|
+| ai4privacy | 250 | 190/60 | 0.844 | 0.995 | 0.913 | 1 |
+| nemotron | 250 | 235/15 | 0.943 | 0.983 | 0.963 | 4 |
+| gretel | 250 | 194/56 | 0.866 | 0.964 | 0.912 | 7 |
+| tab | 127 | 127/0 | 1.000 | 1.000 | 1.000 | 0 |
+| combined | 877 | 746/131 | 0.904 | 0.984 | 0.942 | 12 |
+
+TAB's precision is not meaningful: its 127-document sample contains zero
+natural negatives (every ECHR judgment sampled names its applicant, a DIRECT
+identifier), so its false-positive count is trivially zero and its precision
+of 1.000 says nothing about over-blocking. Nemotron's 15 negatives are also
+thin; treat its precision as weaker evidence than ai4privacy's or gretel's,
+each with 56-60. This is reported rather than fixed, per the mandate for
+this run: no threshold was retuned to improve these numbers.
+
+**This is worse than `dataset.jsonl`'s numbers**, as expected: the synthetic
+set measured near-perfect precision throughout `airlock.py`'s own
+docstrings, and every corpus here lands measurably below that, ai4privacy's
+0.844 most of all. That gap is the entire reason this script exists: the
+synthetic set was never a claim about field performance, and now there is a
+number for what "the field" actually looks like on data this project did not
+generate.
+
+**Layer attribution** (which layer caught each true positive, combined
+across all four corpora): `pii-patterns` 293, `pii-detector` 356, `secrets`
+79, `policy-linter` 6. The two deterministic layers (`secrets` +
+`pii-patterns`, 372) catch a comparable share to the PII-Detector encoder
+alone (356); the Policy-Linter's contribution is small in absolute count but
+is not redundant with the others; see `PLAN-liquid-guard.md` and the "Known
+weaknesses" note in `CLAUDE.md` on rule 5's noise/recall tradeoff for why it
+stays. This is the number nobody had before this script: the model card
+covers the PII-Detector encoder alone, not its contribution relative to the
+regex layers ahead of it or the linter behind it.
+
+**False negatives** (masked; see `results/public_corpora_summary.json` for
+the full list per corpus after a run): ai4privacy missed a PASSPORT-only
+record; nemotron missed a customer ID, an employee ID, a blood type, and a
+biometric identifier / unique ID pair; gretel missed several `name`-only
+records, no other blocking label present. All are single-label or
+narrow-context misses, not broad category failures.
+
+Sampling and label mapping decisions are the main source of uncertainty in
+this measurement, not the guard itself: a different BLOCK/EXCLUDE choice
+(especially around address components, network identifiers, or the
+excluded bare demographic words) would move these numbers. Re-read
+`public_corpora.py`'s mapping dicts before citing a figure from this section
+elsewhere.
+
 ## Sandbox versus Apple Silicon
 
 Any latency number from a run in a constrained container does not transfer.
@@ -183,6 +298,11 @@ transfer across hardware.
 - `round_full_stack.py` measures the same reassembly cases through airlock's
   actual stack (`scan_secrets` and `scan_pii_patterns` ahead of the
   encoders), attributing each catch to the layer that made it.
+- `public_corpora.py` measures airlock's full guard stack (`evaluate()`, not
+  the encoders alone) against four public annotated PII corpora, since
+  `dataset.jsonl` is synthetic and measurably easier than real text. See
+  "Real-corpus validation" above for the numbers, the label mapping, and the
+  SPY/MAPA caveat.
 - `bakeoff.py` is the single-message guard-architecture comparison across
   configs (PII Detector, Policy Linter, Privacy Filter, and combinations).
   Provenance for the dataset's design and for the architecture conclusions

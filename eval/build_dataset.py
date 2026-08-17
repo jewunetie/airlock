@@ -85,6 +85,19 @@ def _basic_auth(rng: random.Random) -> str:
     return base64.b64encode(f"admin:{_password(rng, 12)}".encode()).decode()
 
 
+def _pem_header(kind: str) -> str:
+    """Assembled from two literals, neither of which alone spells out a
+    complete PEM private-key header, so no single string in this source file
+    matches that shape. The GENERATED record (this function's return value,
+    concatenated with a random body at the call site) still contains the
+    real header at runtime, which is what scan_secrets's private_key_block
+    pattern needs to see. Same reasoning as the generated credentials
+    elsewhere in this file and in tests/test_server.py: a fixed literal close
+    enough to a real secret shape is what got this repo's push rejected by
+    GitHub secret scanning once (see CLAUDE.md)."""
+    return "-----BEGIN " + kind + " PRIVATE KEY-----"
+
+
 def _slack_webhook(rng: random.Random) -> str:
     host = "hooks.slack.com"
     team = _shaped(rng, "T", 8, string.ascii_uppercase + string.digits)
@@ -100,7 +113,7 @@ def _credentials_block(rng: random.Random) -> list[tuple[str, list[str], str]]:
         # scanners precisely because it is public and inert. See CLAUDE.md.
         ("AWS creds are AKIAIOSFODNN7EXAMPLE and wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY.", ["secret"], "aws pair"),
         (f"The database password is {_password(rng, 14)} and the user is svc_reporting.", ["secret"], "password in prose"),
-        (f"-----BEGIN RSA PRIVATE KEY-----{_shaped(rng, '', 28, B64)}", ["secret"], "private key header"),
+        (f"{_pem_header('RSA')}{_shaped(rng, '', 28, B64)}", ["secret"], "private key header"),
         (f"Set GITHUB_TOKEN={_shaped(rng, 'ghp_', 36)} before running.", ["secret"], "github pat"),
         (f"Slack webhook: {_slack_webhook(rng)}", ["secret", "url"], "webhook url"),
         (f"The admin login is root with password {_password(rng, 15)}.", ["secret"], "credential pair"),

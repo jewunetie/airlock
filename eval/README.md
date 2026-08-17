@@ -76,26 +76,61 @@ script's three round shapes, so that exact number is not reproduced by this
 command; the direction and rough magnitude are.
 
 **The six-digit-floor residual** (same docstring: "300 seeded trials, 60
-six-digit sources... 0.0167 false blocking"):
+six-digit sources... 0.0167 false blocking versus 0.0000 for the raw pass;
+eight- and nine-digit sources measured 0.000"):
 
-Not reproducible from anything in this repo, and `tests/test_round_guard.py`
-says so directly in its own comments: "no eval script exists in this
-worktree, so the 300-trial false-blocking rate cited in the docstring is
-taken from that review rather than re-measured here." What ships instead is
-a deterministic regression control in `tests/test_round_guard.py` (a
-five-source hand-derived case pinning the direction: six-digit sources can
-coincidentally collide, eight-digit sources measured there do not), not a
-re-run of the statistical claim.
+```
+uv run --script eval/reassembly_residuals.py
+```
+
+The "Six-digit-floor residual" table varies source length (six, eight, nine
+digits) and source count (20, 40, 60) against a digit-dense round of prose,
+amounts, dates, box numbers and reference numbers, over 300 seeded trials per
+cell, for the shipped `reassembles_identifier` and for its raw pass in
+isolation. A run against this repo's `dataset.jsonl` (seed 20260817) measured
+eight- and nine-digit sources at 0.0000 for both columns, matching the
+docstring. It did not match the docstring on six-digit sources: this run's
+digit-dense round produces literal digit runs in its own right (dates,
+amounts, box and reference numbers concatenated in job order can abut without
+a separator), so the raw pass here false-blocks too (0.0000 to 0.0133
+depending on source count), not only the digits projection. The docstring's
+claim that six-digit false blocking is unique to the projection (0.0167
+shipped versus 0.0000 raw) is not reproduced by this corpus. The docstring
+was written from a review, not this script, so this is new information for
+whoever owns that text next, not a silent correction; `airlock.py` has not
+been changed on the strength of this run.
 
 **`MAX_REASSEMBLY_LENGTH`'s worst-case timing** (the comment above the
 constant: "twelve unshaped answers of FILE_SLICE_CHARS each against 400
 workspace identifiers took 18.0 seconds"):
 
-Also not reproducible here. That number came from a throwaway scratch script
-during development, not a script that was kept. The permanent protection is
-`tests/test_round_guard.py`'s `important3_length_bound`, which asserts the
-bound fires on an oversized round and that a realistic round stays under it;
-it checks the logic, not the timing.
+```
+uv run --script eval/reassembly_residuals.py
+```
+
+The same run's "MAX_REASSEMBLY_LENGTH worst-case cost" section times the real
+`reassembles_identifier`, not a scratch reimplementation. It cannot reproduce
+the cited scenario directly: 12 values of `FILE_SLICE_CHARS` each sum to
+48,000 characters, and `MAX_REASSEMBLY_LENGTH` itself now rejects a round
+that large in O(1) before the expensive subset enumeration runs at all, which
+is the entire reason the comment gives for the bound existing. What this
+measures instead is the worst case the CURRENT, bounded function can still
+be made to pay: 12 values summing to exactly the `MAX_REASSEMBLY_LENGTH`
+ceiling (4,000 characters total, so the length check does not short-circuit)
+against 400 non-matching workspace identifiers (so neither the raw pass nor
+the digits projection exits early on a hit). On this run that measured a
+mean of 4.5 seconds over 5 reps, not 18.0. The two numbers describe different
+scenarios (48,000 characters pre-bound versus 4,000 at the post-bound
+ceiling) on possibly different hardware, so treat 18.0 seconds as the
+justification for why the bound exists rather than as a figure this script
+reproduces, and treat 4.5 seconds as this run's answer to "what can the
+bounded function still cost." Re-measure before trusting either on your own
+machine; see "Sandbox versus Apple Silicon" below.
+
+`tests/test_round_guard.py`'s `important3_length_bound` remains the
+permanent regression control for this: it asserts the bound fires on an
+oversized round and that a realistic round stays under it. It checks the
+logic, not the timing; `reassembly_residuals.py` is what checks the timing.
 
 ## Sandbox versus Apple Silicon
 
@@ -116,6 +151,12 @@ transfer across hardware.
   `reassembles_identifier`: detection by padding shape and false-blocking by
   round shape, for the shipped design and two candidates that were not
   shipped.
+- `reassembly_residuals.py` measures two claims `padding_bypass.py` does not
+  cover: the six-digit-floor false-blocking residual in
+  `reassembles_identifier`'s docstring, and the worst-case timing cited above
+  `MAX_REASSEMBLY_LENGTH`. Imports the real functions; times the real
+  function at its bound rather than a pre-bound scenario the shipped code no
+  longer reaches.
 - `round_guard.py` measures the round-level guard using the two 350M
   encoders alone (no deterministic layers), showing that reassembly
   detection dilutes as benign jobs are added to a round. This is the

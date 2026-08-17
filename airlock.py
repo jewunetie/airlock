@@ -1188,7 +1188,16 @@ def reassembles_identifier(values: list[str], sources: set[str]) -> bool:
     not permute, so a caller that issues its jobs out of order defeats it.
     Closing that costs 12! arrangements for a full round and was judged not
     worth it. Reassembly across separate rounds is also out of scope here.
+
+    Bounded defensively at MAX_JOBS_PER_ROUND rather than trusting the
+    caller: _subset_concatenations is 2**len(values), and run_jobs enforcing
+    MAX_JOBS_PER_ROUND upstream is a convention, not a guarantee this
+    function can rely on. A round this function cannot evaluate is treated
+    as a block, the same rule `evaluate` follows when a layer is
+    unavailable: a guard that cannot evaluate must never approve.
     """
+    if len(values) > MAX_JOBS_PER_ROUND:
+        return True
     normalised = [normalise_identifier(v) for v in values]
     candidates = {
         source

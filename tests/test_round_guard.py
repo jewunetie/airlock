@@ -176,6 +176,18 @@ def task2_reassembly() -> None:
         not airlock.reassembles_identifier(legitimate_round, ssn_sources),
     )
 
+    # Defensive bound: _subset_concatenations is 2**len(values). Today only
+    # run_jobs enforces MAX_JOBS_PER_ROUND, and that enforcement is not wired
+    # to this function (that is Task 3), so reassembles_identifier must not
+    # trust its caller. Empty sources is the case that would otherwise
+    # trivially return False, so this proves the bound fires ahead of the
+    # normal candidate-filtering path rather than coinciding with it.
+    oversized_round = ["x"] * (airlock.MAX_JOBS_PER_ROUND + 1)
+    check(
+        "more than MAX_JOBS_PER_ROUND values blocks even with no sources",
+        airlock.reassembles_identifier(oversized_round, set()),
+    )
+
 
 def main() -> int:
     print(f"airlock: {AIRLOCK}")
@@ -196,8 +208,8 @@ def main() -> int:
         print("failed:")
         for name in FAIL:
             print(f"  - {name}")
-    if total < 17:
-        print(f"\nWARNING: only {total} checks ran. Expected at least 17.")
+    if total < 18:
+        print(f"\nWARNING: only {total} checks ran. Expected at least 18.")
         print("Something did not collect. Treat this as a failure, not a pass.")
         return 1
     return 1 if FAIL else 0

@@ -199,6 +199,16 @@ CONTEXT_SECRET_PATTERNS: dict[str, re.Pattern[str]] = {
         r"[^\n]{0,20}?[\s:=#]([0-9][0-9\-]{6,})",
         re.I,
     ),
+    # us_ein stays hyphen-only in PII_PATTERNS: a bare 2-7 digit split is a
+    # shape ordinary prose produces constantly (amounts, counts, part
+    # numbers), unlike SSN's more distinctive 3-2-4 across two separators.
+    # The space form is only trustworthy near a label, same reasoning as
+    # labelled_ssn above.
+    "labelled_ein": re.compile(
+        r"\b(?:ein|employer id(?:entification)?(?:\s+number)?|federal tax id)\b"
+        r"[^\n]{0,24}?\b(\d{2}[-\s]\d{7})\b",
+        re.I,
+    ),
     "labelled_opaque_token": re.compile(
         r"\b(?:secret|api[_-]?key|access[_-]?token|bearer|auth[_-]?token|key|credentials?)"
         r"[^\n]{0,20}?[\s:=\"']([A-Za-z0-9/+_-]{24,})",

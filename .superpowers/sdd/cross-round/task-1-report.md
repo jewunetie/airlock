@@ -27,7 +27,7 @@ Concerns:
 ## Fix round 1: bound false blocking
 
 Status: done, all green.
-Commit: (pending, see below), feat/cross-round-guard, not pushed.
+Commit: 49f9902 (feat/cross-round-guard), not pushed.
 
 Confirmed the flaw and the coordinator's diagnosis: plain prefix-walk cannot
 give order independence, and unbounded coverage never forgets, so false

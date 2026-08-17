@@ -1145,10 +1145,23 @@ def source_identifiers(sandbox: Sandbox) -> set[str]:
     return sources
 
 
-def _is_subsequence(needle: str, haystack: str) -> bool:
-    """True if needle's characters occur in haystack in order, gaps allowed."""
-    haystack_iter = iter(haystack)
-    return all(ch in haystack_iter for ch in needle)
+def _subset_concatenations(normalised: list[str]) -> set[str]:
+    """Every string obtainable by keeping some subset of the values, in job
+    order, and concatenating what is kept.
+
+    This is the model of what a caller can actually do: it received these job
+    results in this order and can discard any of them, but cannot reorder or
+    split one. Exhaustive because MAX_JOBS_PER_ROUND bounds the round to 12
+    values, so 2**12 = 4096 subsets at most. Built once per round by the
+    caller and reused across every source identifier, rather than rebuilt per
+    identifier, since it does not depend on which identifier is being tested.
+    """
+    concatenations: set[str] = set()
+    n = len(normalised)
+    for mask in range(1, 1 << n):
+        parts = [normalised[i] for i in range(n) if mask & (1 << i)]
+        concatenations.add("".join(parts))
+    return concatenations
 
 
 def reassembles_identifier(values: list[str], sources: set[str]) -> bool:
@@ -1158,21 +1171,35 @@ def reassembles_identifier(values: list[str], sources: set[str]) -> bool:
     Benign job results routinely sit between the fragments, since that costs
     a caller nothing and is exactly how the round-level shape check upstream
     was defeated (see PLAN-round-reassembly.md). So this does not require the
-    fragments adjacent: a source identifier counts as reconstructed once its
-    characters appear, in order, somewhere across the round's normalised
-    values concatenated in job order, with any amount of other content
-    interleaved.
+    fragments adjacent: a source identifier counts as reconstructed once it is
+    a substring of the concatenation of SOME subset of the round's normalised
+    values, kept in job order.
+
+    A character-level subsequence test (ignoring which values the characters
+    came from) was tried first and rejected: measured on legitimate rounds of
+    twelve numeric answers, it false-blocked 38.0% of them, because a round
+    normalises to roughly 60 characters and a coincidental in-order digit
+    match is not actually rare at that length. Matching whole values instead
+    of loose characters is what keeps a false block a needed conjunction of
+    real fragments rather than a coincidence of stray digits, and it measured
+    zero false blocks on the same rounds.
+
+    Residual, stated rather than implied: this preserves job order and does
+    not permute, so a caller that issues its jobs out of order defeats it.
+    Closing that costs 12! arrangements for a full round and was judged not
+    worth it. Reassembly across separate rounds is also out of scope here.
     """
     normalised = [normalise_identifier(v) for v in values]
-    concatenation = "".join(normalised)
-    for source in sources:
-        if len(source) < MIN_REASSEMBLY_LENGTH:
-            continue
-        if any(source in v for v in normalised):
-            continue
-        if _is_subsequence(source, concatenation):
-            return True
-    return False
+    candidates = {
+        source
+        for source in sources
+        if len(source) >= MIN_REASSEMBLY_LENGTH
+        and not any(source in v for v in normalised)
+    }
+    if not candidates:
+        return False
+    concatenations = _subset_concatenations(normalised)
+    return any(source in c for source in candidates for c in concatenations)
 
 
 MAX_JOBS_PER_ROUND = 12

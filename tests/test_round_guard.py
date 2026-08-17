@@ -137,6 +137,12 @@ def task2_reassembly() -> None:
             ["912", "notes", "84", "more", "7731"], ssn_sources
         ),
     )
+    check(
+        "fragments padded with numeric job answers still caught",
+        airlock.reassembles_identifier(
+            ["912", "500", "84", "700", "7731"], ssn_sources
+        ),
+    )
 
     tmp = Path(tempfile.mkdtemp(prefix="airlock-round-guard-test-"))
     (tmp / "notes.txt").write_text("Client SSN is 912-84-7731, filed Monday.\n")
@@ -152,6 +158,22 @@ def task2_reassembly() -> None:
         "source_identifiers returns normalised, never masked",
         not any("*" in s for s in sources),
         ",".join(sorted(sources)),
+    )
+
+    # Positive control against false blocking (CLAUDE.md: assertions about
+    # absence need one). Twelve plausible numeric answers, none of them a
+    # fragment of the SSN: each carrier sandwiches one of the SSN's digits
+    # between two unrelated '5's, so no whole job value ever places two of
+    # the SSN's digits adjacent to each other, and no subset of whole values
+    # concatenated can ever reproduce the SSN contiguously. The rejected
+    # subsequence design does not honour that distinction (it drops the
+    # sandwich digits and reads the target straight through), which is why
+    # it blocked 38.0% of legitimate rounds like this one in the plan
+    # owner's measurement.
+    legitimate_round = [f"5{d}5" for d in sorted(ssn_sources)[0]] + ["203", "410", "999"]
+    check(
+        "legitimate round of twelve numeric answers is not blocked",
+        not airlock.reassembles_identifier(legitimate_round, ssn_sources),
     )
 
 
@@ -174,8 +196,8 @@ def main() -> int:
         print("failed:")
         for name in FAIL:
             print(f"  - {name}")
-    if total < 15:
-        print(f"\nWARNING: only {total} checks ran. Expected at least 15.")
+    if total < 17:
+        print(f"\nWARNING: only {total} checks ran. Expected at least 17.")
         print("Something did not collect. Treat this as a failure, not a pass.")
         return 1
     return 1 if FAIL else 0

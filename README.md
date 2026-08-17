@@ -301,6 +301,8 @@ Read this section before relying on airlock for anything that matters.
 - **The guard sees the reply, not the reasoning.** It inspects what the worker proposes to send. It does not audit how the worker arrived at it.
 - **A determined local model is not the threat model.** airlock guards against incidental disclosure: a helpful local model quoting a file that happens to contain a phone number. It is not built to contain a local model actively trying to exfiltrate data.
 - **Side channels are unaddressed.** Message timing, length, and the pattern of refusals all leak a little information about the contents of the directory.
+- **A legitimate bare number is occasionally withheld as a false postal code.** Measured at roughly 1 in 150 on tax-style extraction answers, even after tuning the threshold on this specific case. The false-positive and true-positive score distributions overlap, so no threshold clears this to zero without also losing recall on real postal codes and addresses. If an answer you expect to see plain numbers in comes back withheld, this is the likely reason.
+- **A bare common noun can be flagged as a person's name.** Words that double as given names ("cherry", "kiwi", "lemon", "olive") occasionally trigger the PII detector's name entity on their own, with no surrounding context. Rare in ordinary prose, more likely if your files use fruit or flower names as identifiers.
 
 ## Running the tests
 

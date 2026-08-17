@@ -3,8 +3,8 @@
 # requires-python = ">=3.11"
 # dependencies = [
 #     "rich>=13.7",
-#     "torch>=2.2",
-#     "transformers>=4.57",
+#     "torch>=2.13.0,<2.14.0",
+#     "transformers>=5.15.0,<5.16.0",
 # ]
 # ///
 """Tests for the round-reassembly guard. See PLAN-round-reassembly.md.

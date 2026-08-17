@@ -58,8 +58,10 @@ confidence.
 **Deterministic layers run before model layers,** and must not be reachable
 only through an optional dependency. `pii-patterns` duplicates part of
 `pii-detector` on purpose: an earlier version delegated all PII detection to
-a single model layer, and disabling that layer then approved an email and a
-phone number.
+Presidio, and `--no-presidio` then approved an email and a phone number.
+`--no-presidio` no longer exists (Presidio was replaced by the two Liquid
+encoders), but the lesson still applies to `pii-detector`: it must stay
+reachable unconditionally, not only when a dependency happens to be present.
 
 **`trust_remote_code=True` is an accepted tradeoff, not an oversight.** Both
 guard encoders (`pii-detector`, `policy-linter`) use custom architectures and
@@ -108,6 +110,26 @@ a low threshold anyway, per `PLAN-liquid-guard.md`'s operating-point note,
 because it is also the only rule that catches the hardest contextual cases.
 This wants the rule reworded, not the threshold retuned; raising the
 threshold enough to quiet it would also cost the recall it exists for.
+
+**`contact.postal_code` still false-flags bare numbers occasionally, even
+after the 0.70 threshold.** A 300-sample sweep of bare number-shaped strings
+(`task-4-report.md`) measured 2/300 (0.67%, roughly 1 legitimate bare number
+in 150 on the tax-extraction workflow) still scoring above 0.70, at 0.856 and
+0.764. 0.856 is *above* the lowest measured true positive (0.845): the
+false-positive and true-positive score distributions overlap, so no single
+global threshold on this entity separates them cleanly. This is why
+`PII_DETECTOR_ENTITY_THRESHOLDS`'s comment in `airlock.py` calls 0.70 the
+best tradeoff found, not a clean separator; a legitimate bare number can
+still be withheld.
+
+**`identity.person_name` fires on bare single common nouns that double as
+given names.** Measured directly against the model: "cherry" 0.90, "kiwi"
+0.96, "lemon" 0.64, "olive" 0.98, while business vocabulary and short prose
+measured clean (0/27 sampled). Narrow and rare enough in what a real
+extraction job returns that it did not meet the bar for a threshold override
+the way `contact.postal_code` did, but it is why
+`tests/test_round_guard.py`'s benign-round fixture uses business words
+rather than a fruit list.
 
 ## Things that look like bugs and are not
 

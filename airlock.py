@@ -437,10 +437,21 @@ PII_DETECTOR_ENTITY_THRESHOLDS: dict[str, float] = {
     # Measured directly against this model (scratch script, not committed):
     # bare context-free numbers that false-flag as a postal code score
     # 0.524-0.565 (matches the 8/300 sweep above); real postal codes and
-    # addresses in surrounding context score 0.845-0.998. One real address
-    # in the sweep scored 0.000 (already a recall miss below any threshold
-    # considered, so raising this cannot cost that case further). 0.70 sits
-    # between the two measured clusters with margin on both sides.
+    # addresses in surrounding context score 0.845-0.998, with one real
+    # address recall miss at 0.000 (already below any threshold considered,
+    # so raising this cannot cost that case further). 0.70 sits above that
+    # first cluster, which is why it cuts the false-positive rate.
+    #
+    # It does not eliminate it. A follow-up 300-sample sweep at 0.70
+    # (task-4-report.md) found 2/300 (0.67%, roughly one bare number in 150
+    # on this workflow) still false-flag, at 0.856 and 0.764. 0.856 is
+    # *above* the lowest measured true positive (0.845): the false-positive
+    # and true-positive score distributions overlap, so no single global
+    # threshold on this entity separates them cleanly. Raising the threshold
+    # past 0.856 to catch that case would also silence the 0.845 true
+    # positive, trading a smaller false-positive rate for a directly
+    # measured recall loss. 0.70 is the best tradeoff point found, not a
+    # clean separator.
     "contact.postal_code": 0.70,
 }
 
@@ -686,7 +697,7 @@ def _load_policy_linter(device: str = "auto") -> tuple[Any, Any, Any, str]:
     return torch, model, tok, resolved
 
 
-def _scan_policy_region(chunk: str) -> set[int]:
+def _scan_policy_region(chunk: str, threshold: float | None = None) -> set[int]:
     """Score one region against the rule pool.
 
     Same deterministic-overflow handling as _scan_pii_region, and for the
@@ -697,6 +708,14 @@ def _scan_policy_region(chunk: str) -> set[int]:
     overlap at this level, same DoS reasoning as _scan_pii_region) and each
     half scored the same way. A region too short to bisect further that
     still overflows fails closed.
+
+    threshold, when given, replaces POLICY_LINTER_THRESHOLD for this call
+    only; POLICY_LINTER_RULE_THRESHOLDS' per-rule overrides still take
+    precedence regardless, same as before. Passed explicitly rather than
+    through the module global so a per-call override (evaluate()'s
+    linter_threshold parameter) cannot affect a concurrent caller sharing
+    this process; POLICY_LINTER_THRESHOLD itself remains mutable for the
+    eval harness and tests, which override it as a module global on purpose.
     """
     torch, model, tok, device = _load_policy_linter()
     prefix = _policy_prefix()
@@ -711,7 +730,7 @@ def _scan_policy_region(chunk: str) -> set[int]:
         half = len(chunk) // 2
         found: set[int] = set()
         for region in _chunk_text(chunk, half, 0):
-            found |= _scan_policy_region(region)
+            found |= _scan_policy_region(region, threshold)
         return found
 
     offsets = enc.pop("offset_mapping")[0].tolist()
@@ -734,14 +753,15 @@ def _scan_policy_region(chunk: str) -> set[int]:
     if not keep:
         return set()
     sub = probs[keep]
+    fallback = POLICY_LINTER_THRESHOLD if threshold is None else threshold
     found = set()
     for ri in range(len(CONTEXTUAL_RULES)):
-        if float(sub[:, ri].max()) > POLICY_LINTER_RULE_THRESHOLDS.get(ri, POLICY_LINTER_THRESHOLD):
+        if float(sub[:, ri].max()) > POLICY_LINTER_RULE_THRESHOLDS.get(ri, fallback):
             found.add(ri)
     return found
 
 
-def scan_policy(text: str) -> list[dict[str, str]]:
+def scan_policy(text: str, threshold: float | None = None) -> list[dict[str, str]]:
     """Rules the policy linter scores above their threshold.
 
     Scans in overlapping POLICY_CHUNK_CHARS-character windows for the same
@@ -757,19 +777,23 @@ def scan_policy(text: str) -> list[dict[str, str]]:
     offsets, because the pool's positions are computed from the
     prefix-plus-region string, not from the whole document.
 
-    Reads POLICY_LINTER_THRESHOLD and POLICY_LINTER_RULE_THRESHOLDS as module
-    globals at call time, not as bound defaults, so a caller overriding either
-    constant (as the eval harness and tests do) takes effect immediately.
-    Rule-pool construction is ported unchanged from eval/bakeoff.py's
-    PolicyLinterGuard.decide: each rule's pooled span has to land on that
-    rule's own tokens inside the prompt prefix, not on the input text, which
-    is fiddly and already measured there. Raises GuardModelUnavailable rather
-    than returning empty on any failure, matching scan_pii_model.
+    threshold overrides POLICY_LINTER_THRESHOLD for this call only, without
+    touching the module global; evaluate() uses this so a per-session
+    linter_threshold cannot leak into a concurrent call. Leave it None to
+    read POLICY_LINTER_THRESHOLD (and POLICY_LINTER_RULE_THRESHOLDS, which a
+    per-call threshold never overrides) as module globals at call time, so a
+    caller overriding either constant directly, as the eval harness and
+    tests do, still takes effect immediately. Rule-pool construction is
+    ported unchanged from eval/bakeoff.py's PolicyLinterGuard.decide: each
+    rule's pooled span has to land on that rule's own tokens inside the
+    prompt prefix, not on the input text, which is fiddly and already
+    measured there. Raises GuardModelUnavailable rather than returning empty
+    on any failure, matching scan_pii_model.
     """
     found: set[int] = set()
     for chunk in _chunk_text(text, POLICY_CHUNK_CHARS, POLICY_CHUNK_OVERLAP_CHARS):
         try:
-            found |= _scan_policy_region(chunk)
+            found |= _scan_policy_region(chunk, threshold)
         except GuardModelUnavailable:
             raise
         except Exception as exc:  # noqa: BLE001 - inference failure fails closed too
@@ -1141,17 +1165,15 @@ def evaluate(message: str, linter_threshold: float = POLICY_LINTER_THRESHOLD) ->
             layers_run=layers,
         )
 
-    # scan_policy() reads POLICY_LINTER_THRESHOLD as a module global at call
-    # time (by design, so the eval harness and tests can override it without
-    # a parameter on scan_policy itself). A caller-supplied linter_threshold
-    # is applied the same way: swapped in for the duration of this call and
-    # restored after, so a concurrent caller with a different session setting
-    # is never affected.
-    global POLICY_LINTER_THRESHOLD
-    previous_threshold = POLICY_LINTER_THRESHOLD
-    POLICY_LINTER_THRESHOLD = linter_threshold
+    # linter_threshold is passed straight through as a call argument, not
+    # swapped into the POLICY_LINTER_THRESHOLD module global: a global is
+    # process-wide, so mutating it here would apply this call's threshold to
+    # any concurrent call too, including one running a different session's
+    # setting. scan_policy still falls back to the module global when no
+    # threshold is given, which is how the eval harness and tests override
+    # it directly.
     try:
-        policy = scan_policy(message)
+        policy = scan_policy(message, linter_threshold)
         layers.append("policy-linter")
     except GuardModelUnavailable as exc:
         return GuardVerdict(
@@ -1160,8 +1182,6 @@ def evaluate(message: str, linter_threshold: float = POLICY_LINTER_THRESHOLD) ->
             instruction="Install torch and transformers so the policy linter encoder can load.",
             layers_run=layers,
         )
-    finally:
-        POLICY_LINTER_THRESHOLD = previous_threshold
     if policy:
         rules = sorted({f["rule"] for f in policy})
         return GuardVerdict(
@@ -3336,6 +3356,27 @@ def cmd_quickstart(args: argparse.Namespace) -> int:
     return cmd_chat(args)
 
 
+def _linter_threshold_type(raw: str) -> float:
+    """Parse --linter-threshold and reject anything outside the sigmoid's range.
+
+    argparse's bare type=float converts but never validates, so a typo like
+    2 parsed silently and was applied as-is: sigmoid output tops out at 1.0,
+    so a threshold above that makes every rule without its own
+    POLICY_LINTER_RULE_THRESHOLDS override permanently unreachable, and the
+    guard fails open on the linter layer with nothing surfacing it. The
+    interactive config screen already enforces 0.0-1.0 (see the "linter
+    threshold" branch of _config_loop); this matches that range at the
+    other entry point.
+    """
+    try:
+        value = float(raw)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{raw!r} is not a number")
+    if not 0.0 <= value <= 1.0:
+        raise argparse.ArgumentTypeError(f"{raw!r} must be between 0.0 and 1.0")
+    return value
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Construct the command line interface."""
     # Every shared option carries argument_default=SUPPRESS, so an option
@@ -3347,10 +3388,11 @@ def build_parser() -> argparse.ArgumentParser:
     common.add_argument("--allow-writes", action="store_true", help="Let the model write files.")
     common.add_argument(
         "--linter-threshold",
-        type=float,
+        type=_linter_threshold_type,
         help=f"Score above which the policy linter's contextual rules revise a "
-        f"message (default: {POLICY_LINTER_THRESHOLD}). The PII detector's threshold "
-        "and the per-rule overrides are constants, not flags, until measured otherwise.",
+        f"message (default: {POLICY_LINTER_THRESHOLD}). Must be between 0.0 and 1.0. "
+        "The PII detector's threshold and the per-rule overrides are constants, "
+        "not flags, until measured otherwise.",
     )
     common.add_argument(
         "--trace",

@@ -2,8 +2,8 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
-#     "torch>=2.2",
-#     "transformers>=4.57",
+#     "torch>=2.13.0,<2.14.0",
+#     "transformers>=5.15.0,<5.16.0",
 #     "rich>=13.7",
 # ]
 # ///
@@ -506,11 +506,12 @@ def evaluate_fail_closed_cases() -> None:
 
 
 def cli_parser_cases() -> None:
-    """Task 3 section of the plan: the removed flags, --linter-threshold, and
-    what gets printed for a client to paste. Parser-level only, no model or
+    """Task 3 section of the plan: the removed flags, --linter-threshold
+    (wired through, and range-validated per the final fix wave), and what
+    gets printed for a client to paste. Parser-level only, no model or
     Ollama needed, so none of these may skip.
     """
-    print("\nCLI: removed flags rejected, --linter-threshold wired through")
+    print("\nCLI: removed flags rejected, --linter-threshold wired through and range-checked")
 
     parser = airlock.build_parser()
     for flag, value in (
@@ -547,6 +548,30 @@ def cli_parser_cases() -> None:
         session.linter_threshold == 0.42,
         str(session.linter_threshold),
     )
+
+    # Fix wave: the config screen already rejects a threshold outside
+    # 0.0-1.0 (_config_loop's "linter threshold" branch), but the CLI flag
+    # had no equivalent check and applied whatever float() parsed. A
+    # threshold above 1.0 makes every rule without its own
+    # POLICY_LINTER_RULE_THRESHOLDS override unreachable, since sigmoid
+    # output never exceeds 1.0, so this must be rejected at the parser, not
+    # silently accepted.
+    for bad in ("2", "-0.1", "1.0001", "not-a-number"):
+        raised = False
+        with contextlib.redirect_stderr(sys.stdout):
+            try:
+                parser.parse_args(["--linter-threshold", bad])
+            except SystemExit:
+                raised = True
+        check(f"--linter-threshold rejects out-of-range/non-numeric: {bad}", raised)
+
+    for edge in ("0.0", "1.0"):
+        args_edge = parser.parse_args(["--linter-threshold", edge])
+        check(
+            f"--linter-threshold accepts boundary value: {edge}",
+            args_edge.linter_threshold == float(edge),
+            str(args_edge.linter_threshold),
+        )
 
     stale = {"guard_model", "use_presidio", "spacy_model", "guardian_model"}
     present = stale & set(airlock.CLI_DEFAULTS)
@@ -883,10 +908,12 @@ def main() -> int:
     # Raised from 38 to 51 (Task 4: check()'s formatting (2), the
     # banner/config-screen smoke case (4), and cmd_doctor's real encoder
     # checks (7)), then to 55 (PLAN-liquid-guard.md fix round 2:
-    # pii_entity_threshold_case, 4 checks). Per CLAUDE.md, a suite that
-    # silently collects fewer checks reads like one that passed.
-    if total < 55:
-        print(f"\nWARNING: only {total} checks ran. Expected at least 55.")
+    # pii_entity_threshold_case, 4 checks), then to 61 (final fix wave:
+    # cli_parser_cases' --linter-threshold range validation, 6 checks). Per
+    # CLAUDE.md, a suite that silently collects fewer checks reads like one
+    # that passed.
+    if total < 61:
+        print(f"\nWARNING: only {total} checks ran. Expected at least 61.")
         print("Something did not collect. Treat this as a failure, not a pass.")
         return 1
     # Skips are reported, not failed, per CLAUDE.md. But a run where every

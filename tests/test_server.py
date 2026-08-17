@@ -5,8 +5,8 @@
 #     "mcp[cli]>=2.0.0,<2.1.0",
 #     "rich>=13.7",
 #     "detect-secrets>=1.5",
-#     "torch>=2.2",
-#     "transformers>=4.57",
+#     "torch>=2.13.0,<2.14.0",
+#     "transformers>=5.15.0,<5.16.0",
 # ]
 # ///
 """End to end tests for airlock, run against the installed MCP SDK.
@@ -54,7 +54,7 @@ def skip(name: str, why: str) -> None:
 
 def make_args(root: Path, **over: object) -> argparse.Namespace:
     values = dict(airlock.CLI_DEFAULTS)
-    values.update(root=root, no_presidio=True, approve="none")
+    values.update(root=root, approve="none")
     values.update(over)
     return argparse.Namespace(**values)
 

@@ -1249,6 +1249,21 @@ def reassembles_identifier(values: list[str], sources: set[str]) -> bool:
     the letters that make the match meaningful, so those still rely on the
     raw pass above.
 
+    A residual the padding measurement did not probe, since it varied round
+    shape but not source length or source count: the projection widens
+    false blocking at the MIN_REASSEMBLY_LENGTH floor. Many short (six
+    digit) all-digit sources against a digit-dense round of ordinary prose,
+    amounts, dates, box numbers and reference numbers can coincidentally
+    reconstruct one of them, even though nothing was actually split. Six
+    digits is reachable in practice because labelled_account accepts
+    [0-9][0-9-]{6,}, so a hyphenated sort-code-shaped account number
+    normalises to exactly six digits, right at the floor. Measured over 300
+    seeded trials, 60 six-digit sources against such a round: 0.0167 false
+    blocking versus 0.0000 for the raw pass; eight- and nine-digit sources
+    measured 0.000. Well under the 12.8% that disqualified the rejected
+    substr design, and it errs toward blocking rather than approving, so
+    this is not a reason to change the design, only to state it.
+
     Bounded defensively at MAX_JOBS_PER_ROUND and MAX_REASSEMBLY_LENGTH
     rather than trusting the caller: _subset_concatenations is
     2**len(values) and its cost per subset scales with total value length,
@@ -1274,11 +1289,14 @@ def reassembles_identifier(values: list[str], sources: set[str]) -> bool:
     if _subset_contains(normalised, candidates):
         return True
 
-    # Digits-only projection, tried only after the raw pass misses, so the
-    # common case (no reassembly at all) does not pay for a second
-    # enumeration. Restricted to sources that are themselves all-digit:
-    # projecting an alphanumeric identifier would discard the letters that
-    # make the match meaningful, so those keep relying on the raw pass.
+    # Digits-only projection. Only reached when the raw pass above misses,
+    # which costs a second full subset enumeration; what keeps the common
+    # case cheap is `not candidates` above and `not numeric` below, since a
+    # round with no matching source at all, or with only alphanumeric
+    # sources, returns before either enumeration runs twice. Restricted to
+    # sources that are themselves all-digit: projecting an alphanumeric
+    # identifier would discard the letters that make the match meaningful,
+    # so those keep relying on the raw pass.
     numeric = {source for source in candidates if source.isdigit()}
     if not numeric:
         return False

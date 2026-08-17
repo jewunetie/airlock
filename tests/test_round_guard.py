@@ -29,6 +29,17 @@ padding characters are not digits. Restricted to sources that are themselves
 all-digit, so alphanumeric identifiers keep relying on the raw pass alone.
 See task-4-brief.md.
 
+Task 4 fix round 1: corrects two comments (one factually wrong about which
+digit the 16-digit-value control contains, one backwards about which guard
+actually keeps the common case cheap), makes the alphanumeric-only-sources
+regression guard deterministic instead of 10.5% likely to fire, and adds a
+test pinning the direction of a residual the padding measurement did not
+probe: many six-digit sources against a digit-dense round can coincidentally
+collide under the projection, widened sources do not. See the coordinator's
+review notes; no eval script exists in this worktree, so the 300-trial
+false-blocking rate cited in the docstring is taken from that review rather
+than re-measured here.
+
 Fix wave (final whole-branch review, see final-fix-report.md):
 
 CRITICAL 1: a workspace over MAX_LISTING_ENTRIES blocked every round, because
@@ -586,12 +597,15 @@ def task4_digit_projection() -> None:
         not airlock.reassembles_identifier(legitimate_round, sources),
     )
 
-    # The exact shape that took the rejected substring-DP design to 100%
-    # false blocking (task-4-brief.md). Twelve 16-digit values built from a
-    # narrow digit alphabet (0-6) that never includes '9'; the source is
-    # sixteen '9's, so no subset concatenation, however assembled, can ever
-    # contain it: it would need a contiguous run of sixteen nines, and there
-    # is no nine anywhere in the round.
+    # Twelve 16-digit values, the round shape task-4-brief.md measured at
+    # 100% false blocking under the rejected substr design. This does not
+    # reproduce that measurement's numeric-source population (that used many
+    # sources sized to collide; this uses one, sized not to); it is a
+    # minimal positive control proving the digits design does not
+    # blanket-block that value shape. Source is sixteen '9's; among the
+    # round's values only i=9 ("0000000000000009") contains a '9' at all,
+    # one digit, never a run, so no subset concatenation can contain sixteen
+    # contiguous nines.
     sixteen_digit_source = {"9" * 16}
     twelve_16digit_values = [f"{i:016d}" for i in range(12)]
     check(
@@ -622,8 +636,13 @@ def task4_digit_projection() -> None:
     # construction, however this key's OWN digit run gets split. This is a
     # stronger regression guard than an unrelated digit round would be: a
     # broken implementation that projected every candidate's digits instead
-    # of only whole-source all-digit ones would wrongly catch this.
-    embedded_digit_key = "k482910" + fake_secret_value(13)
+    # of only whole-source all-digit ones would wrongly catch this. The
+    # trailing filler is drawn from letters only, not fake_secret_value's
+    # alphanumeric alphabet, so the key's digit projection is deterministically
+    # exactly "482910" and this stays a guaranteed regression trap rather than
+    # one that only fires when a random digit does not land in the filler.
+    letters_only_filler = "".join(secrets.choice(string.ascii_letters) for _ in range(13))
+    embedded_digit_key = "k482910" + letters_only_filler
     alnum_only_source = {airlock.normalise_identifier(embedded_digit_key)}
     check(
         "round with only alphanumeric sources: projection does not run, not blocked",
@@ -631,6 +650,39 @@ def task4_digit_projection() -> None:
             ["482", "unrelated filler note", "910"],
             alnum_only_source,
         ),
+    )
+
+    # Documented residual (reassembles_identifier's docstring): the
+    # projection widens false blocking at the MIN_REASSEMBLY_LENGTH floor,
+    # because many short six-digit sources are more likely to coincide with
+    # a digit-dense round's incidental digits than one long source is. This
+    # is a deterministic hand-built collision pinning the DIRECTION of that
+    # residual, not a reproduction of the 300-trial/60-source measurement
+    # behind the docstring's numbers (that would reintroduce the same
+    # probabilistic-guarantee problem raised about the alphanumeric-only
+    # case above). Ordinary digit-dense prose, an amount, a box number and a
+    # reference number, whose digits concatenate in order to "482910":
+    # coincidental, not a split identifier, but indistinguishable from one
+    # once every fragment has been through the digits projection.
+    digit_dense_round = [
+        "invoice amount is 48", "filed under box 29", "reference 10 pending",
+    ]
+    six_digit_sources = {"482910", "119955", "203040", "556677", "334455"}
+    check(
+        "digit-dense round against many six-digit sources: blocked",
+        airlock.reassembles_identifier(digit_dense_round, six_digit_sources),
+    )
+
+    # Same round, sources widened to eight digits (each padded from the same
+    # six-digit sources above, so this isolates length rather than changing
+    # anything else): the round's total normalised digit count is 6, so an
+    # 8-character source can never be a substring of any subset
+    # concatenation. Pins the direction the docstring states: the residual
+    # is specific to the length floor, not to digit-dense rounds generally.
+    eight_digit_sources = {s + "00" for s in six_digit_sources}
+    check(
+        "same digit-dense round against eight-digit sources: not blocked",
+        not airlock.reassembles_identifier(digit_dense_round, eight_digit_sources),
     )
 
 
@@ -659,8 +711,8 @@ def main() -> int:
         print("failed:")
         for name in FAIL:
             print(f"  - {name}")
-    if total < 43:
-        print(f"\nWARNING: only {total} checks ran. Expected at least 43.")
+    if total < 45:
+        print(f"\nWARNING: only {total} checks ran. Expected at least 45.")
         print("Something did not collect. Treat this as a failure, not a pass.")
         return 1
     return 1 if FAIL else 0

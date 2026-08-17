@@ -75,9 +75,11 @@ against the sixteen-digit-values shape, which again is not one of this
 script's three round shapes, so that exact number is not reproduced by this
 command; the direction and rough magnitude are.
 
-**The six-digit-floor residual** (same docstring: "300 seeded trials, 60
-six-digit sources... 0.0167 false blocking versus 0.0000 for the raw pass;
-eight- and nine-digit sources measured 0.000"):
+**The six-digit-floor residual** (same docstring: "300 seeded trials
+(eval/reassembly_residuals.py), 20/40/60 six-digit sources against such a
+round: 0.0000 to 0.0133 false blocking for the shipped function, 0.0000 to
+0.0067 for the raw pass alone... eight- and nine-digit sources measured 0.000
+for both"):
 
 ```
 uv run --script eval/reassembly_residuals.py
@@ -88,21 +90,21 @@ digits) and source count (20, 40, 60) against a digit-dense round of prose,
 amounts, dates, box numbers and reference numbers, over 300 seeded trials per
 cell, for the shipped `reassembles_identifier` and for its raw pass in
 isolation. A run against this repo's `dataset.jsonl` (seed 20260817) measured
-eight- and nine-digit sources at 0.0000 for both columns, matching the
-docstring. It did not match the docstring on six-digit sources: this run's
+eight- and nine-digit sources at 0.0000 for both columns, and six-digit
+sources at 0.0000 to 0.0133 (shipped) and 0.0000 to 0.0067 (raw pass) across
+the three source counts, matching the docstring as it now reads. The
 digit-dense round produces literal digit runs in its own right (dates,
 amounts, box and reference numbers concatenated in job order can abut without
-a separator), so the raw pass here false-blocks too (0.0000 to 0.0133
-depending on source count), not only the digits projection. The docstring's
-claim that six-digit false blocking is unique to the projection (0.0167
-shipped versus 0.0000 raw) is not reproduced by this corpus. The docstring
-was written from a review, not this script, so this is new information for
-whoever owns that text next, not a silent correction; `airlock.py` has not
-been changed on the strength of this run.
+a separator), so the raw pass false-blocks at the six-digit floor too, not
+only the digits projection; the projection adds to that floor rather than
+creating it on its own. The docstring was updated to this run's figures, so
+`airlock.py`'s prose and this script now agree.
 
 **`MAX_REASSEMBLY_LENGTH`'s worst-case timing** (the comment above the
-constant: "twelve unshaped answers of FILE_SLICE_CHARS each against 400
-workspace identifiers took 18.0 seconds"):
+constant: 18.0 seconds pre-bound was the historical measurement that
+motivated the bound; post-bound, at the bound's own ceiling against 400
+workspace identifiers, the function still costs seconds because cost scales
+with identifier count as well as total length):
 
 ```
 uv run --script eval/reassembly_residuals.py
@@ -110,22 +112,26 @@ uv run --script eval/reassembly_residuals.py
 
 The same run's "MAX_REASSEMBLY_LENGTH worst-case cost" section times the real
 `reassembles_identifier`, not a scratch reimplementation. It cannot reproduce
-the cited scenario directly: 12 values of `FILE_SLICE_CHARS` each sum to
+the pre-bound scenario directly: 12 values of `FILE_SLICE_CHARS` each sum to
 48,000 characters, and `MAX_REASSEMBLY_LENGTH` itself now rejects a round
 that large in O(1) before the expensive subset enumeration runs at all, which
-is the entire reason the comment gives for the bound existing. What this
-measures instead is the worst case the CURRENT, bounded function can still
-be made to pay: 12 values summing to exactly the `MAX_REASSEMBLY_LENGTH`
-ceiling (4,000 characters total, so the length check does not short-circuit)
-against 400 non-matching workspace identifiers (so neither the raw pass nor
-the digits projection exits early on a hit). On this run that measured a
-mean of 4.5 seconds over 5 reps, not 18.0. The two numbers describe different
-scenarios (48,000 characters pre-bound versus 4,000 at the post-bound
-ceiling) on possibly different hardware, so treat 18.0 seconds as the
-justification for why the bound exists rather than as a figure this script
-reproduces, and treat 4.5 seconds as this run's answer to "what can the
-bounded function still cost." Re-measure before trusting either on your own
-machine; see "Sandbox versus Apple Silicon" below.
+is the entire reason the comment gives for the bound existing; 18.0 seconds
+is carried in the comment as that historical justification, not as a figure
+this script reproduces. What this measures instead is the worst case the
+CURRENT, bounded function can still be made to pay: 12 values summing to
+exactly the `MAX_REASSEMBLY_LENGTH` ceiling (4,000 characters total, so the
+length check does not short-circuit) against 400 non-matching workspace
+identifiers (so neither the raw pass nor the digits projection exits early
+on a hit). This run measured a mean of 4.452 seconds (median 4.416 seconds)
+over 5 reps, matching the figure now in `airlock.py`'s comment. Cost scales
+with identifier count, not only length: a shaped round (twelve 80-character
+values, well under the ceiling) against a realistic handful of workspace
+identifiers costs tens of milliseconds, not seconds; this script does not
+vary identifier count itself, so that scaling claim was checked separately
+against the real functions and is stated qualitatively in the comment rather
+than pinned to a script-reproduced figure. Re-measure the ceiling timing
+before trusting it on your own machine; see "Sandbox versus Apple Silicon"
+below.
 
 `tests/test_round_guard.py`'s `important3_length_bound` remains the
 permanent regression control for this: it asserts the bound fires on an

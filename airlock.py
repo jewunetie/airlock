@@ -1091,16 +1091,27 @@ def evaluate_session(session: Session, text: str) -> GuardVerdict:
 MIN_REASSEMBLY_LENGTH = 6
 
 # Bounds the total normalised length of one round's values, not just their
-# count. _subset_concatenations' cost scales with both the number of subsets
+# count. _subset_concatenations' cost scales with the number of subsets
 # (2**len(values), already capped by MAX_JOBS_PER_ROUND) and the length of
-# what gets copied into each one. Measured worst case: 12 unshaped answers of
-# FILE_SLICE_CHARS (4000) each against 400 workspace identifiers took 18.0
-# seconds on the guard path itself, a denial of service on the path that is
-# supposed to protect against one. A round of shaped jobs cannot approach
-# this: twelve "line"-shaped answers (JOB_SHAPES maxLength 80) sum to at most
-# 960 characters, so FILE_SLICE_CHARS, the size of a single document slice,
-# is a generous ceiling for a whole round that leaves realistic traffic
-# untouched while still bounding unshaped free-text answers.
+# what gets copied into each one; _subset_contains then tests every source
+# identifier against every subset, so cost also scales with how many
+# identifiers are in the workspace, not with length alone. This bound exists
+# because of a pre-bound measurement: 12 unshaped answers of FILE_SLICE_CHARS
+# (4000) each against 400 workspace identifiers took 18.0 seconds on the
+# guard path itself, a denial of service on the path that is supposed to
+# protect against one. That exact scenario is no longer reachable through
+# this function: the length check below now rejects a round that large in
+# O(1), before the subset enumeration ever runs. At the bound's own ceiling
+# (12 values summing to 4000 characters) against 400 non-matching workspace
+# identifiers, the bounded function still costs seconds, not milliseconds:
+# eval/reassembly_residuals.py measured a mean of 4.452s (median 4.416s) over
+# 5 reps. A round of shaped jobs cannot approach that ceiling: twelve
+# "line"-shaped answers (JOB_SHAPES maxLength 80) sum to at most 960
+# characters, and a realistic workspace of a few ordinary documents yields a
+# handful of identifiers, costing tens of milliseconds, not seconds.
+# FILE_SLICE_CHARS, the size of a single document slice, is a generous
+# ceiling for a whole round that leaves realistic traffic untouched while
+# still bounding unshaped free-text answers.
 MAX_REASSEMBLY_LENGTH = FILE_SLICE_CHARS
 
 
@@ -1250,17 +1261,23 @@ def reassembles_identifier(values: list[str], sources: set[str]) -> bool:
     raw pass above.
 
     A residual the padding measurement did not probe, since it varied round
-    shape but not source length or source count: the projection widens
-    false blocking at the MIN_REASSEMBLY_LENGTH floor. Many short (six
-    digit) all-digit sources against a digit-dense round of ordinary prose,
-    amounts, dates, box numbers and reference numbers can coincidentally
-    reconstruct one of them, even though nothing was actually split. Six
-    digits is reachable in practice because labelled_account accepts
-    [0-9][0-9-]{6,}, so a hyphenated sort-code-shaped account number
-    normalises to exactly six digits, right at the floor. Measured over 300
-    seeded trials, 60 six-digit sources against such a round: 0.0167 false
-    blocking versus 0.0000 for the raw pass; eight- and nine-digit sources
-    measured 0.000. Well under the 12.8% that disqualified the rejected
+    shape but not source length or source count: false blocking at the
+    MIN_REASSEMBLY_LENGTH floor. Many short (six digit) all-digit sources
+    against a digit-dense round of ordinary prose, amounts, dates, box
+    numbers and reference numbers can coincidentally reconstruct one of
+    them, even though nothing was actually split. Six digits is reachable
+    in practice because labelled_account accepts [0-9][0-9-]{6,}, so a
+    hyphenated sort-code-shaped account number normalises to exactly six
+    digits, right at the floor. A digit-dense round also produces incidental
+    digit runs of its own (dates, amounts, box and reference numbers
+    concatenated in job order can abut without a separator), so this floor
+    is not unique to the digits-only projection: the raw pass false-blocks
+    here too. Measured over 300 seeded trials (eval/reassembly_residuals.py),
+    20/40/60 six-digit sources against such a round: 0.0000 to 0.0133 false
+    blocking for the shipped function, 0.0000 to 0.0067 for the raw pass
+    alone, so the projection adds to the raw pass's floor rather than
+    creating it. Eight- and nine-digit sources measured 0.000 for both.
+    Every figure stays well under the 12.8% that disqualified the rejected
     substr design, and it errs toward blocking rather than approving, so
     this is not a reason to change the design, only to state it.
 

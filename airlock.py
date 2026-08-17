@@ -2068,10 +2068,97 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             "not installed. Only `serve` needs it, so the rest of airlock still works",
         )
 
-    # lean: no real load-and-probe check for the two guard encoders yet. That
-    # is Task 4's job (doctor, banner and the config screen); this task only
-    # has to keep doctor functional after Presidio's removal, not correct.
-    # The evaluate() cases below at least exercise both encoders indirectly.
+    # The guard's model layers are two local encoders now, not an Ollama
+    # tag, so what is worth checking changed completely: importability,
+    # loadability, the selected device, and a real verdict from each on a
+    # fixed probe. trust_remote_code=True model repos are fetched from
+    # Hugging Face the first time either encoder loads, so that is stated
+    # before it happens, not discovered mid-download.
+    def encoder_cached(repo_id: str, revision: str) -> bool | None:
+        try:
+            from huggingface_hub import try_to_load_from_cache
+        except ImportError:
+            return None  # cannot tell; huggingface_hub itself unavailable
+        return isinstance(
+            try_to_load_from_cache(repo_id, "config.json", revision=revision), str
+        )
+
+    try:
+        import torch as _torch
+        import transformers as _transformers
+
+        torch_ok = check(
+            "torch/transformers importable",
+            True,
+            f"torch {_torch.__version__}, transformers {_transformers.__version__}",
+        )
+    except ImportError as exc:
+        torch_ok = check("torch/transformers importable", False, str(exc))
+    if not torch_ok:
+        ok = False
+    else:
+        missing = [
+            name
+            for name, cached in (
+                ("the PII detector", encoder_cached(PII_DETECTOR_MODEL, PII_DETECTOR_REVISION)),
+                ("the policy linter", encoder_cached(POLICY_LINTER_MODEL, POLICY_LINTER_REVISION)),
+            )
+            if cached is False
+        ]
+        if missing:
+            console.print(
+                f"       [dim]first run downloads {' and '.join(missing)} from Hugging "
+                "Face, roughly 350MB each (~700MB total). This happens once and can "
+                "take a while[/dim]"
+            )
+
+        device = resolve_device()
+        check("device", True, device)
+
+        try:
+            _load_pii_detector()
+            check("PII detector loadable", True, f"device={device}")
+        except GuardModelUnavailable as exc:
+            check("PII detector loadable", False, str(exc))
+            ok = False
+
+        try:
+            _load_policy_linter()
+            check("policy linter loadable", True, f"device={device}")
+        except GuardModelUnavailable as exc:
+            check("policy linter loadable", False, str(exc))
+            ok = False
+
+        if ok:
+            # Fixed probes, not the "blocks a credential/person" cases below:
+            # those exercise the whole evaluate() stack, these confirm each
+            # encoder on its own returns a real, expected verdict rather than
+            # merely having loaded. Same literals as SSN_TEXT/MEDICAL_TEXT in
+            # tests/test_liquid_guard.py, already measured there to trigger
+            # an identity finding and rule0 respectively.
+            try:
+                rules = {f["rule"] for f in scan_pii_model("My social security number is 912-84-7731.")}
+                passed = any(r.split(".")[0] == "identity" for r in rules)
+                if not check("PII detector probe", passed, ",".join(sorted(rules)) or "no findings"):
+                    ok = False
+            except GuardModelUnavailable as exc:
+                check("PII detector probe", False, str(exc))
+                ok = False
+
+            try:
+                rules = {
+                    f["rule"]
+                    for f in scan_policy(
+                        "I was recently diagnosed with stage 2 breast cancer and "
+                        "started chemotherapy last week."
+                    )
+                }
+                passed = "rule0" in rules
+                if not check("policy linter probe", passed, ",".join(sorted(rules)) or "no findings"):
+                    ok = False
+            except GuardModelUnavailable as exc:
+                check("policy linter probe", False, str(exc))
+                ok = False
 
     try:
         installed = ollama_models()
@@ -2212,7 +2299,7 @@ def make_session(args: argparse.Namespace, objective: str) -> Session:
 
 HELP_TEXT = """[bold]Commands[/bold]
   [cyan]/help[/cyan]      show this
-  [cyan]/config[/cyan]    view and change settings: models, guard layers, writes
+  [cyan]/config[/cyan]    view and change settings: worker model, linter threshold, writes
   [cyan]/mcp[/cyan]       how to connect a cloud assistant to this workspace
   [cyan]/stats[/cyan]     session counters
   [cyan]/files[/cyan]     list the workspace
@@ -2263,8 +2350,12 @@ SETTING_NOTES: dict[str, str] = {
         "JSON matching a fixed schema, and a model that cannot do that fails every step, "
         "so confirm with a question after changing it."
     ),
-    # lean: no note for a "linter threshold" row yet, since the config screen
-    # does not offer one to edit here. That is Task 4's job; see its brief.
+    "linter threshold": (
+        "Score above which the policy linter's contextual rules revise a message. Lower "
+        "catches more disclosures at the cost of more false positives. The PII detector's "
+        "threshold and the per-rule overrides are constants, not adjustable here, until "
+        "measured otherwise."
+    ),
     "writes": (
         "Whether the local model may create or modify files in this workspace. Off by "
         "default. The sandbox boundary is unaffected either way: nothing outside the "
@@ -2400,12 +2491,12 @@ def _config_loop(session: Session, args: argparse.Namespace, notices: list[str])
             ("writes", "enabled" if session.sandbox.allow_writes else "disabled"),
             ("trace", str(args.trace) if args.trace else "off"),
             ("objective", session.objective[:44]),
+            ("linter threshold", str(session.linter_threshold)),
         ]
         choice = choose(
             "settings",
             rows,
-            footer=f"workspace {session.sandbox.root}  approval {args.approve}  "
-            f"linter threshold {session.linter_threshold}",
+            footer=f"workspace {session.sandbox.root}  approval {args.approve}",
             start=cursor,
             notes=SETTING_NOTES,
         )
@@ -2447,6 +2538,20 @@ def _config_loop(session: Session, args: argparse.Namespace, notices: list[str])
             entered = Prompt.ask("objective", default=session.objective).strip()
             if entered:
                 session.objective = entered
+        elif name == "linter threshold":
+            entered = Prompt.ask(
+                "linter threshold (0.0-1.0)", default=str(session.linter_threshold)
+            ).strip()
+            try:
+                value = float(entered)
+            except ValueError:
+                notices.append(f"[red]not a number:[/red] {entered!r}")
+            else:
+                if 0.0 <= value <= 1.0:
+                    session.linter_threshold = args.linter_threshold = value
+                    notices.append(f"[green]linter threshold[/green] -> {value}")
+                else:
+                    notices.append("[red]out of range:[/red] must be between 0.0 and 1.0")
 
 
 def render_mcp_help(args: argparse.Namespace) -> None:

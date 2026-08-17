@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import importlib.util
+import io
 import secrets
 import string
 import sys
@@ -639,6 +640,134 @@ def jobs_empty_answer_case() -> None:
     )
 
 
+# --------------------------------------------------------------------------
+# Task 4: doctor, banner and the config screen, made correct rather than
+# merely non-crashing. See task-4-brief.md.
+# --------------------------------------------------------------------------
+
+
+def check_function_formatting_case() -> None:
+    """check() renders through Text.assemble, which does NOT parse rich
+    markup (CLAUDE.md's own documented trap for this file: a tag in a check
+    detail prints literally). A detail string containing bracket text has to
+    survive unprocessed, or a future switch to console.print-style rendering
+    would silently start eating operator-facing detail text that happens to
+    look like a tag. No model or Ollama needed: check() is pure.
+    """
+    print("\ncheck(): formatting is pure, and does not parse markup in detail text")
+
+    with airlock.console.capture() as capture:
+        airlock.check("probe", True, "note [with] brackets")
+    printed = capture.get()
+    check("check() reports the label and an ok mark", "probe" in printed and "ok" in printed, printed.strip())
+    check(
+        "check() detail text is literal, not parsed as markup",
+        "[with]" in printed,
+        printed.strip(),
+    )
+
+
+def banner_and_config_screen_case() -> None:
+    """banner() and the config screen against a REAL Session built the new
+    way (worker_model + linter_threshold; no guard_model, guardian_model or
+    use_presidio). A stale attribute reference is the failure mode this
+    guards against, per the brief's own method note, and only a real
+    construction and a real render catches it. Also exercises the config
+    screen's new linter-threshold row end to end (select it, enter a value,
+    confirm the Session field actually changes), since that is the one
+    control this task adds rather than merely un-breaks.
+    """
+    print("\nbanner() and the config screen: real Session, real render, editable threshold")
+
+    tmp = Path(tempfile.mkdtemp(prefix="banner-config-smoke-"))
+    (tmp / "note.txt").write_text("hello\n")
+    session = airlock.Session(
+        session_id="banner-config-test",
+        objective="x",
+        sandbox=airlock.Sandbox(root=tmp, allow_writes=False),
+        worker_model="stub-worker",
+        linter_threshold=0.42,
+    )
+
+    with airlock.console.capture() as capture:
+        airlock.banner(session)
+    printed = capture.get()
+    check("banner runs against a Session with no guard_model field", "stub-worker" in printed, printed[:200])
+    check(
+        "banner describes the real four-layer guard",
+        all(name in printed for name in ("secrets", "pii-patterns", "pii-detector", "policy-linter")),
+        printed[:200],
+    )
+
+    args = argparse.Namespace(**{**airlock.CLI_DEFAULTS, "root": tmp, "model": "stub-worker"})
+    notices: list[str] = []
+    # choose()'s non-tty fallback reads one line per prompt via Prompt.ask;
+    # there is no contextlib.redirect_stdin (that only exists for
+    # stdout/stderr), so sys.stdin is swapped by hand. "5" selects the fifth
+    # settings row (linter threshold, once worker/writes/trace/objective
+    # precede it), "0.55" is the new value, the trailing blank line exits.
+    original_stdin = sys.stdin
+    sys.stdin = io.StringIO("5\n0.55\n\n")
+    try:
+        airlock._config_loop(session, args, notices)
+    finally:
+        sys.stdin = original_stdin
+
+    check(
+        "config screen's linter-threshold row changes the real Session field",
+        session.linter_threshold == 0.55,
+        str(session.linter_threshold),
+    )
+    check(
+        "config screen records a notice for the change",
+        any("linter threshold" in n for n in notices),
+        "; ".join(notices) or "no notices",
+    )
+
+
+def cmd_doctor_encoder_checks_case(unavailable: str) -> None:
+    """cmd_doctor must check what now actually matters for the guard: torch/
+    transformers importability, both encoders loadable, the selected device,
+    and a real verdict from each on a fixed probe (previously it checked an
+    Ollama-hosted guard model tag, meaningless now the guard is two local
+    encoders). Needs both encoders AND a reachable Ollama with the worker
+    model installed, since cmd_doctor also runs the pre-existing worker
+    checks; skipped with a reason rather than failing when either is
+    missing, matching this file's own convention for model-gated cases.
+    """
+    print("\ncmd_doctor: checks the two real encoders, not a vestigial Ollama guard tag")
+
+    try:
+        airlock.ollama_models()
+        ollama_unavailable = ""
+    except RuntimeError as exc:
+        ollama_unavailable = str(exc)
+    reason = unavailable or ollama_unavailable
+    labels = (
+        "torch/transformers importable",
+        "device",
+        "PII detector loadable",
+        "policy linter loadable",
+        "PII detector probe",
+        "policy linter probe",
+    )
+    if reason:
+        skip("cmd_doctor returns 0 with the real worker and encoders available", reason)
+        for label in labels:
+            skip(f"cmd_doctor prints '{label}'", reason)
+        return
+
+    tmp = Path(tempfile.mkdtemp(prefix="doctor-smoke-"))
+    (tmp / "note.txt").write_text("hello\n")
+    args = argparse.Namespace(**{**airlock.CLI_DEFAULTS, "root": tmp})
+    with airlock.console.capture() as capture:
+        code = airlock.cmd_doctor(args)
+    printed = capture.get()
+    check("cmd_doctor returns 0 with the real worker and encoders available", code == 0, str(code))
+    for label in labels:
+        check(f"cmd_doctor prints '{label}'", label in printed, "missing" if label not in printed else "present")
+
+
 def main() -> int:
     print(f"airlock: {AIRLOCK}")
 
@@ -666,6 +795,9 @@ def main() -> int:
     run("dense_non_ascii_truncation_case", dense_non_ascii_truncation_case, unavailable)
     run("worker_step_exhaustion_case", worker_step_exhaustion_case)
     run("jobs_empty_answer_case", jobs_empty_answer_case)
+    run("check_function_formatting_case", check_function_formatting_case)
+    run("banner_and_config_screen_case", banner_and_config_screen_case)
+    run("cmd_doctor_encoder_checks_case", cmd_doctor_encoder_checks_case, unavailable)
 
     total = len(PASS) + len(FAIL) + len(SKIP)
     print(f"\n{len(PASS)} passed, {len(FAIL)} failed, {len(SKIP)} skipped ({total} checks)")
@@ -673,11 +805,12 @@ def main() -> int:
         print("failed:")
         for name in FAIL:
             print(f"  - {name}")
-    # Raised from 36 to 38: fix round 3 adds 2 run_jobs empty-answer cases,
-    # which need no model and always run, per CLAUDE.md: a suite that
-    # silently collects fewer checks reads like one that passed.
-    if total < 38:
-        print(f"\nWARNING: only {total} checks ran. Expected at least 38.")
+    # Raised from 38 to 51: Task 4 adds check()'s formatting (2), the
+    # banner/config-screen smoke case (4), and cmd_doctor's real encoder
+    # checks (7, gated on model+Ollama availability). Per CLAUDE.md, a suite
+    # that silently collects fewer checks reads like one that passed.
+    if total < 51:
+        print(f"\nWARNING: only {total} checks ran. Expected at least 51.")
         print("Something did not collect. Treat this as a failure, not a pass.")
         return 1
     # Skips are reported, not failed, per CLAUDE.md. But a run where every

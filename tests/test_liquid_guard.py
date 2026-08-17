@@ -101,6 +101,27 @@ POLICY_OVERFLOW_FILLER = (
 )
 POLICY_OVERFLOW_TEXT = POLICY_OVERFLOW_FILLER + MEDICAL_TEXT
 
+# Carried finding from Task 1's re-review (see task-2-report.md fix round 1):
+# PII_CHUNK_CHARS/POLICY_CHUNK_CHARS rest on a chars/token ratio measured over
+# ASCII identifier-shaped text (~1.06 chars/token), not a proven floor. Dense
+# non-ASCII text can tokenize well below 1 char/token via BPE byte-fallback,
+# so a single PII_CHUNK_CHARS/POLICY_CHUNK_CHARS-sized window of it can still
+# overflow the model's token budget on its own, reproducing the original
+# fail-open at window granularity instead of document granularity. Rare CJK
+# characters (well outside the tokenizer's common vocabulary, forcing heavy
+# byte-fallback) measured furthest below 1 char/token of several scripts
+# probed; a 500-char slice tokenizes to ~1020 tokens under the PII detector's
+# tokenizer (over the 512 budget) and a 1800-char slice plus the policy
+# linter's ~92-token rule prefix tokenizes to ~3600+ tokens (over the 2048
+# budget). Both fillers below are sized so the trailing value lands inside
+# the LAST outer chunk _chunk_text produces (guaranteed to cover the tail),
+# not rescued by landing in some other, less-dense overlapping window.
+RARE_KANJI_UNIT = "鬱鬱蔥蔥薔薇鑫燚龘齉爨龗蠿豔驫麤龖钃鱻虋鼺齾靐飝饗饕"
+DENSE_NON_ASCII_PII_FILLER = (RARE_KANJI_UNIT * (900 // len(RARE_KANJI_UNIT) + 2))[:900]
+DENSE_NON_ASCII_PII_TEXT = DENSE_NON_ASCII_PII_FILLER + SSN_TEXT
+DENSE_NON_ASCII_POLICY_FILLER = (RARE_KANJI_UNIT * (2500 // len(RARE_KANJI_UNIT) + 2))[:2500]
+DENSE_NON_ASCII_POLICY_TEXT = DENSE_NON_ASCII_POLICY_FILLER + MEDICAL_TEXT
+
 
 def models_available() -> str:
     """Try a real call through both guards. Empty string if both work,
@@ -466,6 +487,62 @@ def cli_parser_cases() -> None:
     )
 
 
+def chunk_text_step_guard_case() -> None:
+    """The one-line guard the re-reviewer flagged (fix round 1): _chunk_text
+    never asserted step > 0. Current constants (500-200, 1800-400) are safe,
+    but a future edit setting overlap >= window would make pos stop
+    advancing (overlap == window) or walk backward (overlap > window),
+    hanging or looping forever rather than raising. No model needed.
+    """
+    print("\n_chunk_text: overlap >= window is refused, not a silent hang")
+
+    raised = False
+    try:
+        airlock._chunk_text("x" * 10, window=5, overlap=5)
+    except AssertionError:
+        raised = True
+    check("overlap == window raises, does not hang", raised)
+
+    raised = False
+    try:
+        airlock._chunk_text("x" * 10, window=5, overlap=8)
+    except AssertionError:
+        raised = True
+    check("overlap > window raises, does not hang", raised)
+
+
+def dense_non_ascii_truncation_case(unavailable: str) -> None:
+    """Carried finding from Task 1's re-review: truncation can still fire
+    INSIDE a single chunk on dense non-ASCII text, reproducing the original
+    fail-open at window granularity. See the fixture comments above
+    DENSE_NON_ASCII_PII_TEXT/DENSE_NON_ASCII_POLICY_TEXT for the measurement
+    behind these two texts. Confirmed RED against the pre-fix code (fix
+    round 1, git-stashed and re-run): both returned [] silently. The fix is
+    _scan_pii_region/_scan_policy_region asking the tokenizer directly
+    whether a chunk overflows, rather than trusting PII_CHUNK_CHARS/
+    POLICY_CHUNK_CHARS' char ratio, and bisecting until each piece fits.
+    """
+    print("\nDense non-ASCII text: truncation inside one window is caught, not silent")
+    if unavailable:
+        skip("PII detector: a value past a single dense-CJK window is still found", unavailable)
+        skip("policy linter: a disclosure past a single dense-CJK window is still found", unavailable)
+        return
+
+    rules = {f["rule"] for f in airlock.scan_pii_model(DENSE_NON_ASCII_PII_TEXT)}
+    check(
+        "PII detector: a value past a single dense-CJK window is still found",
+        any(r.split(".")[0] == "identity" for r in rules),
+        ",".join(sorted(rules)) or "no findings, truncated away",
+    )
+
+    rules = {f["rule"] for f in airlock.scan_policy(DENSE_NON_ASCII_POLICY_TEXT)}
+    check(
+        "policy linter: a disclosure past a single dense-CJK window is still found",
+        "rule0" in rules,
+        ",".join(sorted(rules)) or "no findings, truncated away",
+    )
+
+
 def main() -> int:
     print(f"airlock: {AIRLOCK}")
 
@@ -489,6 +566,8 @@ def main() -> int:
     run("rewired_evaluate_cases", rewired_evaluate_cases, unavailable)
     run("evaluate_fail_closed_cases", evaluate_fail_closed_cases)
     run("cli_parser_cases", cli_parser_cases)
+    run("chunk_text_step_guard_case", chunk_text_step_guard_case)
+    run("dense_non_ascii_truncation_case", dense_non_ascii_truncation_case, unavailable)
 
     total = len(PASS) + len(FAIL) + len(SKIP)
     print(f"\n{len(PASS)} passed, {len(FAIL)} failed, {len(SKIP)} skipped ({total} checks)")
@@ -496,12 +575,12 @@ def main() -> int:
         print("failed:")
         for name in FAIL:
             print(f"  - {name}")
-    # Raised from 15 (Task 1) to 29: Task 2 adds 4 rewired-evaluate cases, 2
-    # fail-closed controls and 8 CLI-surface cases, all of which run (or are
+    # Raised from 29 to 33: fix round 1 adds 2 _chunk_text step-guard cases
+    # and 2 dense-non-ASCII truncation cases, all of which run (or are
     # explicitly SKIPped and still counted) every time, per CLAUDE.md: a
     # suite that silently collects fewer checks reads like one that passed.
-    if total < 29:
-        print(f"\nWARNING: only {total} checks ran. Expected at least 29.")
+    if total < 33:
+        print(f"\nWARNING: only {total} checks ran. Expected at least 33.")
         print("Something did not collect. Treat this as a failure, not a pass.")
         return 1
     # Skips are reported, not failed, per CLAUDE.md. But a run where every

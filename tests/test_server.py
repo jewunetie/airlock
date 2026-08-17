@@ -7,6 +7,8 @@
 #     "presidio-analyzer>=2.2",
 #     "spacy>=3.7",
 #     "detect-secrets>=1.5",
+#     "torch>=2.2",
+#     "transformers>=4.57",
 # ]
 # ///
 """End to end tests for airlock, run against the installed MCP SDK.
@@ -308,7 +310,7 @@ def group_b2() -> None:
     session = airlock.Session(
         session_id="test", objective="x",
         sandbox=airlock.Sandbox(root=Path("."), allow_writes=False),
-        worker_model="stub", guard_model="stub", use_presidio=False,
+        worker_model="stub",
     )
     real = airlock.ollama_chat
     try:

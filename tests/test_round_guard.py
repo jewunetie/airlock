@@ -3,6 +3,8 @@
 # requires-python = ">=3.11"
 # dependencies = [
 #     "rich>=13.7",
+#     "torch>=2.2",
+#     "transformers>=4.57",
 # ]
 # ///
 """Tests for the round-reassembly guard. See PLAN-round-reassembly.md.
@@ -117,16 +119,17 @@ def fake_secret_value(length: int = 16) -> str:
 
 
 def stub_ollama(answers):
-    """Serves both callers run_jobs drives per round: the worker (unshaped
-    here, since these jobs set no "as") and the guard's model layer
-    (GUARD_SCHEMA). The guard always approves, so only the deterministic
-    scanners and the source-anchored check can block a round in these tests.
+    """Serves the worker's calls to ollama_chat (unshaped here, since these
+    jobs set no "as"). GUARD_SCHEMA no longer exists: per task-2-brief.md
+    the guard's model layers are the two local encoders, not an Ollama call,
+    so ollama_chat is only ever reached by the worker now. session_over()
+    runs those two encoders for real (unstubbed), so the deterministic
+    scanners, the two encoders and the source-anchored check are all still
+    live and can each block a round in these tests.
     """
     it = iter(answers)
 
     def stub(model, prompt, schema=None):
-        if schema is airlock.GUARD_SCHEMA:
-            return {"verdict": "approve", "concerns": [], "instruction": ""}
         return next(it)
 
     return stub
@@ -142,14 +145,14 @@ def run_with_stub(session, jobs, answers):
 
 
 def session_over(root, allow_writes=False):
-    # use_presidio=False and guardian_model=None per task-3-brief.md, so the
-    # stubbed model layer is the only model layer in play; the deterministic
-    # scanners are not stubbed and still run for real.
+    # Session signature per task-2-brief.md (PLAN-liquid-guard.md): the guard
+    # is now the two local encoders, unstubbed and run for real here, same as
+    # every other real evaluate_session call in this suite. Only ollama_chat
+    # (the worker) is stubbed, by run_with_stub below.
     return airlock.Session(
         session_id="t3", objective="x",
         sandbox=airlock.Sandbox(root=root, allow_writes=allow_writes),
-        worker_model="stub-worker", guard_model="stub-guard",
-        use_presidio=False, guardian_model=None,
+        worker_model="stub-worker",
     )
 
 

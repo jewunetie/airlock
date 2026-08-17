@@ -375,6 +375,7 @@ def _chunk_text(text: str, window: int, overlap: int) -> list[str]:
     if len(text) <= window:
         return [text]
     step = window - overlap
+    assert step > 0, "overlap must be smaller than window, or pos never advances"
     chunks: list[str] = []
     pos = 0
     while True:
@@ -462,6 +463,55 @@ def _load_pii_detector(device: str = "auto") -> tuple[Any, Any, Any, str, dict[i
     return torch, model, tok, resolved, id2label
 
 
+def _scan_pii_region(chunk: str) -> list[str]:
+    """Score one region for entity types above PII_DETECTOR_THRESHOLD.
+
+    PII_CHUNK_CHARS assumes a measured worst-case ratio (~1.06 chars/token
+    over ASCII identifier-shaped samples), but that is not a proven floor:
+    BPE byte-fallback on CJK, emoji or other non-ASCII scripts commonly
+    tokenizes below 1 char/token, so a PII_CHUNK_CHARS-sized window of dense
+    non-ASCII text can still exceed 512 tokens. Rather than trust the ratio,
+    this asks the tokenizer directly: encode without truncation and check
+    the real length. If it still overflows, bisect the region in half (no
+    overlap at this level: the caller's PII_CHUNK_OVERLAP_CHARS already
+    covers the boundary between PII_CHUNK_CHARS windows, and reusing that
+    large an overlap at ever-smaller recursion depths would blow up the
+    number of windows scanned here, the same DoS shape the round-reassembly
+    guard's own length bound exists to prevent) and score each half the same
+    way. A region too short to bisect further that still overflows fails
+    closed: at that point no window size could have scanned it safely.
+    """
+    torch, model, tok, device, id2label = _load_pii_detector()
+    enc = tok(chunk, return_tensors="pt")
+    if enc["input_ids"].shape[1] > 512:
+        if len(chunk) <= 1:
+            raise GuardModelUnavailable(
+                "PII detector: text does not fit the 512-token budget even "
+                "at a single character; refusing to scan it truncated"
+            )
+        half = len(chunk) // 2
+        found: list[str] = []
+        for region in _chunk_text(chunk, half, 0):
+            for entity in _scan_pii_region(region):
+                if entity not in found:
+                    found.append(entity)
+        return found
+
+    enc = {k: v.to(device) for k, v in enc.items()}
+    with torch.no_grad():
+        logits = model(**enc).logits.float().cpu()
+    conf, ids = logits.softmax(-1)[0].max(-1)
+    found: list[str] = []
+    for c, i in zip(conf.tolist(), ids.tolist()):
+        label = id2label.get(i, "O")
+        if label == "O" or c < PII_DETECTOR_THRESHOLD:
+            continue
+        entity = re.sub(r"^[BIES]-", "", label)
+        if entity not in found:
+            found.append(entity)
+    return found
+
+
 def scan_pii_model(text: str) -> list[dict[str, str]]:
     """Entity types found by the PII detector, above threshold.
 
@@ -469,8 +519,12 @@ def scan_pii_model(text: str) -> list[dict[str, str]]:
     handing the whole text to the tokenizer's own truncation: max_length=512
     tokens is roughly 2000 characters of ordinary English and far less for
     dense identifier-shaped text, and everything past a silent truncation cut
-    would be indistinguishable from "found nothing" to a caller. Findings are
-    entity types, not spans, so unioning across chunks needs no stitching.
+    would be indistinguishable from "found nothing" to a caller. Each window
+    is then re-checked by _scan_pii_region, which bisects further if that
+    window alone still overflows the token budget (see its docstring for
+    why a char ratio alone cannot be trusted to prevent that). Findings are
+    entity types, not spans, so unioning across chunks and regions needs no
+    stitching.
 
     Returns findings shaped like the other scanners: rule, masked, layer.
     The model's own output is a per-token entity label, not a reconstructed
@@ -483,24 +537,13 @@ def scan_pii_model(text: str) -> list[dict[str, str]]:
     found: list[str] = []
     for chunk in _chunk_text(text, PII_CHUNK_CHARS, PII_CHUNK_OVERLAP_CHARS):
         try:
-            torch, model, tok, device, id2label = _load_pii_detector()
-            enc = tok(chunk, return_tensors="pt", truncation=True, max_length=512)
-            enc = {k: v.to(device) for k, v in enc.items()}
-            with torch.no_grad():
-                logits = model(**enc).logits.float().cpu()
-            conf, ids = logits.softmax(-1)[0].max(-1)
+            for entity in _scan_pii_region(chunk):
+                if entity not in found:
+                    found.append(entity)
         except GuardModelUnavailable:
             raise
         except Exception as exc:  # noqa: BLE001 - inference failure fails closed too
             raise GuardModelUnavailable(f"PII detector inference failed: {exc}")
-
-        for c, i in zip(conf.tolist(), ids.tolist()):
-            label = id2label.get(i, "O")
-            if label == "O" or c < PII_DETECTOR_THRESHOLD:
-                continue
-            entity = re.sub(r"^[BIES]-", "", label)
-            if entity not in found:
-                found.append(entity)
     return [{"rule": entity, "masked": "detected", "layer": "pii:model"} for entity in found]
 
 
@@ -585,17 +628,76 @@ def _load_policy_linter(device: str = "auto") -> tuple[Any, Any, Any, str]:
     return torch, model, tok, resolved
 
 
+def _scan_policy_region(chunk: str) -> set[int]:
+    """Score one region against the rule pool.
+
+    Same deterministic-overflow handling as _scan_pii_region, and for the
+    same reason: POLICY_CHUNK_CHARS' char ratio is a measurement, not a
+    proven floor, and dense non-ASCII text can tokenize below it. The
+    encoded length of prefix + chunk is checked directly against the
+    2048-token budget; an overflowing region is bisected in half (no
+    overlap at this level, same DoS reasoning as _scan_pii_region) and each
+    half scored the same way. A region too short to bisect further that
+    still overflows fails closed.
+    """
+    torch, model, tok, device = _load_policy_linter()
+    prefix = _policy_prefix()
+    full = prefix + chunk
+    enc = tok(full, return_offsets_mapping=True, return_tensors="pt")
+    if enc["input_ids"].shape[1] > 2048:
+        if len(chunk) <= 1:
+            raise GuardModelUnavailable(
+                "policy linter: text does not fit the 2048-token budget even "
+                "at a single character; refusing to scan it truncated"
+            )
+        half = len(chunk) // 2
+        found: set[int] = set()
+        for region in _chunk_text(chunk, half, 0):
+            found |= _scan_policy_region(region)
+        return found
+
+    offsets = enc.pop("offset_mapping")[0].tolist()
+    pool = torch.zeros(1, len(CONTEXTUAL_RULES), len(offsets))
+    pos = len("Policy:\n")
+    for ri, rule in enumerate(CONTEXTUAL_RULES):
+        start = pos + 2
+        end = start + len(rule)
+        idx = [i for i, (a, b) in enumerate(offsets) if a < end and b > start and a != b]
+        if idx:
+            pool[0, ri, idx] = 1 / len(idx)
+        pos = end + 1
+    enc = {k: v.to(device) for k, v in enc.items()}
+    pool = pool.to(device)
+    with torch.no_grad():
+        probs = model(**enc, rule_pool=pool)["logits"].float().sigmoid()[0].cpu()
+
+    text_start = len(prefix)
+    keep = [i for i, (a, b) in enumerate(offsets) if b > text_start and a != b]
+    if not keep:
+        return set()
+    sub = probs[keep]
+    found = set()
+    for ri in range(len(CONTEXTUAL_RULES)):
+        if float(sub[:, ri].max()) > POLICY_LINTER_RULE_THRESHOLDS.get(ri, POLICY_LINTER_THRESHOLD):
+            found.add(ri)
+    return found
+
+
 def scan_policy(text: str) -> list[dict[str, str]]:
     """Rules the policy linter scores above their threshold.
 
     Scans in overlapping POLICY_CHUNK_CHARS-character windows for the same
     reason scan_pii_model does: max_length=2048 tokens minus the rule prefix
     leaves headroom for ordinary English but far less for dense text, and a
-    silent truncation is indistinguishable from a clean scan. Findings are
-    rule indices, not spans, so unioning across chunks needs no stitching.
-    Each chunk gets its own rule prefix prepended and its own pool built
-    against that chunk's own token offsets, because the pool's positions are
-    computed from the prefix-plus-chunk string, not from the whole document.
+    silent truncation is indistinguishable from a clean scan. Each window is
+    then re-checked by _scan_policy_region, which bisects further if that
+    window (plus the rule prefix) alone still overflows the token budget
+    (see its docstring for why a char ratio alone cannot be trusted to
+    prevent that). Findings are rule indices, not spans, so unioning across
+    chunks and regions needs no stitching. Each region gets its own rule
+    prefix prepended and its own pool built against that region's own token
+    offsets, because the pool's positions are computed from the
+    prefix-plus-region string, not from the whole document.
 
     Reads POLICY_LINTER_THRESHOLD and POLICY_LINTER_RULE_THRESHOLDS as module
     globals at call time, not as bound defaults, so a caller overriding either
@@ -609,39 +711,11 @@ def scan_policy(text: str) -> list[dict[str, str]]:
     found: set[int] = set()
     for chunk in _chunk_text(text, POLICY_CHUNK_CHARS, POLICY_CHUNK_OVERLAP_CHARS):
         try:
-            torch, model, tok, device = _load_policy_linter()
-            prefix = _policy_prefix()
-            full = prefix + chunk
-            enc = tok(
-                full, return_offsets_mapping=True, return_tensors="pt", truncation=True, max_length=2048
-            )
-            offsets = enc.pop("offset_mapping")[0].tolist()
-            pool = torch.zeros(1, len(CONTEXTUAL_RULES), len(offsets))
-            pos = len("Policy:\n")
-            for ri, rule in enumerate(CONTEXTUAL_RULES):
-                start = pos + 2
-                end = start + len(rule)
-                idx = [i for i, (a, b) in enumerate(offsets) if a < end and b > start and a != b]
-                if idx:
-                    pool[0, ri, idx] = 1 / len(idx)
-                pos = end + 1
-            enc = {k: v.to(device) for k, v in enc.items()}
-            pool = pool.to(device)
-            with torch.no_grad():
-                probs = model(**enc, rule_pool=pool)["logits"].float().sigmoid()[0].cpu()
+            found |= _scan_policy_region(chunk)
         except GuardModelUnavailable:
             raise
         except Exception as exc:  # noqa: BLE001 - inference failure fails closed too
             raise GuardModelUnavailable(f"policy linter inference failed: {exc}")
-
-        text_start = len(prefix)
-        keep = [i for i, (a, b) in enumerate(offsets) if b > text_start and a != b]
-        if not keep:
-            continue
-        sub = probs[keep]
-        for ri in range(len(CONTEXTUAL_RULES)):
-            if float(sub[:, ri].max()) > POLICY_LINTER_RULE_THRESHOLDS.get(ri, POLICY_LINTER_THRESHOLD):
-                found.add(ri)
     return [
         {"rule": f"rule{ri}", "masked": "detected", "layer": "policy:model"}
         for ri in sorted(found)

@@ -1489,7 +1489,13 @@ def reassembles_identifier(values: list[str], sources: set[str]) -> bool:
     worth it. Reassembly across separate rounds was also out of scope here;
     that gap is now CLOSED by advance_reassembly_state below, which run_jobs
     calls after this function on every round, so a caller spreading one
-    fragment per round no longer escapes either check.
+    fragment per round no longer escapes either check. Both this function
+    and advance_reassembly_state model the same attacker: one who
+    concatenates whole released values in some order. Overlap-based
+    reassembly, where a caller merges "91284" and "847731" into a source by
+    recognising the shared "84" rather than concatenating whole values, is
+    NOT covered by either check (fix round 2, advance_reassembly_state's own
+    docstring has the measurement showing this cost little in practice).
 
     A second gap, now CLOSED for numeric identifiers: this tests substring
     containment, so a fragment padded with extra characters can defeat it,
@@ -1581,25 +1587,63 @@ def reassembles_identifier(values: list[str], sources: set[str]) -> bool:
 # never forgets across a session, so with no limit on how many pieces a
 # covering may use, a long enough benign session eventually covers some
 # workspace source by pure coincidence, and a long-lived session with no
-# eviction on SESSIONS would eventually block everything. Measured over 200
-# synthetic benign sessions per length before this bound existed (uncapped
-# piece count): 12 released values 0/200, 30 values 1/200 (0.5%), 60 values
-# 3/200 (1.5%), 240 values 23/200 (11.5%). The discriminator is how many
-# distinct pieces the cheapest covering needs: the real attack (three
-# fragments of one identifier) always needs exactly 3, while the false
-# positives at 240 values needed at least 6 pieces each (6, 14, 15 and 16
-# across the 23 sampled), and nothing coincidentally covered at 30 values in
-# 6 pieces or fewer. REASSEMBLY_PIECE_BOUND sits inside that gap: it catches
-# the 3-piece attack and, in that same measurement, did not fire on any
-# benign session at any length sampled.
+# eviction on SESSIONS would eventually block everything. The coordinator's
+# own measurement over 200 synthetic benign sessions per length, before this
+# bound existed (uncapped piece count): 12 released values 0/200, 30 values
+# 1/200 (0.5%), 60 values 3/200 (1.5%), 240 values 23/200 (11.5%). The
+# discriminator is how many distinct pieces the cheapest covering needs: the
+# real attack (three fragments of one identifier) always needs exactly 3,
+# while that measurement's false positives at 240 values needed at least 6
+# pieces each, and nothing coincidentally covered at 30 values in 6 pieces
+# or fewer. REASSEMBLY_PIECE_BOUND sits inside that gap.
 #
-# This project's own independent re-measurement (task-1-report.md, fix
-# round 1) used a different synthetic generator and got a materially
-# different picture: minimum coincidental piece counts clustered much lower
-# (commonly 4-7 rather than 6+), so the bound caught fewer of them. The
-# discriminator's size depends on how long a typical released value is
-# relative to a source's length, which this file cannot know in advance;
-# see that report for the numbers and the residual this leaves.
+# Fix round 2 (coordinator review): this project's own re-measurement,
+# reported instead of tuned away, did not reproduce that 11.5% ceiling and
+# does not claim to. Two questions, kept separate because they have
+# different answers:
+#
+# 1. Does the coverage MODEL matter (tiling: pieces must abut exactly, the
+#    same concatenation model reassembles_identifier already uses; versus
+#    overlap: pieces may overlap as long as their union covers the source)?
+#    Measured head to head on the same edge sets, 200 sessions at 240
+#    released values: 0 disagreements between the two models'
+#    minimum-piece counts. Overlap-based reassembly, where a caller merges
+#    "91284" and "847731" by recognising the shared "84" rather than
+#    concatenating whole released values, is NOT covered by this check OR
+#    by reassembles_identifier; both model the same concatenating
+#    attacker, on purpose, so the two checks in this guard do not disagree
+#    about what the adversary can do. _min_pieces below IS the tiling
+#    model: it only ever chains an edge from a position exactly where the
+#    previous edge ended.
+#
+# 2. Does the benign value DISTRIBUTION matter? Yes, substantially. Two
+#    generators, both committed as named functions in
+#    tests/test_cross_round.py (benign_value_freeform, benign_value_shaped),
+#    200 sessions per length, bound already applied:
+#
+#        released values    freeform          shaped
+#        12                 0/200   (0.0%)    0/200   (0.0%)
+#        30                 0/200   (0.0%)    0/200   (0.0%)
+#        60                 0/200   (0.0%)    0/200   (0.0%)
+#        240               23/200  (11.5%)    2/200   (1.0%)
+#
+#    freeform emits digit runs of varied length (1-8 digits) plus ordinary
+#    words; shaped emits only wages, small counts, calendar years and
+#    two-decimal amounts, matching what a real JOB_SHAPES "number" or
+#    "digits" answer looks like, and is this project's own reproduction of
+#    the shape the coordinator's own generator measured near zero with,
+#    not its exact unseen parameters. Neither figure is "the" false-block
+#    rate: the rate is a property of the caller's answer distribution as
+#    much as of this bound, and this file cannot know that distribution in
+#    advance. State the range, not either endpoint, when this number comes
+#    up again.
+#
+# In all cases: an attacker who splits a value into more than
+# REASSEMBLY_PIECE_BOUND pieces evades this specific check entirely, at the
+# cost of one job and one round per extra piece, and remains guarded round
+# by round on the way out regardless. See task-1-report.md fix rounds 1 and
+# 2 for the full measurements and CLAUDE.md's known weaknesses for the
+# summary a future reader should see first.
 REASSEMBLY_PIECE_BOUND = 5
 
 
@@ -1715,6 +1759,23 @@ def advance_reassembly_state(
     in the graph does not depend on when it arrived, so the reverse case
     above still completes on its final fragment, same as the forward case.
 
+    Tiling, not overlap (fix round 2): _min_pieces only ever chains an edge
+    from the exact position where the previous edge ended, so a covering is
+    always an exact concatenation of whole released values, never an
+    overlapping patchwork. This matches reassembles_identifier's own
+    concatenation model on purpose, so the two checks in this guard agree on
+    what the adversary can do rather than silently disagreeing. Stated
+    plainly because it is easy to miss: overlap-based reassembly, where a
+    caller merges "91284" and "847731" into the source by recognising the
+    shared "84" rather than concatenating whole values, is NOT covered by
+    this check, and is not covered by reassembles_identifier either.
+    Measured head to head against an explicit overlap-cover implementation
+    on the same edge sets (200 sessions, 240 released values each): 0
+    disagreements in the minimum piece count either model found, so this
+    choice cost nothing in this project's own measurement; see the
+    coordinator's own numbers in REASSEMBLY_PIECE_BOUND's comment for a
+    case where it cost a little (0.5 percentage points at the same length).
+
     Coverage alone is not the completion test, and that is deliberate (fix
     round 1): unlike reassembles_identifier's single-round check, this state
     accumulates for as long as the session runs, so with no limit on how
@@ -1722,11 +1783,17 @@ def advance_reassembly_state(
     covers some source by coincidence. REASSEMBLY_PIECE_BOUND catches a real
     split (attackers pay a job and a round per extra fragment, so they keep
     the count low) while giving coincidental, many-fragment coverage room to
-    occur without blocking. See the constant's own comment for the
-    measurement behind the number, and task-1-report.md fix round 1 for the
-    residual: an attacker who pads a split past the bound evades this
-    specific check, still one job and one round costlier per extra piece,
-    and still guarded round by round on the way out regardless.
+    occur without blocking. The bound reduces coincidental cross-round
+    blocking; it does not eliminate it, and how much it reduces it by
+    depends on what the caller's answers look like, not only on the bound
+    itself: measured at 0.0% under one realistic numeric generator and
+    materially higher (11.5% at 240 released values) under another. See
+    REASSEMBLY_PIECE_BOUND's own comment for both generators' full numbers
+    and task-1-report.md fix rounds 1-2 for the measurements behind them.
+    The residual that remains regardless of generator: an attacker who
+    splits a value into more than REASSEMBLY_PIECE_BOUND pieces evades this
+    specific check entirely, at the cost of one job and one round per extra
+    piece, and remains guarded round by round on the way out regardless.
 
     Applied twice per source, matching reassembles_identifier's own two
     passes: once against the raw released values, and, for a source that is

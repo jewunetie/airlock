@@ -196,13 +196,14 @@ BENIGN_WORDS = [
 ]
 
 
-def _benign_value(rng: random.Random) -> str:
-    """One synthetic released value for the long-session regression control
-    below: a digit run of varied, realistic length 40% of the time (a box
-    number, an amount, a date fragment), an ordinary business word
-    otherwise. Calibrated in task-1-report.md fix round 1 against this
-    worktree's own advance_reassembly_state; not a copy of the coordinator's
-    unseen harness, which measured different numbers (see that report).
+def benign_value_freeform(rng: random.Random) -> str:
+    """One synthetic released value: a digit run of varied, realistic
+    length 40% of the time (a box number, an amount, a date fragment), an
+    ordinary business word otherwise. This project's own generator, first
+    used in fix round 1 (task-1-report.md), kept here under a public name
+    per fix round 2's instruction to commit both generators. Materially
+    higher false-block rate than benign_value_shaped below at long session
+    lengths; see unit_generator_spread_case for both measured rates.
     """
     if rng.random() < 0.4:
         length = rng.choices([1, 2, 3, 4, 5, 6, 7, 8], weights=[3, 4, 4, 3, 2, 2, 1, 1])[0]
@@ -212,21 +213,47 @@ def _benign_value(rng: random.Random) -> str:
     return rng.choice(BENIGN_WORDS)
 
 
+def benign_value_shaped(rng: random.Random) -> str:
+    """One synthetic released value shaped like what a real JOB_SHAPES
+    "number" or "digits" answer actually looks like: a wage, a small count,
+    a calendar year, or a two-decimal dollar amount, never free prose. Fix
+    round 2's second generator, added because the coordinator's own
+    independent measurement used a generator of this shape and reported a
+    materially lower false-block rate than benign_value_freeform's; this is
+    this project's own reproduction of that shape (not the coordinator's
+    exact, unseen parameters), calibrated in task-1-report.md fix round 2.
+    "count" is weighted low (1 part in 10) because a bare 0-99 draw is the
+    single biggest driver of short, coincidentally-matching pieces; wages,
+    years and amounts dominate real number/digits answers in practice.
+    """
+    kind = rng.choices(["wage", "count", "year", "amount"], weights=[4, 1, 4, 4])[0]
+    if kind == "wage":
+        return str(rng.randint(20000, 250000))
+    if kind == "count":
+        return str(rng.randint(0, 99))
+    if kind == "year":
+        return str(rng.randint(1990, 2030))
+    dollars = rng.randint(100, 99999)
+    cents = rng.randint(0, 99)
+    return f"{dollars}.{cents:02d}"
+
+
 def unit_long_benign_session_case() -> None:
-    """Fix round 1, required case: regression control for the false-block-
-    growth measurement. seed=0 against one freshly generated 9-digit source
-    was found, by search, to complete under the PRE-fix design (uncapped
-    piece count) at round 13 of 20, purely by coincidence, needing a
-    minimum of 8 pieces to do so once all 240 values are folded in.
-    Confirmed RED against the code committed before REASSEMBLY_PIECE_BOUND
-    existed (task-1-report.md fix round 1 records the transcript); the fix
-    must let it through, since 8 exceeds the bound of 5.
+    """Fix round 1's required case, generator swapped in fix round 2 per
+    the coordinator's instruction: assert against benign_value_shaped, the
+    generator that measured near zero, not benign_value_freeform, which
+    measures materially worse (see unit_generator_spread_case for both
+    numbers side by side). seed=0 against one freshly generated source was
+    verified (task-1-report.md fix round 2's search) not to complete within
+    240 released values under benign_value_shaped.
 
     This one seed is a representative instance, not a statistical
-    guarantee: the aggregate false-block rate measured with this same
-    generator, reported in fix round 1, is nonzero at 60 and 240 released
-    values. That residual is stated there, not hidden by cherry-picking
-    this test to pass.
+    guarantee: benign_value_shaped's own aggregate false-block rate at 240
+    released values, measured in fix round 2, is not exactly zero either
+    (1.0%, 2/200 sessions), and benign_value_freeform measures materially
+    higher still (11.5%). Both numbers are reported in task-1-report.md and
+    in advance_reassembly_state's own docstring, not hidden by this test
+    passing.
     """
     print("\nUnit: a long benign session (240 released values, 20 rounds) does not block")
 
@@ -234,7 +261,7 @@ def unit_long_benign_session_case() -> None:
     source_len = rng.choice([6, 7, 8, 9])
     source = "".join(str(rng.randint(0, 9)) for _ in range(source_len))
     sources = {source}
-    values = [_benign_value(rng) for _ in range(240)]
+    values = [benign_value_shaped(rng) for _ in range(240)]
 
     state: dict[str, set[int]] = {}
     blocked_round = None
@@ -248,6 +275,50 @@ def unit_long_benign_session_case() -> None:
         "240 released values across 20 rounds: no false block",
         blocked_round is None,
         f"blocked at round {blocked_round}" if blocked_round else "clean",
+    )
+
+
+def unit_generator_spread_case() -> None:
+    """Fix round 2's central finding, made into a regression guard rather
+    than left as a one-time report number: the false-block rate is highly
+    sensitive to the benign value distribution, not mainly to the coverage
+    model (tiling vs overlap was measured separately and explains well
+    under one percentage point; see task-1-report.md fix round 2). 60
+    sessions per generator (fewer than the report's own 200-session
+    measurement, to keep this shipped test fast; fixed seeds, so this is
+    deterministic, not flaky) at 240 released values, asserting the spread
+    itself rather than either generator's exact percentage: freeform must
+    false-block materially more often than shaped. If a future change made
+    them converge, that would mean the bound's behaviour had stopped
+    depending on the answer distribution, which would itself be worth
+    knowing, so this checks the direction, not a specific number.
+    """
+    print("\nUnit: false-block rate is sensitive to the benign value distribution")
+
+    def sessions_blocked(generator, seed_base: int, trials: int) -> int:
+        hits = 0
+        for t in range(trials):
+            rng = random.Random(seed_base + t)
+            source_len = rng.choice([6, 7, 8, 9])
+            source = "".join(str(rng.randint(0, 9)) for _ in range(source_len))
+            sources = {source}
+            state: dict[str, set[int]] = {}
+            for _ in range(240):
+                v = generator(rng)
+                if airlock.advance_reassembly_state(state, [v], sources):
+                    hits += 1
+                    break
+        return hits
+
+    trials = 60
+    freeform_hits = sessions_blocked(benign_value_freeform, 30_000, trials)
+    shaped_hits = sessions_blocked(benign_value_shaped, 40_000, trials)
+
+    check(
+        f"freeform false-blocks materially more often than shaped at 240 released values "
+        f"({freeform_hits}/{trials} vs {shaped_hits}/{trials})",
+        freeform_hits > shaped_hits,
+        f"freeform={freeform_hits}/{trials} shaped={shaped_hits}/{trials}",
     )
 
 
@@ -611,6 +682,7 @@ def main() -> int:
     run("unit_middle_first_order_case", unit_middle_first_order_case)
     run("unit_many_pieces_no_block_case", unit_many_pieces_no_block_case)
     run("unit_long_benign_session_case", unit_long_benign_session_case)
+    run("unit_generator_spread_case", unit_generator_spread_case)
     run("unit_interleaved_benign_rounds_case", unit_interleaved_benign_rounds_case)
     run("unit_unrelated_benign_values_case", unit_unrelated_benign_values_case)
     run("unit_bounded_work_case", unit_bounded_work_case)
@@ -628,8 +700,8 @@ def main() -> int:
         print("failed:")
         for name in FAIL:
             print(f"  - {name}")
-    if total < 42:
-        print(f"\nWARNING: only {total} checks ran. Expected at least 42.")
+    if total < 43:
+        print(f"\nWARNING: only {total} checks ran. Expected at least 43.")
         print("Something did not collect. Treat this as a failure, not a pass.")
         return 1
     return 1 if FAIL else 0

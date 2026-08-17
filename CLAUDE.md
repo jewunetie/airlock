@@ -131,6 +131,35 @@ the way `contact.postal_code` did, but it is why
 `tests/test_round_guard.py`'s benign-round fixture uses business words
 rather than a fruit list.
 
+**Cross-round reassembly's piece bound reduces false blocking but does not
+eliminate it, and the rate depends on the caller's own answer shape.**
+`advance_reassembly_state` blocks a source only when the cheapest way to
+concatenate released values into it uses `REASSEMBLY_PIECE_BOUND` (5) pieces
+or fewer, because unbounded coverage never forgets across a session and a
+long enough benign session eventually covers some workspace identifier by
+coincidence. Measured over 200 synthetic sessions per length, two different
+benign-value generators (both committed as named functions in
+`tests/test_cross_round.py`, `benign_value_freeform` and
+`benign_value_shaped`), with the bound applied: 0.0% false-blocked at 12,
+30 and 60 released values under either generator; at 240, 0.0% for the
+coordinator's own generator, 1.0% for this project's reproduction of that
+same shape, and 11.5% for the wider, more digit-run-heavy generator. Neither
+number is "the" rate; the rate is a property of the caller's answer
+distribution as much as of the bound, and this file cannot know that
+distribution in advance. Separately, the model choice (pieces must abut
+exactly, i.e. tiling, versus pieces allowed to overlap as long as their
+union covers the source) was measured to explain under one percentage point
+of the gap, not the double-digit spread between generators, so tiling was
+kept for consistency with `reassembles_identifier`'s own concatenation
+model, not because it closes more cases. Overlap-based reassembly, where a
+caller merges `"91284"` and `"847731"` by recognising the shared `"84"`
+rather than concatenating whole released values, is not covered by either
+check. An attacker who splits a value into more than the bound's worth of
+pieces evades this specific check entirely, at the cost of one job and one
+round per extra piece, and is still guarded round by round on the way out
+regardless. See `REASSEMBLY_PIECE_BOUND`'s comment in `airlock.py` and
+`task-1-report.md` fix rounds 1-2 for the full measurements.
+
 ## Things that look like bugs and are not
 
 `check()` renders through `Text.assemble`, which does not parse rich markup.

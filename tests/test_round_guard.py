@@ -21,6 +21,24 @@ present in the workspace rather than a shape. See task-2-brief.md.
 
 Task 3: wires the Task 2 check into `run_jobs`, driving it end to end with a
 stubbed `ollama_chat` so no local model is required. See task-3-brief.md.
+
+Fix wave (final whole-branch review, see final-fix-report.md):
+
+CRITICAL 1: a workspace over MAX_LISTING_ENTRIES blocked every round, because
+source_identifiers passed list_dir's truncation sentinel to read_text.
+
+CRITICAL 2: run_jobs' snapshot failure path interpolated the raw SandboxError,
+including document filenames and absolute host paths, into an outbound
+concern the caller never asked about.
+
+IMPORTANT 3: reassembles_identifier had no bound on total value length, only
+on value count, so an unshaped job with a long answer could make
+_subset_concatenations expensive enough to be a denial of service on the
+guard path itself.
+
+MINOR 4: generic_secret_assignment stored "label+value" as one identifier
+instead of the value alone, so a caller splitting only the value across jobs
+was not caught.
 """
 
 from __future__ import annotations
@@ -28,6 +46,8 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import secrets
+import string
 import sys
 import tempfile
 from pathlib import Path
@@ -64,6 +84,55 @@ def ein_rules(text: str) -> set[str]:
     """
     findings = airlock.scan_pii_patterns(text) + airlock.scan_secrets(text)
     return {f["rule"] for f in findings if "ein" in f["rule"]}
+
+
+def fake_secret_value(length: int = 16) -> str:
+    """A synthetic secret value, generated rather than a hand-picked literal.
+
+    In the spirit of fake_credential in tests/test_server.py: no vendor shape
+    to preserve here (generic_secret_assignment matches any 8+ non-whitespace
+    run after a label), so a plain alphanumeric run is enough. See CLAUDE.md
+    for why a literal that looks like a live credential is never written down.
+    """
+    alphabet = string.ascii_letters + string.digits
+    return "".join(secrets.choice(alphabet) for _ in range(length))
+
+
+def stub_ollama(answers):
+    """Serves both callers run_jobs drives per round: the worker (unshaped
+    here, since these jobs set no "as") and the guard's model layer
+    (GUARD_SCHEMA). The guard always approves, so only the deterministic
+    scanners and the source-anchored check can block a round in these tests.
+    """
+    it = iter(answers)
+
+    def stub(model, prompt, schema=None):
+        if schema is airlock.GUARD_SCHEMA:
+            return {"verdict": "approve", "concerns": [], "instruction": ""}
+        return next(it)
+
+    return stub
+
+
+def run_with_stub(session, jobs, answers):
+    real = airlock.ollama_chat
+    try:
+        airlock.ollama_chat = stub_ollama(answers)
+        return airlock.run_jobs(session, jobs)
+    finally:
+        airlock.ollama_chat = real
+
+
+def session_over(root, allow_writes=False):
+    # use_presidio=False and guardian_model=None per task-3-brief.md, so the
+    # stubbed model layer is the only model layer in play; the deterministic
+    # scanners are not stubbed and still run for real.
+    return airlock.Session(
+        session_id="t3", objective="x",
+        sandbox=airlock.Sandbox(root=root, allow_writes=allow_writes),
+        worker_model="stub-worker", guard_model="stub-guard",
+        use_presidio=False, guardian_model=None,
+    )
 
 
 def task1_labelled_ein() -> None:
@@ -197,40 +266,6 @@ def task2_reassembly() -> None:
 def task3_wiring() -> None:
     print("\nTask 3: wiring the source-anchored check into run_jobs")
 
-    def stub_ollama(answers):
-        """Serves both callers run_jobs drives per round: the worker (unshaped
-        here, since these jobs set no "as") and the guard's model layer
-        (GUARD_SCHEMA). The guard always approves, so only the deterministic
-        scanners and the new source-anchored check can block a round below.
-        """
-        it = iter(answers)
-
-        def stub(model, prompt, schema=None):
-            if schema is airlock.GUARD_SCHEMA:
-                return {"verdict": "approve", "concerns": [], "instruction": ""}
-            return next(it)
-
-        return stub
-
-    def run_with_stub(session, jobs, answers):
-        real = airlock.ollama_chat
-        try:
-            airlock.ollama_chat = stub_ollama(answers)
-            return airlock.run_jobs(session, jobs)
-        finally:
-            airlock.ollama_chat = real
-
-    def session_over(root, allow_writes=False):
-        # use_presidio=False and guardian_model=None per task-3-brief.md, so
-        # the stubbed model layer is the only model layer in play; the
-        # deterministic scanners are not stubbed and still run for real.
-        return airlock.Session(
-            session_id="t3", objective="x",
-            sandbox=airlock.Sandbox(root=root, allow_writes=allow_writes),
-            worker_model="stub-worker", guard_model="stub-guard",
-            use_presidio=False, guardian_model=None,
-        )
-
     # Scattered fragments: three job results carry the SSN's groups, with
     # benign job results between them. This is the arrangement the plan's own
     # measurement shows the pre-existing evaluate_session(combined) check
@@ -348,6 +383,140 @@ def task3_wiring() -> None:
     )
 
 
+def critical1_large_workspace() -> None:
+    """CRITICAL 1: a workspace over MAX_LISTING_ENTRIES must not block every
+    round. list_dir appends a literal "... truncated at 200" sentinel once a
+    listing hits the cap; that string is not a file, and source_identifiers
+    used to hand it straight to read_text, turning any large workspace's
+    first round into an automatic block.
+    """
+    print("\nCRITICAL 1: a large workspace does not block every round")
+
+    tmp = Path(tempfile.mkdtemp(prefix="airlock-round-guard-test-c1-"))
+    for i in range(airlock.MAX_LISTING_ENTRIES + 5):
+        (tmp / f"doc{i}.txt").write_text(f"benign note number {i}\n")
+    sandbox = airlock.Sandbox(root=tmp, allow_writes=False)
+
+    try:
+        sources = airlock.source_identifiers(sandbox)
+        raised = None
+    except Exception as exc:  # noqa: BLE001 - captured for the check below
+        sources, raised = None, exc
+    check(
+        "source_identifiers returns normally over a >200-entry workspace",
+        raised is None,
+        f"{type(raised).__name__}: {raised}" if raised else "",
+    )
+
+    session = session_over(tmp)
+    jobs = [{"document": 0, "extract": "what does the note say"}]
+    result = run_with_stub(session, jobs, ["a benign one-line answer"])
+    check(
+        "a round over the same large workspace is not blocked",
+        result.get("status") == "ok",
+        str(result.get("status")),
+    )
+
+
+def critical2_no_filename_leak() -> None:
+    """CRITICAL 2: run_jobs' snapshot failure path must not leak a filename
+    or an absolute host path the caller never referenced. The SandboxError
+    from an unreadable file carries both, e.g. "Cannot read
+    medical_records_2026.txt: [Errno 13] ... '/private/var/.../
+    medical_records_2026.txt'", and the pre-fix concern interpolated it
+    verbatim into the outbound payload. CLAUDE.md names this exact failure by
+    example. Distinctive filename generated, not hardcoded, per the plan.
+    """
+    print("\nCRITICAL 2: an unreadable workspace file leaks no filename or path")
+
+    tmp = Path(tempfile.mkdtemp(prefix="airlock-round-guard-test-c2-"))
+    (tmp / "doc0.txt").write_text("a benign note\n")
+    distinctive = "unreadable_" + fake_secret_value(12) + ".txt"
+    secret_path = tmp / distinctive
+    secret_path.write_text("irrelevant content\n")
+    os.chmod(secret_path, 0o000)
+    try:
+        session = session_over(tmp)
+        jobs = [{"document": 0, "extract": "what does the note say"}]
+        result = run_with_stub(session, jobs, ["a benign one-line answer"])
+        payload = json.dumps(result)
+        check(
+            "unreadable file: round is blocked, not approved",
+            result.get("status") == "blocked",
+            str(result.get("status")),
+        )
+        check(
+            "unreadable file: serialised payload names no filename",
+            distinctive not in payload,
+        )
+        check(
+            "unreadable file: serialised payload carries no absolute path",
+            str(tmp) not in payload,
+        )
+    finally:
+        os.chmod(secret_path, 0o644)
+
+
+def important3_length_bound() -> None:
+    """IMPORTANT 3: reassembles_identifier must bound total normalised value
+    length, not only value count, or an unshaped job's long answer makes
+    _subset_concatenations expensive enough to be a denial of service on the
+    guard path. Empty sources is the case that would otherwise trivially
+    return False, proving the length bound fires ahead of the normal
+    candidate-filtering path rather than coinciding with it.
+    """
+    print("\nIMPORTANT 3: total value length is bounded, defensively")
+
+    oversized = ["x" * (airlock.MAX_REASSEMBLY_LENGTH + 1)]
+    check(
+        "total length over the bound blocks even with no sources",
+        airlock.reassembles_identifier(oversized, set()),
+    )
+
+    # Positive control: twelve "line"-shaped answers (JOB_SHAPES maxLength 80)
+    # sum to at most 960 characters, well under the bound, so a realistic
+    # round is not affected by this check.
+    legitimate_round = [f"line-shaped answer {i}" for i in range(12)]
+    check(
+        "a realistic round of twelve short answers stays under the bound",
+        sum(len(airlock.normalise_identifier(v)) for v in legitimate_round)
+        <= airlock.MAX_REASSEMBLY_LENGTH,
+    )
+    check(
+        "that realistic round is not blocked by the length bound",
+        not airlock.reassembles_identifier(legitimate_round, set()),
+    )
+
+
+def minor4_generic_secret_value_only() -> None:
+    """MINOR 4: generic_secret_assignment must store the secret VALUE alone,
+    not "label+value", so a caller splitting only the value across jobs is
+    still caught. Credential generated with fake_secret_value, never a
+    literal that looks like a live key; see CLAUDE.md.
+    """
+    print("\nMINOR 4: generic_secret_assignment identifies the value, not the label")
+
+    value = fake_secret_value(16)
+    tmp = Path(tempfile.mkdtemp(prefix="airlock-round-guard-test-m4-"))
+    (tmp / "creds.txt").write_text(f"password: {value}\n")
+    sandbox = airlock.Sandbox(root=tmp, allow_writes=False)
+    sources = airlock.source_identifiers(sandbox)
+    normalised_value = airlock.normalise_identifier(value)
+
+    check(
+        "the value alone is a source identifier",
+        normalised_value in sources,
+        ",".join(sorted(sources)) or "empty",
+    )
+
+    half = len(value) // 2
+    fragments = [value[:half], value[half:]]
+    check(
+        "a round splitting the value across jobs is caught",
+        airlock.reassembles_identifier(fragments, sources),
+    )
+
+
 def main() -> int:
     print(f"airlock: {AIRLOCK}")
 
@@ -361,6 +530,10 @@ def main() -> int:
     run("task1_labelled_ein", task1_labelled_ein)
     run("task2_reassembly", task2_reassembly)
     run("task3_wiring", task3_wiring)
+    run("critical1_large_workspace", critical1_large_workspace)
+    run("critical2_no_filename_leak", critical2_no_filename_leak)
+    run("important3_length_bound", important3_length_bound)
+    run("minor4_generic_secret_value_only", minor4_generic_secret_value_only)
 
     total = len(PASS) + len(FAIL) + len(SKIP)
     print(f"\n{len(PASS)} passed, {len(FAIL)} failed, {len(SKIP)} skipped ({total} checks)")
@@ -368,8 +541,8 @@ def main() -> int:
         print("failed:")
         for name in FAIL:
             print(f"  - {name}")
-    if total < 25:
-        print(f"\nWARNING: only {total} checks ran. Expected at least 25.")
+    if total < 35:
+        print(f"\nWARNING: only {total} checks ran. Expected at least 35.")
         print("Something did not collect. Treat this as a failure, not a pass.")
         return 1
     return 1 if FAIL else 0

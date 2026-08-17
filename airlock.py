@@ -162,8 +162,12 @@ SECRET_PATTERNS: dict[str, re.Pattern[str]] = {
     "twilio_key": re.compile(r"\bSK[0-9a-fA-F]{32}\b"),
     "private_key_block": re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
     "jwt": re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"),
+    # Captures the value alone in group 1, mirroring the CONTEXT_SECRET_PATTERNS
+    # rules below: _document_identifiers needs the value on its own so a
+    # caller splitting only the secret VALUE across jobs is still caught,
+    # not just the label-plus-value string. group(0) is unchanged for masking.
     "generic_secret_assignment": re.compile(
-        r"\b(?:password|passwd|secret|api[_-]?key|token)\s*[:=]\s*['\"]?[^\s'\"]{8,}",
+        r"\b(?:password|passwd|secret|api[_-]?key|token)\s*[:=]\s*['\"]?([^\s'\"]{8,})",
         re.I,
     ),
 }
@@ -1086,6 +1090,19 @@ def evaluate_session(session: Session, text: str) -> GuardVerdict:
 
 MIN_REASSEMBLY_LENGTH = 6
 
+# Bounds the total normalised length of one round's values, not just their
+# count. _subset_concatenations' cost scales with both the number of subsets
+# (2**len(values), already capped by MAX_JOBS_PER_ROUND) and the length of
+# what gets copied into each one. Measured worst case: 12 unshaped answers of
+# FILE_SLICE_CHARS (4000) each against 400 workspace identifiers took 18.0
+# seconds on the guard path itself, a denial of service on the path that is
+# supposed to protect against one. A round of shaped jobs cannot approach
+# this: twelve "line"-shaped answers (JOB_SHAPES maxLength 80) sum to at most
+# 960 characters, so FILE_SLICE_CHARS, the size of a single document slice,
+# is a generous ceiling for a whole round that leaves realistic traffic
+# untouched while still bounding unshaped free-text answers.
+MAX_REASSEMBLY_LENGTH = FILE_SLICE_CHARS
+
 
 def normalise_identifier(value: str) -> str:
     """Lowercase alphanumerics only, for separator-independent comparison.
@@ -1117,7 +1134,11 @@ def _document_identifiers(text: str) -> set[str]:
                 continue
             values.append(value)
     for pattern in SECRET_PATTERNS.values():
-        values.extend(match.group(0) for match in pattern.finditer(text))
+        for match in pattern.finditer(text):
+            # generic_secret_assignment captures a label plus the value; only
+            # the value is the identifier, same reasoning as the context
+            # rules below. Patterns with no capture group have none to prefer.
+            values.append(match.group(1) if pattern.groups else match.group(0))
     for pattern in CONTEXT_SECRET_PATTERNS.values():
         for match in pattern.finditer(text):
             # These rules match a label plus the value; only the value is the
@@ -1137,9 +1158,14 @@ def source_identifiers(sandbox: Sandbox) -> set[str]:
     never placed in a concern. Raises SandboxError, which the caller turns
     into a block.
     """
+    # list_dir appends a literal "... truncated at N" sentinel once a listing
+    # hits MAX_LISTING_ENTRIES. It is not a file, so read_text raises on it.
+    # list_dir's contract keeps the sentinel visible to other callers; this
+    # is the one caller that must skip it rather than treat it as a document.
+    truncated_marker = f"... truncated at {MAX_LISTING_ENTRIES}"
     sources: set[str] = set()
     for entry in sandbox.list_dir("."):
-        if entry.endswith("/"):
+        if entry.endswith("/") or entry == truncated_marker:
             continue
         sources |= _document_identifiers(sandbox.read_text(entry))
     return sources
@@ -1189,16 +1215,32 @@ def reassembles_identifier(values: list[str], sources: set[str]) -> bool:
     Closing that costs 12! arrangements for a full round and was judged not
     worth it. Reassembly across separate rounds is also out of scope here.
 
-    Bounded defensively at MAX_JOBS_PER_ROUND rather than trusting the
-    caller: _subset_concatenations is 2**len(values), and run_jobs enforcing
-    MAX_JOBS_PER_ROUND upstream is a convention, not a guarantee this
-    function can rely on. A round this function cannot evaluate is treated
-    as a block, the same rule `evaluate` follows when a layer is
-    unavailable: a guard that cannot evaluate must never approve.
+    A second, documented gap: this tests substring containment, so a fragment
+    padded with extra characters can defeat it depending on which side the
+    padding sits: ["912", "84", "7731"] reassembles, but
+    ["912 ok", "84 ok", "7731 ok"] does not, because trailing padding on each
+    fragment inserts characters between them in the concatenation and breaks
+    the contiguous digit run the source identifier needs. Not fixed here:
+    closing it changes the detection model and needs its own false-positive
+    measurement. It is bounded in practice rather than open-ended, because a
+    shaped job cannot carry the padding needed to exploit it: "as": "digits"
+    is anchored to ^[0-9-]{1,20}$ and "as": "number" is a JSON number, so the
+    bypass is reachable only through unshaped free-text jobs.
+
+    Bounded defensively at MAX_JOBS_PER_ROUND and MAX_REASSEMBLY_LENGTH
+    rather than trusting the caller: _subset_concatenations is
+    2**len(values) and its cost per subset scales with total value length,
+    and run_jobs enforcing MAX_JOBS_PER_ROUND upstream is a convention, not a
+    guarantee this function can rely on. A round this function cannot
+    evaluate within bound is treated as a block, the same rule `evaluate`
+    follows when a layer is unavailable: a guard that cannot evaluate must
+    never approve.
     """
     if len(values) > MAX_JOBS_PER_ROUND:
         return True
     normalised = [normalise_identifier(v) for v in values]
+    if sum(len(v) for v in normalised) > MAX_REASSEMBLY_LENGTH:
+        return True
     candidates = {
         source
         for source in sources
@@ -1308,7 +1350,16 @@ def run_jobs(
             name for name in session.sandbox.list_dir(".") if not name.endswith("/")
         )
     except SandboxError as exc:
-        return envelope(session, "blocked", "", [f"cannot list workspace: {exc}"])
+        # The concern is a FIXED string, never str(exc): a SandboxError can
+        # carry a filename and an absolute host path (see the read failure
+        # below, which definitely does), and the caller never referenced
+        # either. Per CLAUDE.md the receipt describes what airlock did, never
+        # what it found. The full detail still goes to the operator, on
+        # stderr only, since stdout is the JSON-RPC channel in serve mode.
+        err_console.print(
+            Text.assemble(("  │ cannot list workspace: ", "bold red"), (str(exc), "dim"))
+        )
+        return envelope(session, "blocked", "", ["the workspace could not be listed"])
 
     # Snapshotted here, before any job runs, not after the loop: a job can
     # fill_field mid-round (reachable with --allow-writes) and overwrite the
@@ -1319,7 +1370,17 @@ def run_jobs(
     try:
         sources = source_identifiers(session.sandbox)
     except SandboxError as exc:
-        return envelope(session, "blocked", "", [f"cannot read workspace: {exc}"])
+        # Same reasoning as the list failure above: source_identifiers reads
+        # every document, so exc here routinely contains a filename the
+        # caller never referenced and its absolute host path, e.g.
+        # "Cannot read medical_records_2026.txt: [Errno 13] ... '/private/
+        # var/.../medical_records_2026.txt'". That is exactly the class of
+        # leak CLAUDE.md names by example. Fixed string outbound; detail to
+        # the operator only.
+        err_console.print(
+            Text.assemble(("  │ cannot read workspace: ", "bold red"), (str(exc), "dim"))
+        )
+        return envelope(session, "blocked", "", ["a workspace document could not be read"])
 
     results: list[dict[str, Any]] = []
     for index, job in enumerate(jobs):

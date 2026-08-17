@@ -4,8 +4,6 @@
 # dependencies = [
 #     "mcp[cli]>=2.0.0,<2.1.0",
 #     "rich>=13.7",
-#     "presidio-analyzer>=2.2",
-#     "spacy>=3.7",
 #     "detect-secrets>=1.5",
 #     "torch>=2.2",
 #     "transformers>=4.57",

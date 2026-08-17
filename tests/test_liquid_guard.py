@@ -14,8 +14,9 @@ and the CLI surface that configures it.
 
     uv run --script tests/test_liquid_guard.py
 
-torch and transformers are declared here, not in airlock.py's PEP 723 block
-(that is Task 5's job); this file gets its own copy the way eval/ scripts do.
+torch and transformers are declared here too, as their own copy, the way
+eval/ scripts do, even though airlock.py's own PEP 723 block now declares
+them as well (Task 5).
 
 Every case that calls scan_pii_model/scan_policy directly, or evaluate() in a
 way that must reach them, needs both LiquidAI encoders loadable from the local

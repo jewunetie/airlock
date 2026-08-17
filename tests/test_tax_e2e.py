@@ -3,9 +3,9 @@
 # requires-python = ">=3.11"
 # dependencies = [
 #     "mcp[cli]>=2.0.0,<2.1.0",
+#     "torch>=2.13.0,<2.14.0",
+#     "transformers>=5.15.0,<5.16.0",
 #     "rich>=13.7",
-#     "presidio-analyzer>=2.2",
-#     "spacy>=3.7",
 #     "detect-secrets>=1.5",
 #     "pypdf>=5.0",
 #     "reportlab>=4.0",
@@ -15,7 +15,6 @@
 
     uv run --script tests/test_tax_e2e.py
     uv run --script tests/test_tax_e2e.py --keep          leave the files behind
-    uv run --script tests/test_tax_e2e.py --no-presidio   for a machine without it
 
 The cloud model is a tax preparer on a phone call: it knows the form and which
 figure belongs on which line, and it never learns who the taxpayer is.
@@ -126,7 +125,6 @@ def make_args(root: Path) -> argparse.Namespace:
         root=root,
         approve="none",
         allow_writes=True,
-        no_presidio="--no-presidio" in sys.argv,
     )
     return argparse.Namespace(**values)
 
@@ -264,8 +262,7 @@ def main() -> int:
     root = tmp / "tax"
     try:
         build_docs(root)
-        mode = "presidio OFF" if "--no-presidio" in sys.argv else "presidio ON"
-        print(f"workspace: {root}   guard: {mode}")
+        print(f"workspace: {root}")
         try:
             asyncio.run(run(root))
         except BaseException as exc:  # noqa: BLE001

@@ -85,6 +85,13 @@ from rich.rule import Rule
 from rich.table import Table
 from rich.text import Text
 
+# First tagged value for a project that ships as "copy one file and uv run
+# --script it" rather than through a package index: a bug report needs a
+# revision to reference. Starts at 0.1.0, not 1.0.0: there is no
+# compatibility guarantee yet and no prior release for 1.0 to mean anything
+# against.
+__version__ = "0.1.0"
+
 console = Console()
 
 # A second console bound to stderr. Required in serve mode, where stdout is the
@@ -1335,10 +1342,65 @@ class Session:
     # only integer offsets into each source, never the fragments themselves;
     # see advance_reassembly_state's docstring for why that is enough.
     reassembly_state: dict[str, set[int]] = field(default_factory=dict)
+    # Last airlock_ask/airlock_extract call, for evict_stale_sessions' TTL
+    # check below. Separate from created_at: a long-running, actively used
+    # session must not be evicted just because it is old.
+    last_active: str = field(default_factory=lambda: datetime.now().isoformat())
 
 
 SESSIONS: dict[str, Session] = {}
 StepCallback = Callable[[str, str], None]
+
+# SESSIONS is a process-global dict; airlock_close pops one entry, but a
+# caller that never closes (a crashed client, a disconnected MCP transport)
+# leaves its Session in memory for the rest of the process. That is two
+# costs, not one: unbounded memory, and unbounded growth of exactly the
+# state that advance_reassembly_state's own comment above measures a
+# false-blocking residual against (up to 11.5% at 240 released values in
+# one measured distribution). Session eviction bounds both by bounding how
+# long a session can live at all.
+#
+# Chose a cap AND a TTL, not just one: a cap alone still lets a single
+# long-lived session accumulate 240+ released values if nothing else ever
+# opens a session in this process; a TTL alone still lets concurrent-session
+# count grow without limit if sessions open faster than the TTL retires
+# them. Both numbers below are reasoned about, not measured: no eval/
+# figure rides on them. 200 concurrent sessions and one hour of inactivity
+# are both generous for a single local process serving one cloud assistant,
+# and both are far below what would actually exhaust memory.
+SESSION_CAP = 200
+SESSION_IDLE_SECONDS = 3600
+
+
+def touch_session(session: Session) -> None:
+    """Mark a session as active now, for evict_stale_sessions' TTL check."""
+    session.last_active = datetime.now().isoformat()
+
+
+def evict_stale_sessions(now: datetime | None = None) -> None:
+    """Bound SESSIONS: drop sessions idle past the TTL, then oldest-idle
+    first while still over the cap. Enforces len(SESSIONS) <= SESSION_CAP as
+    a postcondition, so a session sitting exactly at the cap is left alone.
+
+    Called after a new session is registered (airlock_open), so the bound
+    holds immediately once every open returns, not only on some later call.
+    Eviction is a plain dict pop, the same primitive airlock_close already
+    uses, so an evicted session's id fails exactly the way a closed one
+    does: the next call with that id finds SESSIONS.get(...) is None, and
+    gets a clear "Unknown session." refusal, never a silent new session and
+    never a crash.
+    """
+    now = now or datetime.now()
+    for sid, sess in list(SESSIONS.items()):
+        idle = (now - datetime.fromisoformat(sess.last_active)).total_seconds()
+        if idle > SESSION_IDLE_SECONDS:
+            SESSIONS.pop(sid, None)
+    if len(SESSIONS) > SESSION_CAP:
+        oldest_idle_first = sorted(SESSIONS.items(), key=lambda kv: kv[1].last_active)
+        excess = len(SESSIONS) - SESSION_CAP
+        for sid, _ in oldest_idle_first[:excess]:
+            SESSIONS.pop(sid, None)
+
 
 # Optional structured trace. Set by --trace. Written as JSON lines so runs can
 # be replayed, diffed, and scored later, which is the only way to know whether
@@ -2609,6 +2671,10 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     console.print(Rule("airlock doctor", style="cyan"))
     ok = True
 
+    # First, unconditionally: a bug report needs a revision to reference,
+    # and this is the one line here that cannot itself fail.
+    check("version", True, __version__)
+
     try:
         sandbox = Sandbox(root=args.root, allow_writes=args.allow_writes)
         counts = sandbox.stats()
@@ -3145,6 +3211,7 @@ def render_mcp_help(args: argparse.Namespace) -> None:
         Panel(
             Group(
                 Text("Serve this workspace to a cloud assistant.", style="bold"),
+                Text(f"airlock v{__version__}", style="dim"),
                 Text(""),
                 Text("Claude Desktop, in claude_desktop_config.json:", style="dim"),
                 Text(json.dumps(config, indent=2), style="cyan"),
@@ -3456,7 +3523,7 @@ def build_server(args: argparse.Namespace) -> Any:
             "client ask."
         )
 
-    mcp = MCPServer("airlock")
+    mcp = MCPServer("airlock", version=__version__)
 
     # Annotations are computed here, not hardcoded, because whether asking a
     # question can alter anything depends on --allow-writes. A fixed
@@ -3511,6 +3578,11 @@ def build_server(args: argparse.Namespace) -> Any:
             linter_threshold=args.linter_threshold,
         )
         SESSIONS[session.session_id] = session
+        # After registering, not before: the new session's own last_active
+        # is always the newest, so it is never the one evicted, and the
+        # cap is enforced (len(SESSIONS) <= SESSION_CAP) the instant this
+        # call returns rather than only from the next open onward.
+        evict_stale_sessions()
         counts = sandbox.stats()
         # Counts, never names.
         truncated_marker = f"... truncated at {MAX_LISTING_ENTRIES}"
@@ -3575,6 +3647,7 @@ def build_server(args: argparse.Namespace) -> Any:
         found = SESSIONS.get(session)
         if found is None:
             return {"status": "error", "message": "Unknown session."}
+        touch_session(found)
 
         err_console.print(
             Text.assemble(
@@ -3705,6 +3778,7 @@ def build_server(args: argparse.Namespace) -> Any:
         found = SESSIONS.get(session)
         if found is None:
             return {"status": "error", "message": "Unknown session."}
+        touch_session(found)
         err_console.print(
             Text.assemble(("\n  \u250c jobs    ", "bold cyan"),
                           (f"{len(jobs)} extraction job(s)", ""),
@@ -3742,6 +3816,29 @@ def cmd_serve(args: argparse.Namespace) -> int:
     except (SandboxError, FileNotFoundError, RuntimeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
+
+    # Both guard encoders otherwise load lazily inside whichever tool call
+    # happens to run first, which means a cloud assistant's first request
+    # would silently block on a ~700MB Hugging Face download with no
+    # explanation visible on its side of the connection. Loading them here,
+    # before mcp.run() starts the transport, means readiness is only
+    # announced once the guard can actually run, and a load failure is a
+    # startup failure with a clear message rather than a server that starts
+    # and then fails closed on every request forever. stdout is the
+    # JSON-RPC channel once mcp.run() starts (CLAUDE.md), so this, like
+    # everything else in serve, goes to err_console only.
+    err_console.print(
+        f"airlock v{__version__}: loading guard encoders "
+        "(first run may download ~700MB from Hugging Face)..."
+    )
+    try:
+        _load_pii_detector()
+        _load_policy_linter()
+    except GuardModelUnavailable as exc:
+        err_console.print(f"error: guard encoders failed to load: {exc}")
+        return 1
+    err_console.print("airlock: guard encoders ready")
+
     print(f"airlock serving {Path(args.root).resolve()} over MCP", file=sys.stderr)
     mcp.run()
     return 0

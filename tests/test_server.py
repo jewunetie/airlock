@@ -21,13 +21,16 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import importlib.util
+import io
 import json
 import secrets
 import shutil
 import string
 import sys
 import tempfile
+from datetime import datetime, timedelta
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -144,6 +147,15 @@ async def group_a(root: Path) -> None:
                     "airlock_extract", "airlock_guard_check"}
         check("five tools registered", set(tools) == expected, ",".join(sorted(tools)))
 
+        # Item-3: the server identifies itself with airlock's own version,
+        # not the empty default MCPServer("airlock") would otherwise carry.
+        server_version = getattr(client.server_info, "version", None)
+        check(
+            "MCP server identifies itself with airlock's own version",
+            server_version == airlock.__version__,
+            server_version,
+        )
+
         ask = tools.get("airlock_ask")
         if ask is None:
             check("airlock_ask present", False)
@@ -192,6 +204,47 @@ async def group_a(root: Path) -> None:
             "destructive_hint flips to true with --allow-writes",
             getattr(ann, "destructive_hint", None) is True,
         )
+
+    # Item-1, end to end: through the real airlock_open/airlock_ask tool
+    # closures rather than evict_stale_sessions directly (group_b5 covers
+    # that level). A small SESSION_CAP forces eviction without opening 200
+    # real sessions; needs the SDK but not Ollama, since airlock_ask on an
+    # unknown/evicted id returns before the worker ever runs.
+    real_cap = airlock.SESSION_CAP
+    airlock.SESSION_CAP = 2
+    airlock.SESSIONS.clear()
+    try:
+        server_evict = airlock.build_server(make_args(root))
+        async with Client(server_evict) as client:
+            opened_ids = []
+            for _ in range(3):
+                opened = await client.call_tool("airlock_open", {"objective": "x"})
+                opened_ids.append((opened.structured_content or {}).get("session"))
+                await asyncio.sleep(0.01)  # keep last_active strictly ordered
+            check("all three opens returned a session", all(opened_ids), str(opened_ids))
+            check(
+                "the cap is enforced: at most SESSION_CAP sessions live",
+                len(airlock.SESSIONS) <= airlock.SESSION_CAP,
+                f"{len(airlock.SESSIONS)} live",
+            )
+
+            oldest, newest = opened_ids[0], opened_ids[-1]
+            res = await client.call_tool("airlock_ask", {"session": oldest, "question": "x"})
+            payload = res.structured_content or {}
+            check(
+                "an evicted session id fails closed: a clear refusal, not a "
+                "silent new session or a crash",
+                payload.get("status") == "error",
+                str(payload),
+            )
+            check(
+                "positive control: the newest session, under the cap, is not evicted",
+                newest in airlock.SESSIONS,
+                sorted(airlock.SESSIONS),
+            )
+    finally:
+        airlock.SESSION_CAP = real_cap
+        airlock.SESSIONS.clear()
 
 
 def group_b(root: Path) -> None:
@@ -463,6 +516,198 @@ def group_b4() -> None:
         airlock.ollama_chat = real
 
 
+def group_b5() -> None:
+    """Item-1: session eviction bounds SESSIONS, a process-global dict.
+
+    Direct against evict_stale_sessions and the module-global SESSIONS
+    dict, no SDK or Ollama needed, at the same level group_b2 already tests
+    run_worker recovery. The end-to-end version, through the real
+    airlock_open/airlock_ask tool closures, is in group A (needs the SDK,
+    not Ollama).
+    """
+    print("\nB5. Session eviction")
+
+    def fresh_session(sid: str, idle_seconds: float) -> airlock.Session:
+        s = airlock.Session(
+            session_id=sid, objective="x",
+            sandbox=airlock.Sandbox(root=Path("."), allow_writes=False),
+            worker_model="stub",
+        )
+        s.last_active = (datetime.now() - timedelta(seconds=idle_seconds)).isoformat()
+        return s
+
+    real_cap, real_ttl = airlock.SESSION_CAP, airlock.SESSION_IDLE_SECONDS
+    airlock.SESSIONS.clear()
+    try:
+        # Cap: oldest-idle evicted first once at the cap; a session under
+        # the cap is a positive control and survives.
+        airlock.SESSION_CAP = 3
+        airlock.SESSION_IDLE_SECONDS = 99999  # TTL not under test here
+        airlock.SESSIONS["old"] = fresh_session("old", 30)
+        airlock.SESSIONS["mid"] = fresh_session("mid", 20)
+        airlock.SESSIONS["new"] = fresh_session("new", 10)
+        airlock.evict_stale_sessions()
+        check(
+            "positive control: three sessions under the cap are not evicted",
+            set(airlock.SESSIONS) == {"old", "mid", "new"},
+            sorted(airlock.SESSIONS),
+        )
+
+        airlock.SESSIONS["newer"] = fresh_session("newer", 0)
+        airlock.evict_stale_sessions()
+        check(
+            "cap enforced once a fourth session arrives",
+            len(airlock.SESSIONS) <= airlock.SESSION_CAP,
+            f"{len(airlock.SESSIONS)} live: {sorted(airlock.SESSIONS)}",
+        )
+        check("oldest-idle session evicted first", "old" not in airlock.SESSIONS,
+              sorted(airlock.SESSIONS))
+        check(
+            "positive control: the newest session is not evicted",
+            "newer" in airlock.SESSIONS,
+            sorted(airlock.SESSIONS),
+        )
+
+        # TTL: idle past SESSION_IDLE_SECONDS is evicted even while under
+        # the cap; a session well within the TTL is a positive control.
+        airlock.SESSIONS.clear()
+        airlock.SESSION_CAP = 200
+        airlock.SESSION_IDLE_SECONDS = 60
+        airlock.SESSIONS["stale"] = fresh_session("stale", 120)
+        airlock.SESSIONS["active"] = fresh_session("active", 5)
+        airlock.evict_stale_sessions()
+        check("a session idle past the TTL is evicted", "stale" not in airlock.SESSIONS)
+        check(
+            "positive control: a session under the TTL is not evicted",
+            "active" in airlock.SESSIONS,
+        )
+
+        # Fail closed: an evicted id must refuse, not silently open a new
+        # session or crash. Eviction is the same dict.pop primitive
+        # airlock_close already uses, so SESSIONS.get on an evicted id
+        # returns None exactly like it does on a closed one, which is what
+        # airlock_ask/airlock_extract key their "Unknown session." refusal
+        # on (see group A's end-to-end version of this same check).
+        check(
+            "an evicted id looks exactly like an unknown one to the caller",
+            airlock.SESSIONS.get("stale") is None,
+        )
+    finally:
+        airlock.SESSION_CAP, airlock.SESSION_IDLE_SECONDS = real_cap, real_ttl
+        airlock.SESSIONS.clear()
+
+
+def group_b6() -> None:
+    """Item-2: serve warm-up. Both encoders must load, in order, before
+    mcp.run() starts the transport and readiness is announced; a load
+    failure must be a startup failure, never a server that starts and then
+    fails closed on every request instead. build_server and both loaders
+    are stubbed so this needs neither the real ~700MB download nor Ollama;
+    a real end-to-end run was also driven manually against the live
+    encoders for this fix (see item-4-report.md), which this cannot
+    reproduce as a repeatable check.
+    """
+    print("\nB6. serve warm-up")
+    real_build = airlock.build_server
+    real_pii, real_policy = airlock._load_pii_detector, airlock._load_policy_linter
+    calls: list[str] = []
+
+    class StubServer:
+        def run(self) -> None:
+            calls.append("mcp.run")
+
+    def stub_build(_args: object) -> StubServer:
+        calls.append("build_server")
+        return StubServer()
+
+    def stub_pii(*_a: object, **_k: object) -> None:
+        calls.append("load_pii")
+
+    def stub_policy(*_a: object, **_k: object) -> None:
+        calls.append("load_policy")
+
+    airlock.build_server = stub_build
+    airlock._load_pii_detector = stub_pii
+    airlock._load_policy_linter = stub_policy
+    try:
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = airlock.cmd_serve(make_args(Path(".")))
+        check("serve reaches readiness and runs the transport", rc == 0, str(rc))
+        check(
+            "both encoders load, in order, before mcp.run",
+            calls == ["build_server", "load_pii", "load_policy", "mcp.run"],
+            str(calls),
+        )
+        check(
+            "serve prints nothing to stdout during warm-up (CLAUDE.md: stdout "
+            "is the JSON-RPC channel)",
+            buf.getvalue() == "",
+            repr(buf.getvalue()[:120]),
+        )
+    finally:
+        airlock.build_server = real_build
+        airlock._load_pii_detector = real_pii
+        airlock._load_policy_linter = real_policy
+
+    # A load failure is a startup failure: mcp.run must never be reached,
+    # and the process must fail closed (non-zero exit), not start a server
+    # that would then fail closed on every later request instead.
+    calls.clear()
+    airlock.build_server = stub_build
+
+    def failing_pii(*_a: object, **_k: object) -> None:
+        calls.append("load_pii")
+        raise airlock.GuardModelUnavailable("stub load failure")
+
+    airlock._load_pii_detector = failing_pii
+    airlock._load_policy_linter = stub_policy
+    try:
+        rc = airlock.cmd_serve(make_args(Path(".")))
+        check("a warm-up load failure is a startup failure, not success", rc != 0, str(rc))
+        check("mcp.run is never reached when warm-up fails", "mcp.run" not in calls, str(calls))
+    finally:
+        airlock.build_server = real_build
+        airlock._load_pii_detector = real_pii
+        airlock._load_policy_linter = real_policy
+
+
+def group_b7() -> None:
+    """Item-3: __version__ surfaces in cmd_doctor's output.
+
+    cmd_doctor prints the version before anything encoder- or
+    Ollama-dependent runs, so both are stubbed to fail fast here
+    (GuardModelUnavailable, RuntimeError) and the assertion is on the
+    captured text alone. No real model load, no Ollama needed, unlike
+    tests/test_liquid_guard.py's cmd_doctor_encoder_checks_case, which
+    exercises the real thing and skips when either is unavailable.
+    """
+    print("\nB7. cmd_doctor prints the version")
+    real_pii = airlock._load_pii_detector
+    real_policy = airlock._load_policy_linter
+    real_ollama = airlock.ollama_models
+
+    def fail_load(*_a: object, **_k: object) -> None:
+        raise airlock.GuardModelUnavailable("stub: no real model load in this test")
+
+    def fail_ollama() -> list[str]:
+        raise RuntimeError("stub: no ollama in this test")
+
+    airlock._load_pii_detector = fail_load
+    airlock._load_policy_linter = fail_load
+    airlock.ollama_models = fail_ollama
+    try:
+        with airlock.console.capture() as capture:
+            code = airlock.cmd_doctor(make_args(Path(".")))
+        printed = capture.get()
+        check("cmd_doctor prints the version", airlock.__version__ in printed, printed[:80])
+        check("cmd_doctor still fails closed when its stubs are unavailable", code == 1, str(code))
+    finally:
+        airlock._load_pii_detector = real_pii
+        airlock._load_policy_linter = real_policy
+        airlock.ollama_models = real_ollama
+
+
 # Every check group_c performs on a run that completes, in order. Each early
 # return below must skip() everything in this list not already recorded via
 # check(), so a suite that exits early collects exactly as many checks as one
@@ -674,6 +919,9 @@ def main() -> int:
         run_group("group B2", lambda _root: group_b2(), False)
         run_group("group B3", lambda _root: group_b3(), False)
         run_group("group B4", lambda _root: group_b4(), False)
+        run_group("group B5", lambda _root: group_b5(), False)
+        run_group("group B6", lambda _root: group_b6(), False)
+        run_group("group B7", lambda _root: group_b7(), False)
         run_group("group C", group_c, True)
         run_group("group C prereqs", group_c_prereq_counts, True)
     finally:
@@ -686,8 +934,12 @@ def main() -> int:
         print("failed:")
         for name in FAIL:
             print(f"  - {name}")
-    if total < 45:
-        print(f"\nWARNING: only {total} checks ran. Expected around 54.")
+    if total < 60:
+        # 80 with the SDK and Ollama both available; measured 66 with the
+        # SDK genuinely unavailable (group A and group C degrade to a
+        # handful of checks each, but B/B2..B7 and group_c_prereq_counts
+        # are unaffected). 60 sits under that floor with margin.
+        print(f"\nWARNING: only {total} checks ran. Expected around 80 (66 without the SDK).")
         print("Something did not collect. Treat this as a failure, not a pass.")
         return 1
     return 1 if FAIL else 0

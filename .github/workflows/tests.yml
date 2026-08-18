@@ -1,0 +1,77 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  suites:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          # Pinned to the floor every PEP 723 block declares
+          # (requires-python = ">=3.11"), not left to float to whatever the
+          # runner or uv happens to default to.
+          python-version: "3.11"
+          enable-cache: true
+
+      # Both guard encoders download from Hugging Face on first load
+      # (~350MB each, ~700MB total; see _load_pii_detector/_load_policy_linter
+      # in airlock.py). Cached by revision, so this downloads once per
+      # PII_DETECTOR_REVISION/POLICY_LINTER_REVISION pin, not once per run.
+      # restore-keys falls back to the newest prior cache on any miss (an
+      # unrelated code change should still restore already-downloaded
+      # model blobs), so only an actual revision bump re-downloads.
+      - name: Cache Hugging Face models
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/huggingface
+          key: hf-models-${{ hashFiles('airlock.py') }}
+          restore-keys: |
+            hf-models-
+
+      # Five suites, one step each for clear per-suite pass/fail in the
+      # Actions UI. Each script's own main() already enforces a low-total
+      # floor (CLAUDE.md: a suite that silently collects fewer checks than
+      # expected reads exactly like one that passed) and exits non-zero on
+      # either a real failure or an implausibly small collected count, so
+      # a green step here really does mean both.
+      #
+      # None of the four below need Ollama to pass: every Ollama-dependent
+      # check in them is written to report itself INCONCLUSIVE/skip rather
+      # than fail when Ollama is unreachable, which a hosted runner always
+      # is (no Ollama here on purpose). That is the mechanism that makes
+      # this workflow meaningful rather than vacuous; do not add Ollama
+      # just to turn those skips into passes, and do not paper over a
+      # suite that stops reporting them as skips.
+      - name: test_liquid_guard.py
+        run: uv run --script tests/test_liquid_guard.py
+
+      - name: test_round_guard.py
+        run: uv run --script tests/test_round_guard.py
+
+      - name: test_cross_round.py
+        run: uv run --script tests/test_cross_round.py
+
+      - name: test_server.py
+        run: uv run --script tests/test_server.py
+
+      # test_tax_e2e.py is different from the four above: it is a straight
+      # end-to-end demonstration with no INCONCLUSIVE fallback of its own,
+      # so without a reachable Ollama it fails for real (verified locally
+      # by pointing OLLAMA_HOST at a closed port: 6 of 8 checks fail
+      # cleanly, fail-closed, no crash, just a suite that cannot pass
+      # without a live worker model). continue-on-error is deliberate, not
+      # a way to hide a real regression: this step's failure on this
+      # workflow is expected on every run until a self-hosted runner with
+      # Ollama is wired up, and gating the job on it would make this
+      # workflow permanently red for a reason that has nothing to do with
+      # the code under test.
+      - name: test_tax_e2e.py (needs a live Ollama; expected to fail here)
+        continue-on-error: true
+        run: uv run --script tests/test_tax_e2e.py

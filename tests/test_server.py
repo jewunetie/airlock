@@ -247,6 +247,124 @@ async def group_a(root: Path) -> None:
         airlock.SESSIONS.clear()
 
 
+def _stub_answers(values: list[str]):
+    """A stub ollama_chat that returns each value in order, then repeats the
+    last one if over-called. Same convention as tests/test_cross_round.py's
+    stub_ollama, adapted for reassignment mid-test since this test switches
+    the stubbed sequence between phases.
+    """
+    it = iter(values)
+    last = values[-1] if values else ""
+
+    def stub(*_args: object, **_kwargs: object) -> str:
+        return next(it, last)
+
+    return stub
+
+
+async def group_a2_cross_round_via_tool(root: Path) -> None:
+    """Item 4 (acceptance fix): drives airlock_extract through the real MCP
+    tool boundary -- SESSIONS, touch_session, the tool closure's argument and
+    result (de)serialisation -- across three rounds on one session id.
+
+    tests/test_cross_round.py's wiring_* cases already exercise run_jobs
+    directly against a hand-built Session object, extensively. What none of
+    them touch is the tool surface itself: a real cloud assistant addresses
+    a session by its string id through airlock_extract, not by holding a
+    Session object, and nothing before this test called airlock_extract
+    through the SDK's Client even once (group_a's tool-registration check
+    only confirms the name is registered). ollama_chat is stubbed --
+    deterministic on purpose, since a clean-context tester found the real
+    worker unreliable at this exact task (it returned "123" for both "first
+    three digits" and "last four digits" of an SSN), and this test is about
+    the guard and the session plumbing, not the worker's arithmetic.
+
+    Uses its own temporary root (a bare file directly under it, addressable
+    as document 0) rather than the shared workspace() fixture, which nests
+    its files under notes/ and so has no top-level document for a job to
+    address.
+    """
+    print("\nA2. airlock_extract through the real tool, across rounds, one session")
+    try:
+        from mcp import Client
+    except ImportError as exc:
+        check("A2: import Client from mcp", False, str(exc))
+        return
+
+    tmp = Path(tempfile.mkdtemp(prefix="airlock-crossround-tool-test-"))
+    (tmp / "record.txt").write_text("Client SSN is 912-84-7731, filed Monday.\n")
+
+    real_ollama = airlock.ollama_chat
+    try:
+        server = airlock.build_server(make_args(tmp))
+        async with Client(server) as client:
+            opened = await client.call_tool("airlock_open", {"objective": "x"})
+            session = (opened.structured_content or {}).get("session")
+            check(
+                "A2: airlock_open returns a session",
+                bool(session),
+                str(opened.structured_content),
+            )
+            if not session:
+                return
+
+            def one_job(i: int) -> dict:
+                return {"session": session, "jobs": [{"document": 0, "extract": f"q{i}"}]}
+
+            airlock.ollama_chat = _stub_answers(["912", "84", "7731"])
+            round_results = []
+            for i in range(3):
+                res = await client.call_tool("airlock_extract", one_job(i))
+                round_results.append(res.structured_content or {})
+
+            check(
+                "A2: round 1 of 3 is ok, through the real tool",
+                round_results[0].get("status") == "ok",
+                str(round_results[0]),
+            )
+            check(
+                "A2: round 2 of 3 is ok, through the real tool",
+                round_results[1].get("status") == "ok",
+                str(round_results[1]),
+            )
+            check(
+                "A2: round 3 blocks through the real tool: completes cross-round reassembly",
+                round_results[2].get("status") == "blocked",
+                str(round_results[2]),
+            )
+
+            payload3 = json.dumps(round_results[2])
+            check(
+                "A2: the blocked round's payload carries no SSN fragment or the full value",
+                not any(f in payload3 for f in ("912", "84", "7731", "912-84-7731")),
+                payload3[:200],
+            )
+
+            # Mandatory positive control: continuing the SAME session with
+            # ordinary, unrelated answers afterward stays ok through the real
+            # tool -- a block is per-round, not a permanent trip of the
+            # session once it goes through SESSIONS and the tool closure.
+            # Same word list as test_round_guard.py's task3 positive control
+            # and test_cross_round.py's wiring_unrelated_benign_session_case,
+            # verified there clean against the real guard.
+            words = ["forecast", "quarterly", "template", "summary", "agenda"]
+            airlock.ollama_chat = _stub_answers(words)
+            benign_results = []
+            for i, _word in enumerate(words, start=10):
+                res = await client.call_tool("airlock_extract", one_job(i))
+                benign_results.append((res.structured_content or {}).get("status"))
+
+            check(
+                "A2: a benign multi-round session over the same session id stays "
+                "ok, through the real tool (positive control)",
+                all(status == "ok" for status in benign_results),
+                str(benign_results),
+            )
+    finally:
+        airlock.ollama_chat = real_ollama
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def group_b(root: Path) -> None:
     print("\nB. Sandbox and deterministic guard layers")
     sb = airlock.Sandbox(root=root, allow_writes=False)
@@ -776,6 +894,127 @@ def group_b8() -> None:
         airlock.ollama_chat = real
 
 
+def group_b9(root: Path) -> None:
+    """Grounded-ness: a caller cannot tell a correct answer from a fabricated
+    one, since the guard checks disclosure, not correctness (a clean-context
+    tester's finding). run_worker now tracks whether any "read" step actually
+    succeeded before the worker answered, and envelope/receipt surface that as
+    a plain operation fact: not a paths, not a count of files, only whether
+    the worker grounded its answer in something it actually read. This is
+    allowed under CLAUDE.md's receipt invariant for the same reason step
+    counts are: it describes what airlock did, not what it found.
+
+    Uses the real workspace() fixture (root, with a real notes/plan.md) so
+    the "successful read" case is a genuine sandbox read, not a stub.
+    """
+    print("\nB9. Grounded-ness: fabricated answers are distinguishable from real reads")
+
+    def make_session() -> airlock.Session:
+        return airlock.Session(
+            session_id="test-b9", objective="x",
+            sandbox=airlock.Sandbox(root=root, allow_writes=False),
+            worker_model="stub",
+        )
+
+    real = airlock.ollama_chat
+    try:
+        # Case 1: the worker reads a real file, then answers. Grounded.
+        grounded_replies = [
+            {"action": "read", "path": "notes/plan.md"},
+            {"action": "answer", "answer": "Two planning files, no personal data."},
+        ]
+
+        def scripted_grounded(*_a, **_k):
+            return grounded_replies.pop(0) if grounded_replies else {
+                "action": "answer", "answer": "x"
+            }
+
+        airlock.ollama_chat = scripted_grounded
+        out = airlock.run_worker(make_session(), "what is here?")
+        check(
+            "a worker that reads successfully before answering is grounded",
+            out.get("status") == "approved" and out.get("grounded") is True,
+            f"status={out.get('status')} grounded={out.get('grounded')!r}",
+        )
+
+        # Case 2: the worker answers with no read at all. Not grounded.
+        def scripted_no_read(_model: str, _prompt: str, _schema: dict) -> dict:
+            return {"action": "answer", "answer": "Two planning files, no personal data."}
+
+        airlock.ollama_chat = scripted_no_read
+        out = airlock.run_worker(make_session(), "what is here?")
+        check(
+            "a worker that answers with zero reads is not grounded",
+            out.get("status") == "approved" and out.get("grounded") is False,
+            f"status={out.get('status')} grounded={out.get('grounded')!r}",
+        )
+
+        # Case 3: the tester's actual scenario. A read fails (the path does
+        # not exist in the sandbox, standing in for the permission error the
+        # tester hit), and the worker then fabricates an answer anyway
+        # instead of reporting the real failure. Still not grounded, and
+        # this must be true regardless of the guard's status verdict: a
+        # generic fabricated sentence like this one is expected to pass the
+        # privacy guard, which is exactly why grounded-ness cannot be
+        # inferred from status alone.
+        fabricated_replies = [
+            {"action": "read", "path": "does-not-exist.txt"},
+            {"action": "answer", "answer": "the file does not exist"},
+        ]
+
+        def scripted_fabricated(*_a, **_k):
+            return fabricated_replies.pop(0) if fabricated_replies else {
+                "action": "answer", "answer": "x"
+            }
+
+        airlock.ollama_chat = scripted_fabricated
+        out = airlock.run_worker(make_session(), "what does the file say?")
+        check(
+            "a failed read followed by a fabricated answer is not grounded",
+            out.get("grounded") is False,
+            f"status={out.get('status')} grounded={out.get('grounded')!r}",
+        )
+    finally:
+        airlock.ollama_chat = real
+
+    # The guarantee statement (fix part a): envelope's note must say plainly
+    # that passing the guard is not a correctness guarantee, not just a
+    # privacy one, on both the approved and blocked paths.
+    session = make_session()
+    approved = airlock.envelope(session, "approved", "fine", [])
+    note = approved.get("note", "").lower()
+    check(
+        "envelope's note states passing the guard is not an accuracy guarantee",
+        "accura" in note or "correct" in note,
+        approved.get("note", ""),
+    )
+
+    # receipt() surfaces grounded as a plain operation fact, alongside step
+    # counts, and carries nothing content-derived (CLAUDE.md's receipt
+    # invariant): the workspace's real file name must not leak into it.
+    result_grounded = {"session": "x", "status": "approved", "grounded": True,
+                        "withheld": False, "guard_concerns": []}
+    rcpt = airlock.receipt(result_grounded, ["read", "approved"])
+    check(
+        "receipt reports grounded as a top-level operation fact",
+        rcpt.get("grounded") is True,
+        str(rcpt),
+    )
+    check(
+        "receipt carries no file name even though grounded is reported",
+        "plan.md" not in json.dumps(rcpt) and "notes" not in json.dumps(rcpt),
+        str(rcpt),
+    )
+    result_ungrounded = {"session": "x", "status": "approved", "grounded": False,
+                         "withheld": False, "guard_concerns": []}
+    rcpt2 = airlock.receipt(result_ungrounded, ["answer"])
+    check(
+        "receipt reports grounded=False when nothing was successfully read (positive control)",
+        rcpt2.get("grounded") is False,
+        str(rcpt2),
+    )
+
+
 # Every check group_c performs on a run that completes, in order. Each early
 # return below must skip() everything in this list not already recorded via
 # check(), so a suite that exits early collects exactly as many checks as one
@@ -983,6 +1222,7 @@ def main() -> int:
 
     try:
         run_group("group A", group_a, True)
+        run_group("group A2", group_a2_cross_round_via_tool, True)
         run_group("group B", group_b, False)
         run_group("group B2", lambda _root: group_b2(), False)
         run_group("group B3", lambda _root: group_b3(), False)
@@ -991,6 +1231,7 @@ def main() -> int:
         run_group("group B6", lambda _root: group_b6(), False)
         run_group("group B7", lambda _root: group_b7(), False)
         run_group("group B8", lambda _root: group_b8(), False)
+        run_group("group B9", group_b9, False)
         run_group("group C", group_c, True)
         run_group("group C prereqs", group_c_prereq_counts, True)
     finally:
@@ -1003,13 +1244,13 @@ def main() -> int:
         print("failed:")
         for name in FAIL:
             print(f"  - {name}")
-    if total < 65:
-        # 85 with the SDK and Ollama both available (80 plus group B8's 5
-        # fully-stubbed checks, added for item 5); measured 71 with the SDK
-        # genuinely unavailable (group A and group C degrade to a handful of
-        # checks each, but B/B2..B8 and group_c_prereq_counts are
-        # unaffected). 65 sits under that floor with margin.
-        print(f"\nWARNING: only {total} checks ran. Expected around 85 (71 without the SDK).")
+    if total < 73:
+        # 98 with the SDK and Ollama both available (92 plus group A2's 6
+        # cross-round-through-the-real-tool checks); ~79 with the SDK
+        # genuinely unavailable (group A and group A2 each degrade to a
+        # single check, but B/B2..B9 and group_c_prereq_counts are
+        # unaffected). 73 sits under that floor with margin.
+        print(f"\nWARNING: only {total} checks ran. Expected around 98 (79 without the SDK).")
         print("Something did not collect. Treat this as a failure, not a pass.")
         return 1
     return 1 if FAIL else 0

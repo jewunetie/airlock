@@ -2406,6 +2406,15 @@ def run_worker(
 
     history: list[str] = []
     draft = ""
+    # Whether any "read" step actually succeeded, tracked so the caller can
+    # tell a grounded answer from a fabricated one (a clean-context tester's
+    # finding: a wrong answer or a misreported permission error is
+    # indistinguishable from a correct one otherwise, since the guard checks
+    # disclosure, not correctness). Set only on a successful read, never on
+    # an attempted one: a SandboxError raised by read_text below is caught
+    # before this line runs, so a failed read leaves grounded exactly as it
+    # was, which is the point.
+    grounded = False
     # Signatures of sandbox actions already run this session, so a repeat can
     # be recognised and short-circuited without re-running the sandbox call
     # (it still costs the step -- `continue` consumes a loop iteration the
@@ -2433,9 +2442,9 @@ def run_worker(
         try:
             step = ollama_chat(session.worker_model, prompt, WORKER_SCHEMA)
         except RuntimeError as exc:
-            return envelope(session, "blocked", "", [f"local model failed: {exc}"])
+            return envelope(session, "blocked", "", [f"local model failed: {exc}"], grounded)
         if not isinstance(step, dict):
-            return envelope(session, "blocked", "", ["local model returned bad output"])
+            return envelope(session, "blocked", "", ["local model returned bad output"], grounded)
 
         # Hand-rolled dispatch rather than Ollama's native tool calling, for
         # the reliability reason documented on ollama_chat above.
@@ -2467,7 +2476,9 @@ def run_worker(
                 continue
             seen_actions.add(signature)
         except TypeError:
-            return envelope(session, "blocked", "", ["local model returned a malformed step"])
+            return envelope(
+                session, "blocked", "", ["local model returned a malformed step"], grounded
+            )
 
         try:
             if action == "list":
@@ -2478,6 +2489,7 @@ def run_worker(
                 target = step.get("path", "")
                 note("read", target)
                 result = session.sandbox.read_text(target)
+                grounded = True
             elif action == "search":
                 query = step.get("query", "")
                 note("search", query)
@@ -2518,10 +2530,13 @@ def run_worker(
             session, "blocked", "",
             ["the local model could not finish within the allowed number of "
              "steps and produced no answer"],
+            grounded,
         )
 
     if not draft:
-        return envelope(session, "blocked", "", ["the local model produced no answer"])
+        return envelope(
+            session, "blocked", "", ["the local model produced no answer"], grounded
+        )
 
     # Concerns from the previous revise verdict, to notice when a revision
     # changed nothing.
@@ -2541,11 +2556,11 @@ def run_worker(
         if verdict.approved:
             session.exchanges += 1
             note("approved", " + ".join(verdict.layers_run))
-            return envelope(session, "approved", draft, [])
+            return envelope(session, "approved", draft, [], grounded)
         if verdict.decision == "block":
             session.blocked += 1
             note("blocked", "; ".join(verdict.concerns))
-            return envelope(session, "blocked", "", verdict.concerns)
+            return envelope(session, "blocked", "", verdict.concerns, grounded)
 
         # The same rejection reason twice in a row means the last revision
         # did not change anything the guard cares about, most often because
@@ -2563,6 +2578,7 @@ def run_worker(
                 ["the question cannot be answered without disclosing content "
                  "the guard withholds, and revising the answer did not change "
                  "that"],
+                grounded,
             )
         previous_concerns = verdict.concerns
 
@@ -2580,12 +2596,14 @@ def run_worker(
             )
         except RuntimeError as exc:
             session.blocked += 1
-            return envelope(session, "blocked", "", [f"revision failed: {exc}"])
+            return envelope(session, "blocked", "", [f"revision failed: {exc}"], grounded)
         if isinstance(revised, dict):
             draft = str(revised.get("answer", "")).strip() or draft
 
     session.blocked += 1
-    return envelope(session, "blocked", "", ["could not produce a message passing the guard"])
+    return envelope(
+        session, "blocked", "", ["could not produce a message passing the guard"], grounded
+    )
 
 
 def sanitise_concerns(concerns: list[str]) -> list[str]:
@@ -2612,12 +2630,21 @@ def sanitise_concerns(concerns: list[str]) -> list[str]:
 
 
 def envelope(
-    session: Session, status: str, message: str, concerns: list[str]
+    session: Session, status: str, message: str, concerns: list[str],
+    grounded: bool = False,
 ) -> dict[str, Any]:
     """Build the structured reply, stating plainly when content was withheld.
 
     The single choke point for anything leaving for the caller, which is why
     concern sanitising happens here rather than at each call site.
+
+    grounded reports whether the worker successfully read anything from the
+    workspace before producing this message. It is an operation fact, not a
+    content-derived one (CLAUDE.md's receipt invariant): it says nothing
+    about which files, how many, or what they contained, only whether at
+    least one read actually succeeded. Default False so call sites that never
+    read anything (a malformed step, a listing failure) do not need to pass
+    it explicitly.
     """
     return {
         "session": session.session_id,
@@ -2625,14 +2652,17 @@ def envelope(
         "message": message,
         "withheld": bool(concerns),
         "guard_concerns": sanitise_concerns(concerns),
+        "grounded": grounded,
         "counters": {
             "exchanges": session.exchanges,
             "revisions": session.revisions,
             "blocked": session.blocked,
         },
         "note": (
-            "This reply passed a local privacy guard. Content may have been "
-            "generalised or withheld."
+            "This reply passed a local privacy guard: the content was judged "
+            "safe to disclose. That is not a guarantee it is accurate -- the "
+            "guard checks disclosure, not correctness. Content may also have "
+            "been generalised or withheld."
         ),
     }
 
@@ -3493,10 +3523,13 @@ WORKER_ACTIONS = frozenset({"list", "read", "search", "write", "refused"})
 def receipt(result: dict[str, Any], actions: list[str]) -> dict[str, Any]:
     """Describe what airlock DID, with nothing about what it FOUND.
 
-    Reports step counts, action kinds and guard verdicts. Never paths, match
-    counts, topics or anything else derived from file contents: the guard
-    inspects answer text and never sees this metadata, so content-derived
-    facts here would be an unguarded oracle. See CLAUDE.md.
+    Reports step counts, action kinds, guard verdicts, and whether the
+    answer was grounded in a successful read. Never paths, match counts,
+    topics or anything else derived from file contents: the guard inspects
+    answer text and never sees this metadata, so content-derived facts here
+    would be an unguarded oracle. See CLAUDE.md. grounded is the same kind of
+    fact as steps/action_kinds: whether a read succeeded, not which file or
+    how many, so it stays on the allowed side of that line.
     """
     # Only actions that touched the workspace. The callback also reports guard
     # lifecycle events (guard, revise, approved, blocked), and passing those
@@ -3510,6 +3543,7 @@ def receipt(result: dict[str, Any], actions: list[str]) -> dict[str, Any]:
         "performed": True,
         "steps": len(worker_actions),
         "action_kinds": sorted(set(worker_actions)),
+        "grounded": result.get("grounded", False),
         "guard": {
             "withheld": result.get("withheld", False),
             "concerns": result.get("guard_concerns", []),

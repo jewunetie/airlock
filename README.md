@@ -12,6 +12,8 @@ Cloud assistants are useful over your own documents, and sending those documents
 
 airlock takes a third position. The local model does the reading. The cloud model does the reasoning. A guard decides what is allowed to cross between them, and it is the guard, not the local model, that has final say.
 
+**Passing the guard means the content was judged safe to disclose. It does not mean the content is accurate.** The guard checks disclosure, not correctness, and the worker is a small local model: it can misread a file, report a permission error as "the file does not exist," or answer confidently having read nothing at all. An approved reply is vetted for privacy, not verified for truth.
+
 ## How it works
 
 ```
@@ -73,6 +75,7 @@ That harness's numbers should be read as an upper bound, not as expected field p
 | `airlock_open(objective)` | Start a session. Returns a session id and file and directory **counts**, never names. |
 | `airlock_ask(session, question)` | Ask the local model about the workspace. The reply is guarded. |
 | `airlock_close(session)` | End a session and discard its state. |
+| `airlock_extract(session, jobs)` | Extract one fact per job from a specific document, or write a value into one, without routing it through free-form prose. Prefer this over `airlock_ask` for anything with structure. |
 | `airlock_guard_check(text)` | Test whether a given string would pass the guard. Useful for calibration. |
 
 ### Disclosure is opt-in
@@ -97,6 +100,7 @@ airlock *did*, never what it *found*:
 | step count, action kinds | file paths and names |
 | guard decision, layers, rules | match counts, topics |
 | whether anything was withheld | anything derived from file contents |
+| whether the answer was grounded in a successful read | which files were read, or how many |
 
 A receipt carrying content-derived facts would be an unguarded oracle. The
 guard inspects answer text and never sees this metadata, so "how many files
@@ -152,11 +156,11 @@ Tool annotations are computed at startup from `--allow-writes`, so
 Dependencies are declared inline in `airlock.py` using PEP 723, so `uv` resolves them on first run. There is nothing to install beforehand.
 
 ```sh
-ollama pull qwen3.5:0.8b               # worker
+ollama pull qwen3.5:0.8B               # worker
 ```
 
 **Do not use an `-mlx` tag for the worker.** MLX is the faster backend on Apple
-Silicon, but measured on Ollama 0.32.0, `qwen3.5:0.8b-mlx` ignores
+Silicon, but measured on Ollama 0.32.0, `qwen3.5:0.8B-mlx` ignores
 grammar-constrained decoding: asked for an object matching the worker schema it
 returns the bare string `answer`, so every step fails and no session completes.
 The plain tag on the same machine, same Ollama, same prompt, honours the schema.

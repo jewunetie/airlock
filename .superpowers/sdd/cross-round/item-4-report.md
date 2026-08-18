@@ -144,3 +144,61 @@ local parse (PyYAML resolves the bare `on:` key as the boolean `True`
 internally, a known YAML 1.1 quirk that GitHub's parser handles as the
 literal trigger key in every real workflow that uses this exact form; not
 independently confirmed against GitHub's parser here).
+
+## Fix round 1 (coordinator review): continue-on-error hid real regressions
+
+`continue-on-error: true` on test_tax_e2e.py was wrong for the reason
+CLAUDE.md's own low-total-floor rule exists: it made "the worker is
+unreachable" and "the worker is reachable and the extraction is broken"
+report identically (a green job, advisory step). Removed. test_tax_e2e.py
+now gets the same INCONCLUSIVE-skip treatment as the other four suites,
+via a new up-front probe rather than a bare `continue-on-error`:
+
+- `TAX_E2E_CHECKS`: the 8 check names in order (mirrors GROUP_C_CHECKS in
+  tests/test_server.py). The four "line N = ..." names embed
+  WAGES/INTEREST/TOTAL_INCOME/WITHHELD, fixed module-level constants, so
+  they are deterministic and known ahead of any run.
+- `worker_unavailable_reason(model)`: reachable Ollama, the exact model tag
+  installed (same case/`:latest`-insensitive match as cmd_doctor's `has()`
+  in airlock.py, reimplemented locally rather than imported since that one
+  prints through Rich), and the model honours WORKER_SCHEMA (one probe
+  call, same shape as cmd_doctor's own "worker emits valid JSON" check).
+  Empty string means available; anything else is the skip reason.
+- `main()` calls this before touching the workspace's MCP session at all.
+  Non-empty reason: `skip_remaining(0, reason)` skips all 8, matching
+  group_c's coarse-grained convention (group_c skips
+  "airlock_open returns a session" too, even though airlock_open itself
+  doesn't need Ollama; test_tax_e2e.py now does the same rather than
+  inventing a finer-grained split this codebase doesn't otherwise use).
+  Empty reason: runs exactly as before, unmodified assertions, all real
+  failures still fail.
+- The pre-existing containment check's "form was never filled" branch
+  printed "INCONCLUSIVE" without recording it anywhere (not a check(), not
+  a skip()), so it silently under-collected by one in that edge case. Now
+  calls `skip("no identifier reached the caller", ...)`, closing the same
+  under-collection gap group_c's own fix already closed for its analogous
+  case.
+- `main()`'s own low-total floor: `if total < len(TAX_E2E_CHECKS): return 1`,
+  the same shape as the other four suites' floor guard, previously absent
+  here entirely.
+
+Both paths verified locally:
+
+- Ollama reachable (real): `8 passed, 0 failed, 0 skipped (8 checks)`, exit 0.
+- Ollama unreachable (`OLLAMA_HOST=http://127.0.0.1:1`):
+  `0 passed, 0 failed, 8 skipped (8 checks)`, exit 0, all 8 skip reasons
+  correctly naming "Ollama unreachable at http://127.0.0.1:1: [Errno 61]
+  Connection refused".
+
+No check was scoped out of CI as unskippable: all 8 gate cleanly on the
+single up-front probe.
+
+.github/workflows/tests.yml: `continue-on-error: true` removed from the
+test_tax_e2e.py step; its comment above the five steps rewritten to state
+plainly that this suite now shares the same skip mechanism as the other
+four, and to name what happened before (continue-on-error hid a real
+extraction regression exactly as easily as it hid "no worker") so a later
+reader does not reintroduce it.
+
+Re-verified full suite, all five, Ollama reachable: 43 / 73 / 58 / 80 / 8,
+0 failed, exit 0 each.

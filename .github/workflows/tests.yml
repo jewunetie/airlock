@@ -42,13 +42,17 @@ jobs:
       # either a real failure or an implausibly small collected count, so
       # a green step here really does mean both.
       #
-      # None of the four below need Ollama to pass: every Ollama-dependent
-      # check in them is written to report itself INCONCLUSIVE/skip rather
-      # than fail when Ollama is unreachable, which a hosted runner always
-      # is (no Ollama here on purpose). That is the mechanism that makes
-      # this workflow meaningful rather than vacuous; do not add Ollama
-      # just to turn those skips into passes, and do not paper over a
-      # suite that stops reporting them as skips.
+      # None of the five need Ollama to pass: every Ollama-dependent check
+      # in all of them is written to report itself as an INCONCLUSIVE skip
+      # rather than a failure when Ollama is unreachable, which a hosted
+      # runner always is (no Ollama here on purpose). test_tax_e2e.py got
+      # this same treatment as an item-4 fix (it originally had none, and
+      # ran under continue-on-error here as a stopgap; that hid a real
+      # extraction regression exactly as easily as it hid "no worker", so
+      # it is gone). That skip mechanism is what makes this workflow
+      # meaningful rather than vacuous; do not add Ollama just to turn
+      # those skips into passes, and do not paper over a suite that stops
+      # reporting them as skips or reintroduce continue-on-error instead.
       - name: test_liquid_guard.py
         run: uv run --script tests/test_liquid_guard.py
 
@@ -61,17 +65,5 @@ jobs:
       - name: test_server.py
         run: uv run --script tests/test_server.py
 
-      # test_tax_e2e.py is different from the four above: it is a straight
-      # end-to-end demonstration with no INCONCLUSIVE fallback of its own,
-      # so without a reachable Ollama it fails for real (verified locally
-      # by pointing OLLAMA_HOST at a closed port: 6 of 8 checks fail
-      # cleanly, fail-closed, no crash, just a suite that cannot pass
-      # without a live worker model). continue-on-error is deliberate, not
-      # a way to hide a real regression: this step's failure on this
-      # workflow is expected on every run until a self-hosted runner with
-      # Ollama is wired up, and gating the job on it would make this
-      # workflow permanently red for a reason that has nothing to do with
-      # the code under test.
-      - name: test_tax_e2e.py (needs a live Ollama; expected to fail here)
-        continue-on-error: true
+      - name: test_tax_e2e.py
         run: uv run --script tests/test_tax_e2e.py

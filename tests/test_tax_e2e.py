@@ -65,12 +65,82 @@ INTEREST = 317.42
 TOTAL_INCOME = WAGES + INTEREST
 WITHHELD = 11_910.00 + 612.00
 
-PASS, FAIL, DIAG = [], [], []
+PASS, FAIL, SKIP, DIAG = [], [], [], []
 
 
 def check(name: str, ok: bool, detail: str = "") -> None:
     (PASS if ok else FAIL).append(name)
     print(f"  {'pass' if ok else 'FAIL'}  {name}" + (f"  [{detail}]" if detail else ""))
+
+
+def skip(name: str, why: str) -> None:
+    SKIP.append(name)
+    print(f"  skip  {name}  [{why}]")
+
+
+# Every check run() performs on a run that completes, in order. Mirrors
+# tests/test_server.py's GROUP_C_CHECKS: the item-4 fix for this file. This
+# suite has no INCONCLUSIVE fallback of its own otherwise, so without one an
+# unreachable worker does not skip, it fails for real on assertions about
+# on-disk form content the worker never had a chance to produce, which is
+# indistinguishable in CI from an actual extraction regression. The line
+# labels are f-strings over WAGES/INTEREST/TOTAL_INCOME/WITHHELD, which are
+# fixed module-level constants, so they are deterministic here too.
+TAX_E2E_CHECKS = [
+    "airlock_open discloses no filename",
+    f"line 1a = {WAGES:,.2f}",
+    f"line 2b = {INTEREST:,.2f}",
+    f"line 9 = {TOTAL_INCOME:,.2f}",
+    f"line 25a = {WITHHELD:,.2f}",
+    "the form carries the taxpayer SSN",
+    "the form carries the taxpayer name",
+    "no identifier reached the caller",
+]
+
+
+def skip_remaining(done: int, reason: str) -> None:
+    """skip() every TAX_E2E_CHECKS entry from index `done` onward."""
+    for name in TAX_E2E_CHECKS[done:]:
+        skip(name, reason)
+
+
+def has_model(installed: list[str], tag: str) -> bool:
+    """Same case/':latest'-insensitive match as cmd_doctor's own has()
+    (airlock.py), reimplemented rather than imported: that one prints
+    through Rich's console, this needs a plain bool.
+    """
+    names = {m.lower() for m in installed}
+    want = tag.lower()
+    return want in names or f"{want}:latest" in names or want.removesuffix(":latest") in names
+
+
+def worker_unavailable_reason(model: str) -> str:
+    """Empty string if Ollama is reachable, `model` is installed, and it
+    honours the JSON schema run_jobs depends on; otherwise why not.
+
+    "The worker is not available here" must skip; "the worker is available
+    and the extraction is wrong" must fail. This is the line between them,
+    checked once up front rather than left for run()'s own assertions to
+    discover the hard way. Mirrors cmd_doctor's worker checks in airlock.py
+    (installed vs. usable are different properties there too: qwen3.5:0.8b-mlx
+    is installed but ignores the schema, per CLAUDE.md).
+    """
+    try:
+        installed = airlock.ollama_models()
+    except RuntimeError as exc:
+        return str(exc)
+    if not has_model(installed, model):
+        return f"{model} not installed"
+    try:
+        probe = airlock.ollama_chat(
+            model, "Reply with the action 'answer' and a one word answer.",
+            airlock.WORKER_SCHEMA,
+        )
+    except RuntimeError as exc:
+        return f"worker probe failed: {exc}"
+    if not (isinstance(probe, dict) and "action" in probe):
+        return f"{model} does not honour the JSON schema"
+    return ""
 
 
 def build_docs(root: Path) -> None:
@@ -249,7 +319,14 @@ async def run(root: Path) -> None:
     leaked = [k for k, v in IDENTIFIERS.items() if v in blob]
     filled_any = SSN in filled
     if not filled_any:
-        print("  INCONCLUSIVE  the form was never filled, so this proves nothing")
+        # A containment assertion is vacuous when there was nothing to
+        # contain (CLAUDE.md: distinguish "withheld" from "never ran").
+        # worker_unavailable_reason already gated main() on a reachable,
+        # schema-honouring worker, so reaching this with an unfilled form is
+        # unexpected (a transient failure, not "no worker"); skip() still
+        # keeps the collected count honest either way, and DIAG carries the
+        # detail into the summary.
+        skip("no identifier reached the caller", "the form was never filled, so this proves nothing")
         DIAG.append("the worker never filled the form; containment is unproven")
     else:
         check("no identifier reached the caller", not leaked,
@@ -260,24 +337,42 @@ async def run(root: Path) -> None:
 def main() -> int:
     tmp = Path(tempfile.mkdtemp(prefix="airlock-1040-"))
     root = tmp / "tax"
+    model = airlock.CLI_DEFAULTS["model"]
     try:
         build_docs(root)
         print(f"workspace: {root}")
-        try:
-            asyncio.run(run(root))
-        except BaseException as exc:  # noqa: BLE001
-            FAIL.append("run crashed")
-            print(f"  FAIL  run crashed [{type(exc).__name__}: {str(exc)[:120]}]")
+
+        # Gate on a reachable, schema-honouring worker before doing any real
+        # work, same shape as tests/test_server.py's group_c: "no worker
+        # here" skips every check that needs one; a worker that IS available
+        # but gets the extraction wrong still fails for real below.
+        reason = worker_unavailable_reason(model)
+        if reason:
+            print(f"\n  worker unavailable: {reason}")
+            skip_remaining(0, reason)
         else:
-            print(f"\n  1040 left at: {root / '0_1040.md'}")
+            try:
+                asyncio.run(run(root))
+            except BaseException as exc:  # noqa: BLE001
+                FAIL.append("run crashed")
+                print(f"  FAIL  run crashed [{type(exc).__name__}: {str(exc)[:120]}]")
+            else:
+                print(f"\n  1040 left at: {root / '0_1040.md'}")
     finally:
-        print(f"\n{len(PASS)} passed, {len(FAIL)} failed")
+        total = len(PASS) + len(FAIL) + len(SKIP)
+        print(f"\n{len(PASS)} passed, {len(FAIL)} failed, {len(SKIP)} skipped ({total} checks)")
         for n in FAIL:
             print(f"  - {n}")
         for line in DIAG:
             print(f"  {line}")
         if "--keep" not in sys.argv:
             shutil.rmtree(tmp, ignore_errors=True)
+
+    total = len(PASS) + len(FAIL) + len(SKIP)
+    if total < len(TAX_E2E_CHECKS):
+        print(f"\nWARNING: only {total} checks ran. Expected {len(TAX_E2E_CHECKS)}.")
+        print("Something did not collect. Treat this as a failure, not a pass.")
+        return 1
     return 1 if FAIL else 0
 
 

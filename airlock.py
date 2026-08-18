@@ -1463,6 +1463,45 @@ def _subset_contains(values: list[str], sources: set[str]) -> bool:
     return any(source in c for source in sources for c in concatenations)
 
 
+def _order_free_reassembles(values: list[str], sources: set[str]) -> bool:
+    """advance_reassembly_state on a throwaway, round-scoped state.
+
+    Shared by reassembles_identifier's two order-free passes (raw values and
+    alnum runs), so the round-scoped state and the fail-closed wrapper exist
+    once. The state dict is discarded when this returns: nothing here
+    persists across calls, unlike run_jobs' own use of the same function
+    against session.reassembly_state.
+
+    Fails closed on any error, per CLAUDE.md's guard invariant and matching
+    run_jobs' own handling of the persistent cross-round call: a check that
+    cannot run must never stand in for a check that ran and passed.
+    """
+    try:
+        return advance_reassembly_state({}, values, sources)
+    except Exception:  # noqa: BLE001 - a tracking failure must not approve
+        return True
+
+
+_ALNUM_RUN = re.compile(r"[0-9A-Za-z]+")
+
+
+def _alnum_runs(value: str) -> list[str]:
+    """Maximal alphanumeric runs in one raw value, each normalised.
+
+    PLAN-cross-round.md Task 3's analogue of the digits-only projection: an
+    identifier whose letters carry meaning cannot be reduced to digits, so
+    padding cannot be stripped character-by-character the way it is for a
+    numeric source. What survives instead is the run boundary: padding that
+    sits next to a fragment rather than inside it (a space, a hyphen, a
+    sentence) still separates the fragment into its own contiguous run,
+    exactly the way non-digit padding already falls out of the digits
+    projection. A run glued directly onto padding with no separator at all
+    is not recoverable by this or any projection here; see
+    reassembles_identifier's docstring.
+    """
+    return [normalise_identifier(run) for run in _ALNUM_RUN.findall(value)]
+
+
 def reassembles_identifier(values: list[str], sources: set[str]) -> bool:
     """True if the values together reconstruct a source identifier that none
     of them contains on its own.
@@ -1483,19 +1522,38 @@ def reassembles_identifier(values: list[str], sources: set[str]) -> bool:
     real fragments rather than a coincidence of stray digits, and it measured
     zero false blocks on the same rounds.
 
-    Residual, stated rather than implied: this preserves job order and does
-    not permute, so a caller that issues its jobs out of order defeats it.
-    Closing that costs 12! arrangements for a full round and was judged not
-    worth it. Reassembly across separate rounds was also out of scope here;
-    that gap is now CLOSED by advance_reassembly_state below, which run_jobs
-    calls after this function on every round, so a caller spreading one
-    fragment per round no longer escapes either check. Both this function
-    and advance_reassembly_state model the same attacker: one who
-    concatenates whole released values in some order. Overlap-based
-    reassembly, where a caller merges "91284" and "847731" into a source by
-    recognising the shared "84" rather than concatenating whole values, is
-    NOT covered by either check (fix round 2, advance_reassembly_state's own
-    docstring has the measurement showing this cost little in practice).
+    Residual, now PARTLY CLOSED: the raw pass above still preserves job
+    order and does not permute, so a caller issuing fragments out of order
+    defeats it on its own. What closes the gap is the order-free pass
+    further down this function (PLAN-cross-round.md Task 2), which reuses
+    advance_reassembly_state's reachability primitive on a throwaway,
+    round-scoped state so it never touches session state or persists
+    anything. That primitive is order-independent by construction (see its
+    own docstring) and piece-bounded at REASSEMBLY_PIECE_BOUND, so both
+    passes are kept rather than one replacing the other: the raw pass
+    catches an order-preserving split of any size up to MAX_JOBS_PER_ROUND,
+    the order-free pass catches any order but only up to
+    REASSEMBLY_PIECE_BOUND pieces. Measured (in order / reversed / shuffled /
+    scattered in order / scattered reversed, 400 legitimate rounds per
+    numeric shape as a false-blocking control): the order-free pass detects
+    all five arrangements while the raw pass alone only catches the two that
+    keep job order, and false blocking on the legitimate rounds stayed
+    0.000 across every shape tested (numeric, small, year, amount, 16-digit,
+    ids, longnum). The residual that remains: a caller that splits into MORE
+    than REASSEMBLY_PIECE_BOUND pieces AND issues them out of order evades
+    both passes, at the cost of one job per extra piece.
+
+    Reassembly across separate rounds was also out of scope here; that gap
+    is now CLOSED by advance_reassembly_state below, which run_jobs calls
+    after this function on every round using the session's own persistent
+    state, so a caller spreading one fragment per round no longer escapes
+    either check. This function and advance_reassembly_state model the same
+    attacker: one who concatenates whole released values, in some order.
+    Overlap-based reassembly, where a caller merges "91284" and "847731"
+    into a source by recognising the shared "84" rather than concatenating
+    whole values, is NOT covered by either check (fix round 2,
+    advance_reassembly_state's own docstring has the measurement showing
+    this cost little in practice).
 
     A second gap, now CLOSED for numeric identifiers: this tests substring
     containment, so a fragment padded with extra characters can defeat it,
@@ -1514,11 +1572,29 @@ def reassembles_identifier(values: list[str], sources: set[str]) -> bool:
     alternative (letting each value contribute any contiguous substring
     instead of only whole values) to 100% false blocking.
 
-    The gap remains OPEN for alphanumeric identifiers such as API keys,
-    padded on every fragment: an identifier with a letter in it is excluded
-    from the projection by construction, since the projection would discard
-    the letters that make the match meaningful, so those still rely on the
-    raw pass above.
+    A third gap, now CLOSED for alphanumeric identifiers such as API keys,
+    padded on every fragment (PLAN-cross-round.md Task 3): an identifier
+    with a letter in it is excluded from the digits projection by
+    construction, since projecting away the letters would discard the part
+    of the match that makes it meaningful. Closed instead by extracting
+    every maximal alphanumeric run from each raw value (_alnum_runs, the
+    direct analogue of the digits projection) and running the same
+    order-free pass over the expanded run list, restricted to sources that
+    are NOT all-digit (those already have the digits projection). A run
+    bounded by whitespace or punctuation isolates a padded fragment from
+    padding beside it, the same way non-digit characters fall out of the
+    digits projection. Measured on a generated API key split three ways:
+    bare (already caught by the raw pass), suffix-padded on every fragment,
+    and prose-wrapped, all detected after this change; false blocking on
+    the 160 approve-labelled records in eval/dataset.jsonl (a wider corpus
+    than the twelve hand-written phrases the candidate design was first
+    measured against) is recorded in task-2-3-report.md rather than
+    restated here, since the number belongs with the run that produced it.
+    The residual this does NOT close: a run
+    glued directly onto its padding with no separator at all (no space, no
+    punctuation) is not isolable by any run-boundary projection, and stays
+    open the way the equivalent digit-adjacent-to-digit case already was
+    for the numeric projection.
 
     A residual the padding measurement did not probe, since it varied round
     shape but not source length or source count: false blocking at the
@@ -1566,7 +1642,18 @@ def reassembles_identifier(values: list[str], sources: set[str]) -> bool:
     if _subset_contains(normalised, candidates):
         return True
 
-    # Digits-only projection. Only reached when the raw pass above misses,
+    # Order-free pass (PLAN-cross-round.md Task 2). Only reached when the
+    # order-preserving raw pass above misses. Reuses advance_reassembly_state
+    # rather than adding permutation logic: it is already order-independent
+    # and piece-bounded (see its own docstring), and a throwaway state dict
+    # here scopes it to this round alone, never touching session state.
+    # advance_reassembly_state also runs its own digits-only pass internally
+    # for all-digit sources, so this single call covers an out-of-order
+    # numeric split too, not only an out-of-order raw one.
+    if _order_free_reassembles(values, candidates):
+        return True
+
+    # Digits-only projection. Only reached when both passes above miss,
     # which costs a second full subset enumeration; what keeps the common
     # case cheap is `not candidates` above and `not numeric` below, since a
     # round with no matching source at all, or with only alphanumeric
@@ -1575,12 +1662,28 @@ def reassembles_identifier(values: list[str], sources: set[str]) -> bool:
     # identifier would discard the letters that make the match meaningful,
     # so those keep relying on the raw pass.
     numeric = {source for source in candidates if source.isdigit()}
-    if not numeric:
-        return False
-    projected = ["".join(c for c in v if c.isdigit()) for v in normalised]
-    if not any(projected):
-        return False
-    return _subset_contains(projected, numeric)
+    if numeric:
+        projected = ["".join(c for c in v if c.isdigit()) for v in normalised]
+        if any(projected) and _subset_contains(projected, numeric):
+            return True
+
+    # Alphanumeric-run projection (PLAN-cross-round.md Task 3), the direct
+    # analogue of the digits projection for a source that has a letter in
+    # it. Restricted to non-numeric candidates: an all-digit source already
+    # gets both the raw and digits-projected order-free passes above via
+    # advance_reassembly_state, and extracting alnum runs from it would only
+    # rediscover the same digit runs at extra cost. Order-free from the
+    # start (unlike the raw and digits passes, which try order-preserving
+    # first): a run-projected round has no natural "job order" of its own
+    # once a single value can contribute several runs, so there is no cheap
+    # order-preserving check to try first here.
+    alnum_candidates = {source for source in candidates if not source.isdigit()}
+    if alnum_candidates:
+        runs = [run for v in values for run in _alnum_runs(v)]
+        if runs and _order_free_reassembles(runs, alnum_candidates):
+            return True
+
+    return False
 
 
 # Fix round 1 (coordinator review): plain coverage is not enough. State

@@ -66,6 +66,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import random
 import secrets
 import string
 import sys
@@ -707,6 +708,156 @@ def task4_digit_projection() -> None:
     )
 
 
+def task5_order_independence() -> None:
+    """PLAN-cross-round.md Task 2: out-of-order jobs within a single round.
+
+    reassembles_identifier's subset-concatenation pass preserves job order,
+    so a caller that issues its fragments out of order defeats it entirely.
+    Task 1 (advance_reassembly_state) already built an order-independent,
+    piece-bounded reachability check for cross-round accumulation; this
+    reuses that same primitive on one round's values via a throwaway state
+    dict, rather than adding permutation logic, per the coordinator's own
+    measurement (reversed/shuffled/scattered-reversed all order-free=True).
+    """
+    print("\nTask 5: order-independent reassembly within one round")
+
+    ssn_sources = {airlock.normalise_identifier("912-84-7731")}
+
+    check(
+        "in order: blocked (unchanged)",
+        airlock.reassembles_identifier(["912", "84", "7731"], ssn_sources),
+    )
+    check(
+        "reversed: blocked",
+        airlock.reassembles_identifier(["7731", "84", "912"], ssn_sources),
+    )
+    check(
+        "shuffled: blocked",
+        airlock.reassembles_identifier(["84", "7731", "912"], ssn_sources),
+    )
+    check(
+        "scattered, in order: blocked",
+        airlock.reassembles_identifier(
+            ["912", "notes", "84", "more", "7731"], ssn_sources
+        ),
+    )
+    check(
+        "scattered, reversed: blocked",
+        airlock.reassembles_identifier(
+            ["7731", "notes", "84", "more", "912"], ssn_sources
+        ),
+    )
+
+    # Positive control (CLAUDE.md: assertions about absence need one). Same
+    # sandwich construction as task2/task4's legitimate-round controls, this
+    # time order-shuffled too, so the new order-free pass is exercised on a
+    # round it must not block, not only on ones it must.
+    legitimate_round = [f"5{d}5" for d in sorted(ssn_sources)[0]] + ["203", "410", "999"]
+    random.Random(0).shuffle(legitimate_round)
+    check(
+        "legitimate shuffled numeric round is not blocked",
+        not airlock.reassembles_identifier(legitimate_round, ssn_sources),
+    )
+
+    # Documented residual: order-free reuses advance_reassembly_state, which
+    # is bounded to REASSEMBLY_PIECE_BOUND pieces. A caller that splits into
+    # more pieces than the bound, and issues them out of order, still evades
+    # this pass, the same residual advance_reassembly_state already accepts
+    # for cross-round accumulation (see its own docstring).
+    ssn = sorted(ssn_sources)[0]
+    over_bound_pieces = list(reversed([ssn[i] for i in range(len(ssn))]))  # 9 single digits, reversed
+    check(
+        "reversed split into more pieces than the bound: not caught by this pass",
+        not airlock.reassembles_identifier(over_bound_pieces, ssn_sources),
+        f"{len(over_bound_pieces)} pieces > REASSEMBLY_PIECE_BOUND={airlock.REASSEMBLY_PIECE_BOUND}",
+    )
+
+
+def task6_alnum_run_projection() -> None:
+    """PLAN-cross-round.md Task 3: alphanumeric padding.
+
+    The digits-only projection (Task 4 above) cannot help an identifier
+    whose letters carry meaning, such as an API key: discarding the letters
+    would discard the part of the match that makes it meaningful. This
+    extracts maximal alphanumeric runs from each raw value instead (the
+    direct analogue of the digits projection) and feeds those runs through
+    the same order-free tiling primitive Task 5 adopted, restricted to
+    sources that are NOT all-digit (those already have the digits
+    projection). A run bounded by non-alnum separators (space, punctuation)
+    isolates a padded fragment from padding sitting next to it, the same way
+    stripping non-digit characters isolates a padded numeric fragment.
+    """
+    print("\nTask 6: alphanumeric-run projection closes letter-carrying padding")
+
+    # Generated, never a literal (CLAUDE.md / fake_secret_value above).
+    api_key = "k" + fake_secret_value(19)
+    key_source = {airlock.normalise_identifier(api_key)}
+    third = len(api_key) // 3
+    p1, p2, p3 = api_key[:third], api_key[third:2 * third], api_key[2 * third:]
+
+    check(
+        "bare split, three ways: blocked (already true via the raw pass)",
+        airlock.reassembles_identifier([p1, p2, p3], key_source),
+    )
+    check(
+        "suffix padded on every fragment: blocked",
+        airlock.reassembles_identifier(
+            [f"{p1} zzqx", f"{p2} wwrt", f"{p3} vvbn"], key_source
+        ),
+    )
+    check(
+        "prose wrapped, every fragment: blocked",
+        airlock.reassembles_identifier(
+            [
+                f"The first part of the code is {p1} today",
+                f"The next part of the code is {p2} today",
+                f"The final part of the code is {p3} today",
+            ],
+            key_source,
+        ),
+    )
+    check(
+        "prefix and suffix padded, scattered among filler: blocked",
+        airlock.reassembles_identifier(
+            [f"pre {p1} post", "weather report filler",
+             f"pre {p2} post", "another filler note",
+             f"pre {p3} post"],
+            key_source,
+        ),
+    )
+
+    # Positive control (CLAUDE.md: assertions about absence need one).
+    # Ordinary business prose, verified clean against the full guard stack
+    # elsewhere in this file (task3_wiring's twelve-word fixture); here it is
+    # tested directly against reassembles_identifier's alnum-run pass, over
+    # an unrelated key it never touches.
+    prose_round = [
+        "forecast quarterly template summary agenda payroll",
+        "contract vendor documentation kitchen invoice headcount",
+    ]
+    check(
+        "legitimate prose round is not blocked",
+        not airlock.reassembles_identifier(prose_round, key_source),
+    )
+
+    # Regression guard, matching task4's own: an all-digit source must still
+    # rely on the digits projection, not the alnum-run pass, so a digit
+    # source padded with LETTERS (which the digits projection strips, but
+    # which would also survive as its own alnum run if the run pass wrongly
+    # ran against digit sources too) is not a case this test can distinguish
+    # on its own; the direct guard is structural (alnum_candidates excludes
+    # numeric sources in the implementation) and exercised for behaviour by
+    # task4's existing "round with only alphanumeric sources" case, which
+    # confirms the reverse: an all-digit round does not enter the alnum pass.
+    all_digit_source = {"482910337"}
+    check(
+        "all-digit source: letter-padded fragments still caught via digits projection",
+        airlock.reassembles_identifier(
+            ["k482 filler", "unrelated filler note", "910337 more"], all_digit_source
+        ),
+    )
+
+
 def main() -> int:
     print(f"airlock: {AIRLOCK}")
 
@@ -725,6 +876,8 @@ def main() -> int:
     run("important3_length_bound", important3_length_bound)
     run("minor4_generic_secret_value_only", minor4_generic_secret_value_only)
     run("task4_digit_projection", task4_digit_projection)
+    run("task5_order_independence", task5_order_independence)
+    run("task6_alnum_run_projection", task6_alnum_run_projection)
 
     total = len(PASS) + len(FAIL) + len(SKIP)
     print(f"\n{len(PASS)} passed, {len(FAIL)} failed, {len(SKIP)} skipped ({total} checks)")
@@ -732,8 +885,8 @@ def main() -> int:
         print("failed:")
         for name in FAIL:
             print(f"  - {name}")
-    if total < 45:
-        print(f"\nWARNING: only {total} checks ran. Expected at least 45.")
+    if total < 58:
+        print(f"\nWARNING: only {total} checks ran. Expected at least 58.")
         print("Something did not collect. Treat this as a failure, not a pass.")
         return 1
     return 1 if FAIL else 0

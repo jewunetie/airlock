@@ -160,6 +160,34 @@ round per extra piece, and is still guarded round by round on the way out
 regardless. See `REASSEMBLY_PIECE_BOUND`'s comment in `airlock.py` and
 `task-1-report.md` fix rounds 1-2 for the full measurements.
 
+**Two more round-guard holes are closed; two remain, on purpose.**
+`reassembles_identifier`'s subset-concatenation pass preserved job order,
+so a caller issuing fragments out of order defeated it, and its digits-only
+projection could not help an alphanumeric identifier such as an API key,
+since discarding the letters would discard what makes the match meaningful.
+Both are closed in `PLAN-cross-round.md` Tasks 2 and 3: order independence
+reuses `advance_reassembly_state`'s reachability primitive on a
+round-scoped, throwaway state (no new algorithm, and it inherits that
+primitive's `REASSEMBLY_PIECE_BOUND` cap); alphanumeric padding is closed by
+`_alnum_runs`, extracting maximal alphanumeric runs from each raw value and
+running the same order-free pass over the expanded run list. Measured false
+blocking stayed at 0.000 in every check re-run for this change: the 160
+approve-labelled records in `eval/dataset.jsonl`, used as a wider prose
+corpus than the twelve hand-written phrases the run-projection design was
+first tried against (400 rounds, `task-2-3-report.md`); the existing
+six/eight/nine-digit residual sweep in `eval/reassembly_residuals.py`
+(unchanged from its prior figures); and `eval/public_corpora.py`'s 877-record
+stack measurement (unaffected in principle, since it calls `evaluate()`
+directly and never touches `reassembles_identifier`, but re-run anyway per
+`PLAN-cross-round.md`'s own instruction to treat that as the deciding
+check). What remains OPEN, stated plainly rather than implied by omission:
+overlap-based reassembly (merging `"91284"` and `"847731"` via the shared
+`"84"` rather than concatenating whole pieces) is still uncovered by any
+pass in this file, and a caller who splits into more pieces than
+`REASSEMBLY_PIECE_BOUND` and also issues them out of order still evades the
+order-free check, the same residual `advance_reassembly_state` already
+carries for cross-round accumulation.
+
 ## Things that look like bugs and are not
 
 `check()` renders through `Text.assemble`, which does not parse rich markup.

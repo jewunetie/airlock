@@ -1,5 +1,5 @@
 Status: done, all green.
-Commit: TBD (feat/cross-round-guard), not pushed.
+Commit: b46aa22998f0be3d8571aed255bf4e7f03af9b58 (feat/cross-round-guard), not pushed.
 
 Suite counts:
 - tests/test_cross_round.py: 49 passed, 0 failed, 0 skipped (49 checks;

@@ -1,5 +1,5 @@
 Status: done, all green.
-Commit: (see `git log -1` on feat/cross-round-guard after this report is committed), not pushed.
+Commit: 7d95074 (feat/cross-round-guard), not pushed.
 
 Suite counts:
 - tests/test_cross_round.py: 43 passed, 0 failed, 0 skipped (43)

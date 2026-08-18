@@ -120,22 +120,43 @@ is also fine; `console.print` is not.
 ## Known weaknesses
 
 **Policy linter rule 5 (confidential business) was reworded, not just
-rethresholded (item-3 fix).** It used to fire on ordinary business vocabulary
-alone (`shipment`, `inventory`, `ledger` each tripped it with no other
-context, 3/8 of a bare-word sample) and accounted for 52% of the bake-off's
-false positives. The wording is now "Flag disclosure of non-public company
-information that has not been announced, such as a pending acquisition, a
-major customer ending its contract, or an internal investigation." (see
-`CONTEXTUAL_RULES`'s comment in `airlock.py` for the full measurement and
-the two rejected rewordings). Re-measured against `eval/dataset.jsonl`:
-contextual recall held at 0.95 (unchanged), dataset-wide false-block dropped
-from 0.41 to 0.34, and the bare-word trip rate dropped from 3/8 to 0/8. The
-rule is not silent: it still accounts for a meaningful share of the linter's
-false positives, and this is a linter-wide precision problem (0.34
-false-block over the approve-class dataset), not something rule 5 alone
-still carries. Wording, not threshold, was still the right lever: raising
-the threshold enough to quiet a noisy rule costs the recall it exists for,
-which a wording fix does not have to trade away.
+rethresholded (item-3 fix).** The prior wording, "Flag confidential business
+information such as unannounced acquisitions or a customer leaving," fired
+on ordinary business vocabulary alone (`shipment`, `inventory`, `ledger`
+each tripped it with no other context, 3/8 of a bare-word sample) and
+accounted for 52% of the bake-off's false positives. The wording is now
+"Flag disclosure of non-public company information that has not been
+announced, such as a pending acquisition, a major customer ending its
+contract, or an internal investigation." Against `eval/dataset.jsonl`
+(contextual block-class as positives, every approve-class record as
+negatives): all 6 rules under the prior wording scored recall 0.9500,
+false-block 0.4062; removing rule 5 outright dropped to recall 0.8000,
+false-block 0.4000 (a 0.15 recall loss for almost nothing, so the wording
+was the defect, not the rule); the reworded rule held recall at 0.9500 and
+brought false-block down to 0.3438, with the bare-word trip rate dropping
+from 3/8 to 0/8. Two rewordings were tried and rejected before this one: an
+abstract harm/reputational-harm framing scored 0.00 recall on the
+contextual set, too vague for the model to match anything; an event-list
+framing (naming categories like acquisitions and customer churn without a
+non-public/unannounced qualifier) kept the false-block rate high, the same
+defect as the prior wording. The qualifier ("has not been announced") and
+concrete examples, not a bare noun list, is what separates announced
+business talk from an actual leak. The rule is not silent even reworded: it
+still accounts for a meaningful share of the linter's false positives, and
+this is a linter-wide precision problem (0.34 false-block over the
+approve-class dataset), not something rule 5 alone still carries. Wording,
+not threshold, was still the right lever: raising the threshold enough to
+quiet a noisy rule costs the recall it exists for, which a wording fix does
+not have to trade away.
+
+**`PII_DETECTOR_ENTITY_THRESHOLDS` is a per-entity override, not an
+exclusion list like Presidio's `BLOCKING_ENTITIES`.** Unfiltered,
+`scan_pii_model` blocked on any non-O label with no notion of confidence,
+and 2.7% of bare number-shaped job answers (8/300 sampled) false-flagged as
+`contact.postal_code`. No category here fires on ordinary text the way
+Presidio's `DATE_TIME`/`URL` did, so a threshold is the fix rather than an
+exclusion; if a category-level problem is measured later, exclude it
+outright instead of thresholding it to the point of never firing.
 
 **`contact.postal_code` no longer trusts the threshold alone (item-3
 fix).** The false-positive and true-positive score distributions provably
@@ -164,13 +185,76 @@ the way `contact.postal_code` did, but it is why
 `tests/test_round_guard.py`'s benign-round fixture uses business words
 rather than a fruit list.
 
+**`reassembles_identifier` matches whole released values, not individual
+characters.** A character-level subsequence test (ignoring which value each
+character came from) was tried first and rejected: on legitimate rounds of
+twelve numeric answers it false-blocked 38.0%, because a round normalises
+to roughly 60 characters and a coincidental in-order digit match is not
+rare at that length. Matching whole values instead keeps a false block a
+needed conjunction of real fragments, and measured zero false blocks on
+the same rounds.
+
+**Padding used to defeat `reassembles_identifier` entirely; numeric
+padding is now closed.** Substring containment lets a fragment padded with
+extra characters break the contiguous run a source needs: measured over
+200 trials per shape with benign jobs interleaved, suffix, prefix,
+both-sides and prose padding all drove detection to 0.00. Closed by
+re-running the same subset test on a digits-only projection of each value,
+restricted to all-digit sources, since non-digit padding vanishes from the
+projection while the identifier's own digits stay contiguous. Detection
+returned to 1.00 on all four shapes, with 0.000 false blocking on six
+legitimate round shapes including twelve 16-digit values -- the shape that
+drove a rejected alternative (letting each value contribute any contiguous
+substring, not just whole values) to 100% false blocking.
+
+**A residual six-digit floor remains, not closed.** Short (six-digit)
+all-digit sources against a digit-dense round of ordinary prose, amounts,
+dates, box and reference numbers can coincidentally reconstruct one of
+them even though nothing was split; six digits is reachable in practice
+because `labelled_account` accepts `[0-9][0-9-]{6,}`, so a hyphenated
+sort-code-shaped account number lands exactly at `MIN_REASSEMBLY_LENGTH`.
+Measured over 300 seeded trials (`eval/reassembly_residuals.py`), 20/40/60
+six-digit sources against such a round: 0.0000 to 0.0133 false blocking
+for the shipped function, 0.0000 to 0.0067 for the raw pass alone (so the
+digits projection adds to this floor rather than creating it); eight- and
+nine-digit sources measured 0.000 for both. Every figure stays well under
+the 12.8% that disqualified the rejected substring-contribution design
+above.
+
+**`advance_reassembly_state` tracks matches as edges, not a prefix walk,
+so fragment release order cannot be assumed.** A caller chooses what order
+to issue jobs in and can reassemble pieces in any order once they leave
+the sandbox, so the state must not assume the fragment that completes an
+identifier is the one released last. A pure prefix walk (extend forward
+only from position 0) lacks that property: a value released before the
+fragment that would make it reachable is tested against a reach set that
+does not know about that fragment yet, and is never retried once it
+arrives, so releasing pieces in reverse order would defeat it. Recording
+every match as a directed edge and re-running shortest-path avoids that,
+since an edge's position does not depend on when it arrived. This is also
+tiling, not overlap: an edge only ever chains from exactly where the
+previous one ended, matching `reassembles_identifier`'s own concatenation
+model, measured head to head against an explicit overlap-cover
+implementation on the same edge sets (200 sessions, 240 released values
+each) at 0 disagreements in minimum piece count -- see the piece-bound
+entry below for the one case (0.5 percentage points) where the model
+choice did cost something.
+
 **Cross-round reassembly's piece bound reduces false blocking but does not
 eliminate it, and the rate depends on the caller's own answer shape.**
 `advance_reassembly_state` blocks a source only when the cheapest way to
 concatenate released values into it uses `REASSEMBLY_PIECE_BOUND` (5) pieces
 or fewer, because unbounded coverage never forgets across a session and a
 long enough benign session eventually covers some workspace identifier by
-coincidence. Measured over 200 synthetic sessions per length, two different
+coincidence. Before this bound existed (uncapped piece count), 200
+synthetic benign sessions per length measured: 12 released values 0/200,
+30 values 1/200 (0.5%), 60 values 3/200 (1.5%), 240 values 23/200 (11.5%).
+The discriminator is how many distinct pieces the cheapest covering needs:
+a real attack (three fragments of one identifier) always needs exactly 3,
+while this measurement's false positives at 240 values needed at least 6
+pieces each, and nothing coincidentally covered at 30 values in 6 pieces
+or fewer -- `REASSEMBLY_PIECE_BOUND` sits inside that gap. Measured over
+200 synthetic sessions per length, two different
 benign-value generators (both committed as named functions in
 `tests/test_cross_round.py`, `benign_value_freeform` and
 `benign_value_shaped`), with the bound applied: 0.0% false-blocked at 12,
@@ -211,7 +295,13 @@ reachability primitive on a round-scoped, throwaway state (no new
 algorithm, and it inherits that primitive's `REASSEMBLY_PIECE_BOUND` cap);
 alphanumeric padding is closed by `_alnum_runs`, extracting maximal
 alphanumeric runs from each raw value and running the same order-free pass
-over the expanded run list. Measured false blocking stayed at 0.000 in
+over the expanded run list. Order independence was measured directly:
+across five arrangements (in order / reversed / shuffled / scattered in
+order / scattered reversed, 400 legitimate rounds per numeric shape), the
+order-free pass detects all five while the raw pass alone only catches the
+two that keep job order, with false blocking staying 0.000 across every
+shape tested (numeric, small, year, amount, 16-digit, ids, longnum).
+Measured false blocking also stayed at 0.000 in
 every check re-run for this change: the 160 approve-labelled records in
 `eval/dataset.jsonl`, used as a wider prose corpus than the twelve
 hand-written phrases the run-projection design was first tried against
@@ -262,6 +352,48 @@ after a block proceeds normally (see `tests/test_cross_round.py`'s
 `wiring_blocked_round_does_not_poison_state_case`, which is also the
 positive control that rounds 1 and 2's legitimately released fragments are
 still tracked correctly after the fix).
+
+**`SESSION_CAP` and `SESSION_IDLE_SECONDS` bound orphaned sessions, not an
+actively-used one's growth.** `airlock_close` pops one `SESSIONS` entry,
+but a caller that never closes (a crashed client, a disconnected
+transport) leaves its `Session` in memory; eviction bounds that specific
+cost. It does NOT bound how much one busy session accumulates:
+`touch_session` refreshes `last_active` on every call, so a session that
+keeps being called never idles out and never hits the TTL, no matter how
+many rounds or values it releases, and there is no separate per-session
+round or value cap. What actually keeps a single session's
+`reassembly_state` bounded is geometry, not eviction: `_fold_source_edges`'
+own comment shows the edge set for one source is capped by that source's
+length squared regardless of how many rounds fold into it, so
+`reassembly_state`'s size tracks the workspace's identifiers, not session
+length or round count. Size is bounded; the false-block *rate*
+`advance_reassembly_state` measures (up to 11.5% at 240 released values in
+one distribution) is not, since nothing caps released-value count for a
+session that keeps getting used. A cap AND a TTL are both needed, not just
+one: a cap alone still lets crashed/disconnected sessions pile up before
+the TTL retires them; a TTL alone still lets concurrent-session count grow
+if sessions open faster than idle ones retire. `SESSION_CAP = 200` and
+`SESSION_IDLE_SECONDS = 3600` are reasoned about, not measured against an
+`eval/` figure: both are generous for a single local process serving one
+cloud assistant.
+
+**`MAX_REASSEMBLY_LENGTH`'s ceiling still costs seconds, not
+milliseconds, at its own worst case.** Before this bound existed, 12
+unshaped answers of `FILE_SLICE_CHARS` (4000 characters) each against 400
+workspace identifiers took 18.0s on the guard path itself, a denial of
+service on the path meant to prevent one; the length check now rejects
+that round in O(1) before subset enumeration runs. At the bound's own
+ceiling (12 values summing to 4000 characters) against 400 non-matching
+identifiers, `reassembles_identifier` still costs seconds:
+`eval/reassembly_residuals.py` measured a mean of 4.452s (median 4.416s, 5
+reps). A round of shaped jobs cannot approach that: twelve
+"line"-shaped answers (`JOB_SHAPES` `maxLength` 80) sum to at most 960
+characters, and identifier count decides the rest -- the same script
+measured 10ms at one identifier, 153ms at fifty, 1230ms at four hundred,
+and a three-document workspace yields five identifiers, so 17ms is
+realistic; the four-hundred-identifier figures above are pathological, not
+representative. `FILE_SLICE_CHARS` is a generous ceiling that leaves
+realistic traffic untouched while bounding unshaped free-text answers.
 
 ## Things that look like bugs and are not
 

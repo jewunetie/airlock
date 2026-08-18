@@ -406,25 +406,13 @@ PII_DETECTOR_MODEL = "LiquidAI/LFM2.5-Encoder-350M-PII-Detector"
 PII_DETECTOR_REVISION = "b8c9cf3d2d6ae52501b35a27ba46f271449c9ce2"
 PII_DETECTOR_THRESHOLD = 0.5
 
-# Blocking policy for the detector's 40-type taxonomy. Presidio's replaced
-# BLOCKING_ENTITIES curated an exclusion list; this taxonomy needs no
-# category excluded outright (no DATE_TIME/URL-equivalent false-fires
-# measured), so the fix here is a per-entity threshold instead: unfiltered,
+# A per-entity threshold, not Presidio's exclusion list: unfiltered,
 # scan_pii_model blocked on ANY non-O label, and 2.7% of bare number-shaped
-# job answers (8/300 sampled) false-flagged as contact.postal_code, landing
-# on the tax-extraction workflow this tool exists for. If a category-level
-# problem is measured later, exclude it outright rather than threshold it
-# to the point of never firing.
-#
-# Also measured, and left unfixed as too narrow to justify an override:
-# identity.person_name fires on bare single common nouns that double as
-# given names ("cherry" 0.90, "kiwi" 0.96, "lemon" 0.64, "olive" 0.98),
-# while business vocabulary and short prose measured clean (0/27 sampled).
-# See CLAUDE.md's "Known weaknesses" for why tests/test_round_guard.py's
-# benign-round fixture avoids fruit words as a result.
-#
-# Mirrors POLICY_LINTER_RULE_THRESHOLDS's shape: a sparse override dict,
-# PII_DETECTOR_THRESHOLD as the default for every entity not listed.
+# job answers (8/300 sampled) false-flagged as contact.postal_code. Mirrors
+# POLICY_LINTER_RULE_THRESHOLDS's shape: a sparse override dict,
+# PII_DETECTOR_THRESHOLD as the default for every entity not listed. See
+# CLAUDE.md's "Known weaknesses" for the design argument and the
+# identity.person_name false-positive case left unfixed.
 PII_DETECTOR_ENTITY_THRESHOLDS: dict[str, float] = {
     # 0.70 separates the false-positive cluster (0.524-0.565, bare numbers)
     # from true positives (0.845-0.998 in address context, with one real
@@ -623,26 +611,9 @@ POLICY_LINTER_RULE_THRESHOLDS: dict[int, float] = {1: 0.98, 4: 0.98}
 # Identifier rules are deliberately absent: the linter measures poorly on
 # exact identifiers, that coverage belongs to scan_pii_model.
 #
-# Rule 5 (confidential business) was reworded after measurement showed the
-# prior wording ("Flag confidential business information such as unannounced
-# acquisitions or a customer leaving") fired on ordinary business vocabulary
-# alone (3/8 of a bare-word sample: "shipment", "inventory", "ledger") and
-# caused 52% of the bake-off's false positives (CLAUDE.md, "Known
-# weaknesses"). Against eval/dataset.jsonl (contextual block-class as
-# positives, every approve-class record as negatives):
-#
-#     all 6 rules (prior wording)   recall 0.9500  false-block 0.4062
-#     rule 5 removed                recall 0.8000  false-block 0.4000
-#     rule 5 reworded (below)       recall 0.9500  false-block 0.3438
-#     bare-word trip rate:          prior 3/8, reworded 0/8
-#
-# Removing the rule costs 0.15 recall for nothing, so the wording was the
-# defect, not the rule. Two rejected rewordings: an abstract harm framing
-# scored 0.00 recall (too vague to match anything); an event-list framing
-# without a non-public/unannounced qualifier kept the false-block rate high,
-# the same defect as the original. The qualifier ("has not been announced")
-# plus concrete examples is what separates announced business talk from an
-# actual leak.
+# Rule 5's wording below was chosen by measurement, not first draft: see
+# CLAUDE.md's "Known weaknesses" for the prior wording it replaced, the two
+# rejected rewordings, and the recall/false-block numbers behind each.
 CONTEXTUAL_RULES: list[str] = [
     "Flag disclosure of a medical condition, diagnosis, treatment, or mental health.",
     "Flag disclosure of financial hardship, debt, bankruptcy, or inability to pay.",
@@ -1315,27 +1286,12 @@ class Session:
 SESSIONS: dict[str, Session] = {}
 StepCallback = Callable[[str, str], None]
 
-# SESSIONS is a process-global dict; airlock_close pops one entry, but a
-# caller that never closes (a crashed client, a disconnected transport)
-# leaves its Session in memory. Eviction bounds that: SESSION_IDLE_SECONDS
-# retires an idle session, SESSION_CAP bounds how many can exist at once.
-#
-# Eviction does not bound an actively-used session's growth: touch_session
-# refreshes last_active on every call, so a busy session never idles out
-# and accumulates rounds and reassembly_state without a per-session cap.
-# What keeps reassembly_state bounded instead is geometry, not eviction:
-# _fold_source_edges' own comment shows one source's edge set is capped by
-# that source's length squared, so reassembly_state tracks the workspace's
-# identifiers, not session length. Size is bounded; the false-block RATE
-# advance_reassembly_state measures (up to 11.5% at 240 released values) is
-# not, since nothing here caps how many values a busy session can release.
-#
-# Cap AND TTL, not just one: a cap alone still lets crashed/disconnected
-# sessions pile up before the TTL retires them; a TTL alone still lets
-# concurrent-session count grow if sessions open faster than idle ones
-# retire. Both numbers are reasoned about, not measured against an eval/
-# figure: 200 concurrent sessions and one hour idle are both generous for
-# a single local process serving one cloud assistant.
+# SESSIONS is a process-global dict; eviction bounds an orphaned Session
+# (a crashed or disconnected caller that never closes) but NOT an
+# actively-used one's growth -- touch_session keeps a busy session from
+# ever going idle. reassembly_state stays bounded regardless, by geometry
+# rather than eviction; see CLAUDE.md's "Known weaknesses" for why, and for
+# where the 200/one-hour numbers below come from.
 SESSION_CAP = 200
 SESSION_IDLE_SECONDS = 3600
 
@@ -1413,24 +1369,13 @@ def evaluate_session(session: Session, text: str) -> GuardVerdict:
 MIN_REASSEMBLY_LENGTH = 6
 
 # Bounds the total normalised length of one round's values, not just their
-# count: _subset_concatenations costs 2**len(values) (already capped by
-# MAX_JOBS_PER_ROUND) times the length copied into each subset, and
-# _subset_contains tests every source against every subset, so cost also
-# scales with workspace identifier count. Exists because of a pre-bound
-# measurement: 12 unshaped answers of FILE_SLICE_CHARS (4000) each against
-# 400 workspace identifiers took 18.0s on the guard path itself, a denial
-# of service on the path meant to prevent one. The length check below now
-# rejects that round in O(1) before subset enumeration runs. At the bound's
-# own ceiling (12 values summing to 4000 chars) against 400 non-matching
-# identifiers the function still costs seconds: eval/reassembly_residuals.py
-# measured a mean of 4.452s (median 4.416s, 5 reps). A round of shaped jobs
-# cannot approach that: twelve "line"-shaped answers (JOB_SHAPES maxLength
-# 80) sum to at most 960 characters, and identifier count decides the rest
-# -- the same script measured 10ms at one identifier, 153ms at fifty, 1230ms
-# at four hundred, and a three-document workspace yields five identifiers,
-# so 17ms is realistic; the four-hundred figures are pathological, not
-# representative. FILE_SLICE_CHARS is a generous ceiling that leaves
-# realistic traffic untouched while bounding unshaped free-text answers.
+# count, since cost scales with both value length and workspace identifier
+# count (see _subset_concatenations/_subset_contains). Exists because 12
+# unshaped answers of FILE_SLICE_CHARS (4000) each against 400 workspace
+# identifiers took 18.0s on the guard path itself before this bound
+# existed -- a denial of service on the path meant to prevent one. See
+# CLAUDE.md's "Known weaknesses" for realistic-vs-pathological cost figures
+# at this bound.
 MAX_REASSEMBLY_LENGTH = FILE_SLICE_CHARS
 
 
@@ -1574,107 +1519,21 @@ def reassembles_identifier(values: list[str], sources: set[str]) -> bool:
     """True if the values together reconstruct a source identifier that none
     of them contains on its own.
 
-    Benign job results routinely sit between the fragments, since that costs
-    a caller nothing. So this does not require the fragments adjacent: a
-    source counts as reconstructed once it is a substring of the
-    concatenation of SOME subset of the round's normalised values, kept in
-    job order.
+    Matches whole values, not characters: a source counts as reconstructed
+    once it is a substring of the concatenation of some subset of the
+    round's normalised values, kept in job order. Handles three ways a
+    caller can dodge that: fragments issued out of order, numeric padding,
+    and alphanumeric padding (e.g. an API key) where digits can't be
+    projected out. Cross-round accumulation is out of scope here; that is
+    advance_reassembly_state's job, called separately by run_jobs.
 
-    A character-level subsequence test (ignoring which values the characters
-    came from) was tried first and rejected: on legitimate rounds of twelve
-    numeric answers it false-blocked 38.0%, because a round normalises to
-    roughly 60 characters and a coincidental in-order digit match is not
-    rare at that length. Matching whole values instead of loose characters
-    keeps a false block a needed conjunction of real fragments, and measured
-    zero false blocks on the same rounds.
+    Bounded at MAX_JOBS_PER_ROUND and MAX_REASSEMBLY_LENGTH rather than
+    trusting the caller (run_jobs enforcing those upstream is a
+    convention, not a guarantee). A round that exceeds either is treated
+    as a block, same as `evaluate` when a layer is unavailable: a guard
+    that cannot evaluate must never approve.
 
-    Three gaps, now closed:
-
-    Order independence. The raw pass above preserves job order, so an
-    out-of-order caller defeats it alone. Closed by an order-free pass
-    further down this function that reuses advance_reassembly_state's
-    reachability primitive on a throwaway, round-scoped state
-    (order-independent by construction, piece-bounded at
-    REASSEMBLY_PIECE_BOUND; see its own docstring). Both passes are kept,
-    not one replacing the other: the raw pass catches an order-preserving
-    split of any size up to MAX_JOBS_PER_ROUND, the order-free pass catches
-    any order but only up to REASSEMBLY_PIECE_BOUND pieces. Measured across
-    five arrangements (in order / reversed / shuffled / scattered in order /
-    scattered reversed, 400 legitimate rounds per numeric shape as a
-    false-blocking control): the order-free pass detects all five while the
-    raw pass alone only catches the two that keep job order, and false
-    blocking on legitimate rounds stayed 0.000 across every shape tested
-    (numeric, small, year, amount, 16-digit, ids, longnum). Residual: a
-    caller who splits into MORE than REASSEMBLY_PIECE_BOUND pieces AND
-    issues them out of order evades both passes, at the cost of one job per
-    extra piece.
-
-    Numeric padding. Substring containment lets a fragment padded with extra
-    characters defeat the check, since the padding breaks the contiguous
-    run the source needs. Measured over 200 trials per shape with benign
-    jobs interleaved: suffix, prefix, both-sides and prose padding all drove
-    detection to 0.00. Closed by re-running the same subset test on a
-    digits-only projection of each value, restricted to sources that are
-    themselves all-digit: non-digit padding vanishes from the projection
-    while the identifier's digits stay contiguous in job order. Detection
-    returned to 1.00 on all four shapes, with 0.000 false blocking on six
-    legitimate round shapes including twelve 16-digit values -- the shape
-    that took a rejected alternative (letting each value contribute any
-    contiguous substring) to 100% false blocking.
-
-    Alphanumeric padding, e.g. an API key. A source with a letter in it is
-    excluded from the digits projection by construction: projecting away
-    the letters would discard the part of the match that makes it
-    meaningful. Closed by extracting every maximal alphanumeric run from
-    each raw value (_alnum_runs) and running the same order-free pass over
-    the expanded run list, restricted to sources that are NOT all-digit. A
-    run bounded by whitespace or punctuation isolates a padded fragment from
-    padding beside it, the same way non-digit characters fall out of the
-    digits projection. Measured on a generated API key split three ways
-    (bare, suffix-padded on every fragment, prose-wrapped): all detected.
-    False blocking on the 160 approve-labelled records in eval/dataset.jsonl,
-    driven as 400 rounds: 0/400 (0.0000), mean 4.0ms per round. Residual
-    this does NOT close: a run glued directly onto its padding with no
-    separator at all is not isolable by any run-boundary projection, the
-    same way a digit glued to its padding already was not for the numeric
-    projection.
-
-    Cross-round reassembly is out of scope here; advance_reassembly_state
-    below closes it, called by run_jobs after this function on every round
-    using the session's persistent state, so a caller spreading one
-    fragment per round does not escape either check. Both functions model
-    the same attacker: one who concatenates whole released values, in some
-    order. Overlap-based reassembly, merging "91284" and "847731" into a
-    source by recognising the shared "84" rather than concatenating whole
-    values, is NOT covered by either check (see advance_reassembly_state's
-    docstring for the measurement showing this cost little in practice).
-
-    A residual the padding measurement did not probe, since it varied round
-    shape but not source length or count: false blocking at the
-    MIN_REASSEMBLY_LENGTH floor. Many short (six-digit) all-digit sources
-    against a digit-dense round of ordinary prose, amounts, dates, box and
-    reference numbers can coincidentally reconstruct one of them, even
-    though nothing was split. Six digits is reachable in practice because
-    labelled_account accepts [0-9][0-9-]{6,}, so a hyphenated
-    sort-code-shaped account number normalises to exactly six digits, right
-    at the floor. A digit-dense round also produces incidental digit runs
-    of its own, so this floor is not unique to the digits projection: the
-    raw pass false-blocks here too. Measured over 300 seeded trials
-    (eval/reassembly_residuals.py), 20/40/60 six-digit sources against such
-    a round: 0.0000 to 0.0133 false blocking for the shipped function,
-    0.0000 to 0.0067 for the raw pass alone -- the projection adds to the
-    raw pass's floor rather than creating it. Eight- and nine-digit sources
-    measured 0.000 for both. Every figure stays well under the 12.8% that
-    disqualified the rejected substr design.
-
-    Bounded defensively at MAX_JOBS_PER_ROUND and MAX_REASSEMBLY_LENGTH
-    rather than trusting the caller: _subset_concatenations is
-    2**len(values) with cost per subset scaling with total value length,
-    and run_jobs enforcing MAX_JOBS_PER_ROUND upstream is a convention, not
-    a guarantee this function can rely on. A round this function cannot
-    evaluate within bound is treated as a block, the same rule `evaluate`
-    follows when a layer is unavailable: a guard that cannot evaluate must
-    never approve.
+    See CLAUDE.md's "Known weaknesses" for what was measured getting here.
     """
     if len(values) > MAX_JOBS_PER_ROUND:
         return True
@@ -1734,29 +1593,16 @@ def reassembles_identifier(values: list[str], sources: set[str]) -> bool:
     return False
 
 
-# Plain coverage is not enough: state never forgets across a session, so
-# with no limit on how many pieces a covering may use, a long enough
-# benign session eventually covers some workspace source by coincidence.
-# Before this bound existed (uncapped piece count), 200 synthetic benign
-# sessions per length measured: 12 released values 0/200, 30 values 1/200
-# (0.5%), 60 values 3/200 (1.5%), 240 values 23/200 (11.5%). The
-# discriminator is how many distinct pieces the cheapest covering needs: a
-# real attack (three fragments of one identifier) always needs exactly 3,
-# while this measurement's false positives at 240 values needed at least 6
-# pieces each, and nothing coincidentally covered at 30 values in 6 pieces
-# or fewer. REASSEMBLY_PIECE_BOUND sits inside that gap.
-#
-# The bound reduces false blocking; it does not eliminate it, and the rate
-# depends on the caller's own answer distribution as much as on the bound.
-# The coverage model (tiling, used here, versus letting pieces overlap)
-# explains under one percentage point of that variation. See CLAUDE.md's
-# "Known weaknesses" for both benign-value generators' full numbers and the
-# tiling-vs-overlap comparison.
-#
-# An attacker who splits into more than REASSEMBLY_PIECE_BOUND pieces
-# evades this specific check entirely, at the cost of one job and one round
-# per extra piece, and remains guarded round by round on the way out
-# regardless.
+# Plain coverage is not enough: state never forgets across a session, so a
+# long enough benign session eventually covers some workspace source by
+# coincidence. REASSEMBLY_PIECE_BOUND caps how many distinct pieces a
+# covering may use before it counts as completion, reducing false blocking
+# without eliminating it -- the rate depends on the caller's own answer
+# distribution too. An attacker who splits into more pieces than this
+# evades the check entirely, at the cost of one job and one round per extra
+# piece, and remains guarded round by round on the way out regardless. See
+# CLAUDE.md's "Known weaknesses" for the bound's derivation and the
+# measured false-block rates.
 REASSEMBLY_PIECE_BOUND = 5
 
 
@@ -1847,72 +1693,22 @@ def advance_reassembly_state(
 
     Mutates state. Returns True when any source has become reconstructible
     from at most REASSEMBLY_PIECE_BOUND distinct pieces of everything
-    released this session, not just this round.
+    released this session, not just this round: reassembles_identifier
+    only bounds one round, so a caller spreading one fragment per round
+    needs state carried between calls, which is what this tracks.
 
-    reassembles_identifier above bounds one round: a caller issuing several
-    rounds of one fragment each defeats it, because nothing carried released
-    values forward from one call to the next. This closes that gap by
-    tracking, per source identifier, every discovered value/source match as
-    a directed edge between two positions in the source, and asking, each
-    time a new value arrives, for the cheapest (fewest-edge) way to span the
-    source end to end.
+    Order-independent and tiling, not overlap: records every discovered
+    value/source match as a directed edge between two positions in the
+    source, then finds the cheapest (fewest-edge) path across them, so a
+    covering is always an exact concatenation of whole values regardless
+    of release order. Applied twice per source (raw values, and, for an
+    all-digit source, their digits-only projection) and bounded without an
+    exponential term: the edge set for one source is capped by that
+    source's own length squared, not by session length.
 
-    Order-independent by construction, and deliberately so: the caller
-    chooses what order to issue jobs in, and can reassemble whatever pieces
-    it receives in whatever order it likes once they are off the guard's
-    sandbox, so this must not assume that the fragment which completes an
-    identifier is the one released last. A pure prefix walk (start at
-    position 0, extend forward only when a value continues the next
-    unclaimed span) does not have that property: a value released before
-    the fragment that would make it reachable gets tested against a reach
-    set that does not know about that fragment yet, and is never retried
-    once the later fragment arrives, so a caller that releases the pieces of
-    an identifier in reverse order would defeat it. Recording every match as
-    an edge and re-running the shortest path avoids that: an edge's position
-    in the graph does not depend on when it arrived, so the reverse case
-    above still completes on its final fragment, same as the forward case.
-
-    Tiling, not overlap: _min_pieces only ever chains an edge from the exact
-    position where the previous edge ended, so a covering is always an exact
-    concatenation of whole released values, never an overlapping patchwork.
-    This matches reassembles_identifier's own concatenation model, so the
-    two checks agree on what the adversary can do. Overlap-based
-    reassembly, merging "91284" and "847731" via the shared "84" rather
-    than concatenating whole values, is NOT covered by this check or by
-    reassembles_identifier. Measured head to head against an explicit
-    overlap-cover implementation on the same edge sets (200 sessions, 240
-    released values each): 0 disagreements in minimum piece count, so
-    tiling cost nothing in this project's own measurement; see
-    REASSEMBLY_PIECE_BOUND's comment for a case where it cost a little
-    (0.5 percentage points at the same length).
-
-    Coverage alone is not the completion test, deliberately: unlike
-    reassembles_identifier's single-round check, this state accumulates for
-    as long as the session runs, so with no piece limit a long enough
-    benign session eventually covers some source by coincidence.
-    REASSEMBLY_PIECE_BOUND trades that off; see its own comment for the
-    measured false-block rates and CLAUDE.md's "Known weaknesses" for the
-    summary. The residual that remains regardless: an attacker who splits a
-    value into more than REASSEMBLY_PIECE_BOUND pieces evades this specific
-    check entirely, at the cost of one job and one round per extra piece,
-    and remains guarded round by round on the way out regardless.
-
-    Applied twice per source, matching reassembles_identifier's own two
-    passes: once against the raw released values, and, for a source that is
-    itself all-digit, again against each value's digits-only projection
-    under a distinct key, so cross-round numeric padding is closed the same
-    way single-round padding already is. A source with a letter in it keeps
-    relying on the raw pass alone, for the same reason reassembles_identifier
-    does: projecting away the letters would discard the part of the match
-    that makes it meaningful.
-
-    No exponential term: unlike keeping every released value and re-running
-    subset enumeration over the union (2**session length), the edge set for
-    one source is bounded by roughly that source's own length squared
-    regardless of how many rounds or values the session has seen, and
-    _min_pieces is O(V + E) over that same bounded graph, so both scale with
-    the workspace's identifiers, not with session length. See
-    _fold_source_edges for the state bound.
+    See CLAUDE.md's "Known weaknesses" for why order-independence needs an
+    edge graph rather than a prefix walk, the piece bound's derivation, and
+    what remains open.
     """
     completed = False
     normalised = [normalise_identifier(v) for v in values]
@@ -2207,26 +2003,16 @@ def run_jobs(
         )
 
     # Cross-round reassembly. reassembles_identifier above only bounds this
-    # round; a caller issuing one fragment per round across many rounds
-    # defeats it entirely, since nothing before this point carried released
-    # values forward from one call to the next. advance_reassembly_state
-    # does, keyed by source identifier so its cost tracks the workspace, not
-    # session length. Any error here blocks rather than approves or raises,
-    # the same rule every guard layer in this file follows: a check that
-    # cannot run must never stand in for a check that ran and passed.
+    # round; advance_reassembly_state carries state across rounds instead,
+    # keyed by source identifier so its cost tracks the workspace, not
+    # session length. Any error here blocks rather than approves: a check
+    # that cannot run must never stand in for one that ran and passed.
     #
-    # Snapshot/restore around the call. A round that blocks below releases
-    # nothing, but advance_reassembly_state tracks "everything released this
-    # session", so folding `released` in before knowing whether the round
-    # blocks would record fragments the caller never received. Once a
-    # source's edges reached REASSEMBLY_PIECE_BOUND that way, every later
-    # round matched against them regardless of its own content: one
-    # coincidental trip made the rest of the session block unconditionally
-    # (see CLAUDE.md's "Known weaknesses" for the false-block rates this
-    # turned session-fatal). Snapshotting first and restoring on block (or
-    # on a tracking error) keeps state limited to what was actually
-    # released, so a blocked round's own fragments never poison a later,
-    # unrelated round. See tests/test_cross_round.py's
+    # Snapshot/restore around the call: a round that blocks below releases
+    # nothing, so its fragments must not be recorded as released either.
+    # See CLAUDE.md's "Known weaknesses" ("A blocked round used to poison
+    # the rest of the session") for the incident this fixed, and
+    # tests/test_cross_round.py's
     # wiring_blocked_round_does_not_poison_state_case.
     snapshot = {k: set(v) for k, v in session.reassembly_state.items()}
     try:

@@ -1353,18 +1353,33 @@ StepCallback = Callable[[str, str], None]
 
 # SESSIONS is a process-global dict; airlock_close pops one entry, but a
 # caller that never closes (a crashed client, a disconnected MCP transport)
-# leaves its Session in memory for the rest of the process. That is two
-# costs, not one: unbounded memory, and unbounded growth of exactly the
-# state that advance_reassembly_state's own comment above measures a
-# false-blocking residual against (up to 11.5% at 240 released values in
-# one measured distribution). Session eviction bounds both by bounding how
-# long a session can live at all.
+# leaves its Session in memory for the rest of the process. Eviction bounds
+# that specific cost -- an orphaned Session sitting in memory forever -- by
+# bounding how long an IDLE session can live: SESSION_IDLE_SECONDS retires
+# one once touch_session stops being called for it, and SESSION_CAP bounds
+# how many live Session objects can exist at once regardless of idling.
 #
-# Chose a cap AND a TTL, not just one: a cap alone still lets a single
-# long-lived session accumulate 240+ released values if nothing else ever
-# opens a session in this process; a TTL alone still lets concurrent-session
-# count grow without limit if sessions open faster than the TTL retires
-# them. Both numbers below are reasoned about, not measured: no eval/
+# It does NOT bound how much one actively-used session accumulates.
+# touch_session refreshes last_active on every ask and extract, so a
+# session that keeps being called never goes idle and never hits the TTL,
+# no matter how many rounds or values it releases, and there is no
+# separate per-session round or value cap here. What actually keeps a
+# single session's reassembly_state bounded is geometry, not eviction:
+# _fold_source_edges' own comment shows the edge set for one source is
+# capped by that source's length squared regardless of how many rounds
+# fold into it, so reassembly_state's size tracks the workspace's
+# identifiers, not session length or round count. Size is bounded; the
+# false-block *rate* advance_reassembly_state's own comment measures (up
+# to 11.5% at 240 released values in one distribution) is not: an
+# actively-used session can still release arbitrarily many values and see
+# that rate climb, since nothing here caps released-value count for a
+# session that keeps getting used.
+#
+# Chose a cap AND a TTL, not just one: a cap alone still lets concurrent
+# sessions that never close pile up without limit if enough clients crash
+# or disconnect; a TTL alone still lets concurrent-session count grow
+# without limit if sessions open faster than the TTL retires the idle
+# ones. Both numbers below are reasoned about, not measured: no eval/
 # figure rides on them. 200 concurrent sessions and one hour of inactivity
 # are both generous for a single local process serving one cloud assistant,
 # and both are far below what would actually exhaust memory.
@@ -2027,6 +2042,17 @@ def advance_reassembly_state(
     for source in sources:
         if not source:
             continue
+        # A source already whole inside one of this round's own values is
+        # reassembles_identifier's exclusion too ("not any(source in v for v
+        # in normalised)"): a source that one released value already
+        # carries in full is the per-job guard's business, not a reassembly
+        # finding. Without this, a single value equal to a source on a
+        # session's very first round -- no prior state, nothing to combine
+        # with -- still returned True here, and run_jobs' block message
+        # ("combine with values released earlier in this session") was then
+        # wrong about a round with no earlier rounds at all.
+        if any(source in v for v in normalised):
+            continue
         pieces = _fold_source_edges(state, source, normalised)
         if pieces is not None and pieces <= REASSEMBLY_PIECE_BOUND:
             completed = True
@@ -2311,6 +2337,28 @@ def run_jobs(
     # session length. Any error here blocks rather than approves or raises,
     # the same rule every guard layer in this file follows: a check that
     # cannot run must never stand in for a check that ran and passed.
+    #
+    # Snapshot/restore around the call (fix wave, item 1a). A round that
+    # blocks below releases nothing: the caller gets an envelope with no
+    # results, not the values in `released`. advance_reassembly_state's own
+    # docstring says it tracks "everything released this session", so
+    # folding `released` in unconditionally, before knowing whether this
+    # round blocks, recorded fragments the caller never actually received.
+    # Once a source's stored edges reached REASSEMBLY_PIECE_BOUND that way,
+    # every later round matched against them regardless of its own content:
+    # one coincidental trip made the rest of the session block
+    # unconditionally, turning the measured false-block rate in
+    # advance_reassembly_state's docstring (up to 11.5% at 240 released
+    # values) into a per-session-fatal event instead of a per-round one.
+    # Snapshotting first and restoring on block (or on a tracking error,
+    # since a failed fold cannot be trusted either) keeps the state limited
+    # to what was actually released, so a blocked round's own fragments
+    # never poison a later, unrelated round; the session is not sticky after
+    # a block, only after a genuine repeat of the same completing fragments.
+    # See tests/test_cross_round.py's
+    # wiring_blocked_round_does_not_poison_state_case and CLAUDE.md's "Known
+    # weaknesses" entry on cross-round reassembly.
+    snapshot = {k: set(v) for k, v in session.reassembly_state.items()}
     try:
         session_reassembled = advance_reassembly_state(
             session.reassembly_state, released, sources
@@ -2319,6 +2367,7 @@ def run_jobs(
         session_reassembled = True
 
     if session_reassembled:
+        session.reassembly_state = snapshot
         note("blocked", "the round completes a reassembly begun in an earlier round")
         session.blocked += 1
         return envelope(
@@ -2358,9 +2407,11 @@ def run_worker(
     history: list[str] = []
     draft = ""
     # Signatures of sandbox actions already run this session, so a repeat can
-    # be caught before it burns a step: a 0.8B worker measured spending its
-    # entire step budget on eight identical `list` calls, never reaching an
-    # answer it already had after the first one.
+    # be recognised and short-circuited without re-running the sandbox call
+    # (it still costs the step -- `continue` consumes a loop iteration the
+    # same as any other turn; see the in-loop comment below): a 0.8B worker
+    # measured spending its entire step budget on eight identical `list`
+    # calls, never reaching an answer it already had after the first one.
     seen_actions: set[tuple[str, str | None, str | None]] = set()
     try:
         listing = "\n".join(session.sandbox.list_dir(".")) or "(empty)"
@@ -2394,17 +2445,29 @@ def run_worker(
         # refusals already are, rather than executed again: the model already
         # has this result in history and gains nothing from a second copy of
         # it, only a step closer to running out.
-        signature = (action, step.get("path"), step.get("query"))
-        if action in {"list", "read", "search", "write"} and signature in seen_actions:
-            note("repeated", f"{action} {step.get('path') or step.get('query') or ''}".strip())
-            result = (
-                f"you already ran {action} with these exact arguments; the result "
-                "is already above in what you have done so far. Do not repeat it: "
-                "answer the question now with what you already know."
-            )
-            history.append(f"{action} -> {result[:600]}")
-            continue
-        seen_actions.add(signature)
+        #
+        # Wrapped in its own try (fix wave, item 5): "path"/"query" are only
+        # schema-suggested strings, not enforced ones, and CLAUDE.md records
+        # that installed worker models do ignore JSON schema constraints
+        # (`doctor` probes for exactly this). A dict or list there makes
+        # `signature` unhashable, and hashing it -- in the `in` check below
+        # or in seen_actions.add -- used to raise TypeError outside every
+        # other try in this loop, escaping run_worker instead of returning
+        # the block envelope every other malformed-step path here does.
+        try:
+            signature = (action, step.get("path"), step.get("query"))
+            if action in {"list", "read", "search", "write"} and signature in seen_actions:
+                note("repeated", f"{action} {step.get('path') or step.get('query') or ''}".strip())
+                result = (
+                    f"you already ran {action} with these exact arguments; the result "
+                    "is already above in what you have done so far. Do not repeat it: "
+                    "answer the question now with what you already know."
+                )
+                history.append(f"{action} -> {result[:600]}")
+                continue
+            seen_actions.add(signature)
+        except TypeError:
+            return envelope(session, "blocked", "", ["local model returned a malformed step"])
 
         try:
             if action == "list":

@@ -450,6 +450,35 @@ def unit_digits_projection_case() -> None:
     check("padded fragments across rounds: digits projection catches the third", r3)
 
 
+def unit_whole_value_first_round_not_combined_case() -> None:
+    """Minor fix (airlock.py, advance_reassembly_state): a single value that
+    already equals the whole source, released on the very first round with
+    no prior state, must not read as a cross-round combination.
+
+    reassembles_identifier already excludes this case ("not any(source in v
+    for v in normalised)", see tests/test_round_guard.py's
+    wiring_whole_identifier_one_round_case): a source already whole inside
+    one released value is the per-job guard's business, not a reassembly
+    finding. advance_reassembly_state lacked the same exclusion, so a fresh
+    session's first round, given the full identifier as its one released
+    value, reported True from a function whose own docstring describes
+    detecting values "combined... with earlier round[s]" -- on a round with
+    no earlier rounds at all.
+    """
+    print("\nUnit: a single whole-value release on round 1 is not a combination")
+
+    state: dict[str, set[int]] = {}
+    sources = {airlock.normalise_identifier(SSN)}
+
+    result = airlock.advance_reassembly_state(state, [SSN], sources)
+
+    check(
+        "a lone value equal to the source on round 1 does not read as reassembly",
+        not result,
+        str(result),
+    )
+
+
 # --------------------------------------------------------------------------
 # Integration level: wired into run_jobs, real Session, real guard models.
 # --------------------------------------------------------------------------
@@ -667,6 +696,55 @@ def wiring_fail_closed_case() -> None:
     )
 
 
+def wiring_blocked_round_does_not_poison_state_case() -> None:
+    """Item 1a fix regression: a round that blocks releases nothing (the
+    caller gets an envelope with no results, not the values in `released`),
+    so advance_reassembly_state must not fold those values into
+    session.reassembly_state as if they had been released. Before the fix,
+    folding happened unconditionally: once a source's stored edges alone
+    reached REASSEMBLY_PIECE_BOUND, every later round matched against them
+    regardless of its own content, so one coincidental trip made the rest of
+    the session block no matter what it contained (see CLAUDE.md's "Known
+    weaknesses" entry on cross-round reassembly for the shipped behaviour).
+
+    Also the mandatory positive control for "a normal round still releases
+    its values" (CLAUDE.md): round 5 re-releases the exact fragment that
+    tripped round 3, and must trip again, which only happens if rounds 1
+    and 2's legitimately released fragments are still being tracked, i.e.
+    the fix does not roll back more than the blocked round contributed.
+    """
+    print("\nWiring: a blocked round's values are not folded into cross-round state")
+
+    tmp = ssn_workspace()
+    session = session_over(tmp)
+
+    r1 = run_with_stub(session, one_job(1), ["912"])
+    r2 = run_with_stub(session, one_job(2), ["84"])
+    r3 = run_with_stub(session, one_job(3), ["7731"])
+    r4 = run_with_stub(session, one_job(4), ["forecast"])
+    r5 = run_with_stub(session, one_job(5), ["7731"])
+
+    check("round 1 releases its fragment", r1.get("status") == "ok", str(r1.get("status")))
+    check("round 2 releases its fragment", r2.get("status") == "ok", str(r2.get("status")))
+    check(
+        "round 3 blocks: completes the reassembly",
+        r3.get("status") == "blocked",
+        str(r3.get("status")),
+    )
+    check(
+        "round 4, an unrelated benign value, is not blocked by round 3's "
+        "never-released fragment",
+        r4.get("status") == "ok",
+        str(r4.get("status")),
+    )
+    check(
+        "round 5 re-releasing round 3's fragment blocks again: rounds 1 and "
+        "2's legitimately released fragments are still tracked",
+        r5.get("status") == "blocked",
+        str(r5.get("status")),
+    )
+
+
 def main() -> int:
     print(f"airlock: {AIRLOCK}")
 
@@ -687,12 +765,20 @@ def main() -> int:
     run("unit_unrelated_benign_values_case", unit_unrelated_benign_values_case)
     run("unit_bounded_work_case", unit_bounded_work_case)
     run("unit_digits_projection_case", unit_digits_projection_case)
+    run(
+        "unit_whole_value_first_round_not_combined_case",
+        unit_whole_value_first_round_not_combined_case,
+    )
     run("wiring_natural_order_case", wiring_natural_order_case)
     run("wiring_reverse_order_case", wiring_reverse_order_case)
     run("wiring_interleaved_benign_rounds_case", wiring_interleaved_benign_rounds_case)
     run("wiring_unrelated_benign_session_case", wiring_unrelated_benign_session_case)
     run("wiring_whole_identifier_one_round_case", wiring_whole_identifier_one_round_case)
     run("wiring_fail_closed_case", wiring_fail_closed_case)
+    run(
+        "wiring_blocked_round_does_not_poison_state_case",
+        wiring_blocked_round_does_not_poison_state_case,
+    )
 
     total = len(PASS) + len(FAIL) + len(SKIP)
     print(f"\n{len(PASS)} passed, {len(FAIL)} failed, {len(SKIP)} skipped ({total} checks)")
@@ -700,8 +786,8 @@ def main() -> int:
         print("failed:")
         for name in FAIL:
             print(f"  - {name}")
-    if total < 43:
-        print(f"\nWARNING: only {total} checks ran. Expected at least 43.")
+    if total < 49:
+        print(f"\nWARNING: only {total} checks ran. Expected at least 49.")
         print("Something did not collect. Treat this as a failure, not a pass.")
         return 1
     return 1 if FAIL else 0

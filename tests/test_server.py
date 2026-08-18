@@ -708,6 +708,74 @@ def group_b7() -> None:
         airlock.ollama_models = real_ollama
 
 
+def group_b8() -> None:
+    """Item 5 (fix wave): a worker step whose path/query is not a string
+    must block run_worker, not crash it with an uncaught TypeError.
+
+    signature = (action, step.get("path"), step.get("query")) is hashed
+    against seen_actions two lines later; if the model returns a dict or a
+    list for "path", building that hash raises TypeError: unhashable type,
+    outside every try in the loop, so it used to escape run_worker entirely
+    instead of returning a block envelope. Reachable, not theoretical:
+    CLAUDE.md records that installed worker models do ignore JSON schema
+    constraints (`doctor` probes for exactly this), so a schema-violating
+    step is ordinary input from this guard's point of view, not an edge
+    case that cannot occur.
+    """
+    print("\nB8. Item 5: a step with an unhashable path/query fails closed")
+
+    def make_session() -> airlock.Session:
+        return airlock.Session(
+            session_id="test-b8", objective="x",
+            sandbox=airlock.Sandbox(root=Path("."), allow_writes=False),
+            worker_model="stub",
+        )
+
+    real = airlock.ollama_chat
+    try:
+        for bad in ({"nested": "dict"}, ["a", "list"]):
+            def scripted_bad(_model: str, _prompt: str, _schema: dict, _bad: object = bad) -> dict:
+                return {"action": "list", "path": _bad}
+
+            airlock.ollama_chat = scripted_bad
+            raised: Exception | None = None
+            out: dict | None = None
+            try:
+                out = airlock.run_worker(make_session(), "what is here?")
+            except Exception as exc:  # noqa: BLE001 - this is exactly what must not happen
+                raised = exc
+
+            check(
+                f"path={type(bad).__name__} does not escape run_worker as an exception",
+                raised is None,
+                f"{type(raised).__name__}: {raised}" if raised else "no exception",
+            )
+            check(
+                f"path={type(bad).__name__} blocks rather than approving",
+                out is not None and out.get("status") == "blocked",
+                str(out),
+            )
+    finally:
+        airlock.ollama_chat = real
+
+    # Positive control: a step shaped exactly like the malformed one but
+    # with an ordinary string path must not be affected by whatever fixes
+    # the unhashable case, i.e. the fix must not start blocking valid steps.
+    try:
+        def scripted_ok(_model: str, _prompt: str, _schema: dict) -> dict:
+            return {"action": "answer", "answer": "Two planning files, no personal data."}
+
+        airlock.ollama_chat = scripted_ok
+        out = airlock.run_worker(make_session(), "what is here?")
+        check(
+            "a normal string-path/answer step still approves (positive control)",
+            out.get("status") == "approved",
+            f"{out.get('status')}: {out.get('guard_concerns')}",
+        )
+    finally:
+        airlock.ollama_chat = real
+
+
 # Every check group_c performs on a run that completes, in order. Each early
 # return below must skip() everything in this list not already recorded via
 # check(), so a suite that exits early collects exactly as many checks as one
@@ -922,6 +990,7 @@ def main() -> int:
         run_group("group B5", lambda _root: group_b5(), False)
         run_group("group B6", lambda _root: group_b6(), False)
         run_group("group B7", lambda _root: group_b7(), False)
+        run_group("group B8", lambda _root: group_b8(), False)
         run_group("group C", group_c, True)
         run_group("group C prereqs", group_c_prereq_counts, True)
     finally:
@@ -934,12 +1003,13 @@ def main() -> int:
         print("failed:")
         for name in FAIL:
             print(f"  - {name}")
-    if total < 60:
-        # 80 with the SDK and Ollama both available; measured 66 with the
-        # SDK genuinely unavailable (group A and group C degrade to a
-        # handful of checks each, but B/B2..B7 and group_c_prereq_counts
-        # are unaffected). 60 sits under that floor with margin.
-        print(f"\nWARNING: only {total} checks ran. Expected around 80 (66 without the SDK).")
+    if total < 65:
+        # 85 with the SDK and Ollama both available (80 plus group B8's 5
+        # fully-stubbed checks, added for item 5); measured 71 with the SDK
+        # genuinely unavailable (group A and group C degrade to a handful of
+        # checks each, but B/B2..B8 and group_c_prereq_counts are
+        # unaffected). 65 sits under that floor with margin.
+        print(f"\nWARNING: only {total} checks ran. Expected around 85 (71 without the SDK).")
         print("Something did not collect. Treat this as a failure, not a pass.")
         return 1
     return 1 if FAIL else 0

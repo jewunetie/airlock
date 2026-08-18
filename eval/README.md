@@ -219,11 +219,11 @@ cached weights required):
 
 | corpus | n | gold block/approve | precision | recall | f1 | false negatives |
 |---|---|---|---|---|---|---|
-| ai4privacy | 250 | 190/60 | 0.844 | 0.995 | 0.913 | 1 |
-| nemotron | 250 | 235/15 | 0.943 | 0.983 | 0.963 | 4 |
-| gretel | 250 | 194/56 | 0.866 | 0.964 | 0.912 | 7 |
+| ai4privacy | 250 | 190/60 | 0.859 | 0.995 | 0.922 | 1 |
+| nemotron | 250 | 235/15 | 0.943 | 0.987 | 0.965 | 3 |
+| gretel | 250 | 194/56 | 0.866 | 0.969 | 0.915 | 6 |
 | tab | 127 | 127/0 | 1.000 | 1.000 | 1.000 | 0 |
-| combined | 877 | 746/131 | 0.904 | 0.984 | 0.942 | 12 |
+| combined | 877 | 746/131 | 0.909 | 0.987 | 0.946 | 10 |
 
 TAB's precision is not meaningful: its 127-document sample contains zero
 natural negatives (every ECHR judgment sampled names its applicant, a DIRECT
@@ -236,14 +236,14 @@ this run: no threshold was retuned to improve these numbers.
 **This is worse than `dataset.jsonl`'s numbers**, as expected: the synthetic
 set measured near-perfect precision throughout `airlock.py`'s own
 docstrings, and every corpus here lands measurably below that, ai4privacy's
-0.844 most of all. That gap is the entire reason this script exists: the
+0.859 most of all. That gap is the entire reason this script exists: the
 synthetic set was never a claim about field performance, and now there is a
 number for what "the field" actually looks like on data this project did not
 generate.
 
 **Layer attribution** (which layer caught each true positive, combined
 across all four corpora): `pii-patterns` 293, `pii-detector` 356, `secrets`
-79, `policy-linter` 6. The two deterministic layers (`secrets` +
+79, `policy-linter` 8. The two deterministic layers (`secrets` +
 `pii-patterns`, 372) catch a comparable share to the PII-Detector encoder
 alone (356); the Policy-Linter's contribution is small in absolute count but
 is not redundant with the others; see `PLAN-liquid-guard.md` and the "Known
@@ -253,11 +253,25 @@ covers the PII-Detector encoder alone, not its contribution relative to the
 regex layers ahead of it or the linter behind it.
 
 **False negatives** (masked; see `results/public_corpora_summary.json` for
-the full list per corpus after a run): ai4privacy missed a PASSPORT-only
-record; nemotron missed a customer ID, an employee ID, a blood type, and a
-biometric identifier / unique ID pair; gretel missed several `name`-only
-records, no other blocking label present. All are single-label or
+the full list per corpus after a run, capped at five stored examples per
+corpus): ai4privacy missed a PASSPORT-only record; nemotron missed a
+customer ID, an employee ID, and a blood type (all single-label misses);
+gretel missed six records, five of them stored in the capped summary
+(three `name`-only, one `name`+`street_address` together, one
+`street_address`-only; the sixth is not in the stored summary), no other
+blocking label present in any of the five shown. All are single-label or
 narrow-context misses, not broad category failures.
+
+**This run reflects item-3's rule 5 reword and `contact.postal_code` letter
+gate** (see `CLAUDE.md`'s "Known weaknesses"), re-measured directly rather
+than copied from that fix's own report: precision rose 0.904 -> 0.909,
+recall rose 0.984 -> 0.987 (12 -> 10 false negatives), matching what
+`.superpowers/sdd/cross-round/item-3-report.md` recorded for the same
+change. Recall improved on two records unrelated to either fix (a nemotron
+employee ID and a gretel name/street-address record); that item-3 report
+already flagged this as more likely float non-determinism in this
+environment's matmul reduction than a causal effect of either fix, and this
+re-run does not add evidence either way.
 
 Sampling and label mapping decisions are the main source of uncertainty in
 this measurement, not the guard itself: a different BLOCK/EXCLUDE choice

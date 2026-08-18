@@ -49,6 +49,23 @@ That deleted three functions once and a block of constants once.
 every containment check because the worker had failed and produced nothing to
 contain. Assertions about absence need a positive control.
 
+**A step outside every try still needs to fail closed.** `run_worker`
+builds `signature = (action, step.get("path"), step.get("query"))` from the
+worker model's own step, then hashes it to check `seen_actions`, outside
+any try/except. Hashing raises `TypeError: unhashable type` if the model
+returns a dict or list for "path" or "query" instead of a string, which
+escaped `run_worker` as an uncaught exception rather than the block
+envelope every other malformed-step path in that loop returns. Reachable,
+not hypothetical: "Things that look like bugs and are not" below already
+records that installed worker models ignore JSON schema constraints, so a
+schema-violating step is ordinary input from this guard's point of view.
+Fixed by wrapping the signature build and the `seen_actions` lookup/add in
+their own try, returning a block envelope on `TypeError`. The general
+lesson: fail-closed has to be checked at every point user- or
+model-controlled data gets hashed, indexed, or otherwise used in a way
+that can raise on an unexpected shape, not just at the call sites that
+obviously look risky.
+
 ## Invariants
 
 **The guard fails closed.** Any error, timeout, or unparseable payload is
@@ -174,7 +191,15 @@ check. An attacker who splits a value into more than the bound's worth of
 pieces evades this specific check entirely, at the cost of one job and one
 round per extra piece, and is still guarded round by round on the way out
 regardless. See `REASSEMBLY_PIECE_BOUND`'s comment in `airlock.py` and
-`task-1-report.md` fix rounds 1-2 for the full measurements.
+`task-1-report.md` fix rounds 1-2 for the full measurements. This tracking
+is wired into `run_jobs` only, `airlock_extract`'s pipeline; `run_jobs` is
+its sole call site. A fragment released through `airlock_ask`'s free-form
+path, or a value split between an `airlock_ask` call and an
+`airlock_extract` job, is not folded into this state at all and is
+untracked cross-round. Each `airlock_ask` reply is still guarded on its
+own; what is missing is the accumulation across calls that
+`airlock_extract` gets. See README.md's "Limitations" for the user-facing
+version of this gap.
 
 **Two more round-guard holes are closed; two remain, on purpose.**
 `reassembles_identifier`'s subset-concatenation pass preserved job order,
@@ -203,6 +228,41 @@ pass in this file, and a caller who splits into more pieces than
 `REASSEMBLY_PIECE_BOUND` and also issues them out of order still evades the
 order-free check, the same residual `advance_reassembly_state` already
 carries for cross-round accumulation.
+
+**A blocked round used to poison the rest of the session; it no longer
+does (fix wave, item 1).** `run_jobs` folded a round's `released` values
+into `session.reassembly_state` before deciding whether that round itself
+blocks, so a round that completed a cross-round reassembly and returned
+`blocked` still recorded its own fragments as if the caller had received
+them, even though a blocked round carries no results. Once a source's
+stored edges reached `REASSEMBLY_PIECE_BOUND` that way, they stayed there:
+every later round in the session matched against them regardless of its
+own content, since `_fold_source_edges` recomputes the cheapest covering
+from all stored edges, old and new, and the round-3 edges never left.
+Concretely: `["912"]` -> ok, `["84"]` -> ok, `["7731"]` -> blocked
+(correctly, it completes the SSN), then `["forecast"]` -> also blocked, for
+the rest of the session, no matter what was asked. This turned the
+measured false-block rate above (up to 11.5% at 240 released values) into
+a per-session-fatal event instead of a per-round one: one coincidental trip
+anywhere in a session doomed everything after it.
+
+Fixed by snapshotting `session.reassembly_state` before the fold and
+restoring it whenever the round blocks or the fold errors, so only rounds
+that actually release their values leave a mark. Ruling on whether a
+tripped session should stay blocked for the rest of its life: no, not as a
+deliberate policy, and no separate "stay blocked" flag was added. With the
+fix, a session's stored state, immediately after any round that returns
+`ok`, never has a source at or under `REASSEMBLY_PIECE_BOUND` pieces --
+otherwise that round would have blocked and its own contribution would
+have been rolled back -- so a later round can only trip by contributing
+new fragments of its own, never off residue from an earlier blocked one. A
+caller who keeps re-submitting the exact fragment that completes a source
+will keep getting blocked on that specific submission, which is
+fail-closed working as intended, not stickiness; an unrelated round right
+after a block proceeds normally (see `tests/test_cross_round.py`'s
+`wiring_blocked_round_does_not_poison_state_case`, which is also the
+positive control that rounds 1 and 2's legitimately released fragments are
+still tracked correctly after the fix).
 
 ## Things that look like bugs and are not
 

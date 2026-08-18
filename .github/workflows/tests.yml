@@ -8,6 +8,13 @@ on:
 jobs:
   suites:
     runs-on: ubuntu-latest
+    # No suite here waits on Ollama or the network beyond the one-time model
+    # download above, so a run should finish in a few minutes; 30 is a
+    # reasoned ceiling, not a measured one (same caveat as SESSION_CAP /
+    # SESSION_IDLE_SECONDS in airlock.py), generous enough for a cold cache
+    # yet well under GitHub's 360-minute default, which would otherwise let
+    # a hung step burn CI minutes indefinitely instead of failing loudly.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

@@ -102,25 +102,41 @@ is also fine; `console.print` is not.
 
 ## Known weaknesses
 
-**Policy linter rule 5 (confidential business) is the noisy rule.** Measured
-twice independently in `eval/bakeoff.py`'s runs: it fires on ordinary business
-vocabulary alone (`shipment`, `inventory`, `ledger` each trip it with no other
-context) and accounted for 52% of the bake-off's false positives. It stays at
-a low threshold anyway, per `PLAN-liquid-guard.md`'s operating-point note,
-because it is also the only rule that catches the hardest contextual cases.
-This wants the rule reworded, not the threshold retuned; raising the
-threshold enough to quiet it would also cost the recall it exists for.
+**Policy linter rule 5 (confidential business) was reworded, not just
+rethresholded (item-3 fix).** It used to fire on ordinary business vocabulary
+alone (`shipment`, `inventory`, `ledger` each tripped it with no other
+context, 3/8 of a bare-word sample) and accounted for 52% of the bake-off's
+false positives. The wording is now "Flag disclosure of non-public company
+information that has not been announced, such as a pending acquisition, a
+major customer ending its contract, or an internal investigation." (see
+`CONTEXTUAL_RULES`'s comment in `airlock.py` for the full measurement and
+the two rejected rewordings). Re-measured against `eval/dataset.jsonl`:
+contextual recall held at 0.95 (unchanged), dataset-wide false-block dropped
+from 0.41 to 0.34, and the bare-word trip rate dropped from 3/8 to 0/8. The
+rule is not silent: it still accounts for a meaningful share of the linter's
+false positives, and this is a linter-wide precision problem (0.34
+false-block over the approve-class dataset), not something rule 5 alone
+still carries. Wording, not threshold, was still the right lever: raising
+the threshold enough to quiet a noisy rule costs the recall it exists for,
+which a wording fix does not have to trade away.
 
-**`contact.postal_code` still false-flags bare numbers occasionally, even
-after the 0.70 threshold.** A 300-sample sweep of bare number-shaped strings
-(`task-4-report.md`) measured 2/300 (0.67%, roughly 1 legitimate bare number
-in 150 on the tax-extraction workflow) still scoring above 0.70, at 0.856 and
-0.764. 0.856 is *above* the lowest measured true positive (0.845): the
-false-positive and true-positive score distributions overlap, so no single
-global threshold on this entity separates them cleanly. This is why
-`PII_DETECTOR_ENTITY_THRESHOLDS`'s comment in `airlock.py` calls 0.70 the
-best tradeoff found, not a clean separator; a legitimate bare number can
-still be withheld.
+**`contact.postal_code` no longer trusts the threshold alone (item-3
+fix).** The false-positive and true-positive score distributions provably
+overlapped at the 0.70 threshold: one measured false positive scored 0.856,
+above the lowest measured true positive at 0.845, so no single global
+threshold on this entity could separate them. A `contact.postal_code`
+finding now also requires at least one letter in the scanned text,
+alongside the 0.70 threshold, not instead of it: a real postal code always
+travels with an address, city, or an explicit "zip"/"postal code" label,
+none of which a bare extracted number carries. Re-measured: a 600-string
+sweep of bare, tax-extraction-shaped numbers found 5 scoring above 0.70
+before the gate (0.83%) and 0 after (0/600, by construction, since none of
+them contain a letter); six real postal-code-in-address sentences fired
+identically before and after the gate (the gate is a no-op on text that
+already has a letter). This closes the residual for bare numbers
+specifically. It does not raise the PII detector's own recall on postal
+codes in general, which is a separate, unmeasured-here limit of the model
+itself, not something this gate touches.
 
 **`identity.person_name` fires on bare single common nouns that double as
 given names.** Measured directly against the model: "cherry" 0.90, "kiwi"

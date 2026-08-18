@@ -404,12 +404,21 @@ def task3_wiring() -> None:
     # were verified clean both individually and as the joined round-level
     # string the guard actually evaluates, against the real models, not
     # assumed from the word list alone.
+    #
+    # item-3 fix round: rule5 was reworded (see airlock.py's comment above
+    # CONTEXTUAL_RULES). "contract" was swapped for "spreadsheet" here
+    # because the reworded rule now names "a major customer ending its
+    # contract" as an example, and this fixture's prior word list (which
+    # included both "payroll" and "vendor" alongside "contract") tripped the
+    # new wording once joined, though every word in it still measures clean
+    # individually. Same phenomenon this comment already described for the
+    # old wording, recurring under the new one; re-verified the same way.
     tmp4 = Path(tempfile.mkdtemp(prefix="airlock-round-guard-test3-"))
     (tmp4 / "record.txt").write_text("Client SSN is 912-84-7731, filed Monday.\n")
     session = session_over(tmp4)
     jobs = [{"document": 0, "extract": f"question {i}"} for i in range(12)]
     answers = ["forecast", "quarterly", "template", "summary", "agenda", "payroll",
-               "contract", "vendor", "documentation", "kitchen", "invoice", "headcount"]
+               "spreadsheet", "vendor", "documentation", "kitchen", "invoice", "headcount"]
     result = run_with_stub(session, jobs, answers)
     check(
         "twelve benign jobs over an untouched SSN: round is ok",

@@ -101,6 +101,36 @@ PII_POSTAL_TRUE_POSITIVE_TEXT = (
     "Tax Board."
 )
 
+# Fix round 3 (item-3): the 0.70 threshold alone still lets some bare numbers
+# through. Measured directly against the real model (scratch probe, not
+# committed, 600-string sweep of tax-extraction-shaped bare numbers): "43044"
+# scores 0.7189 for contact.postal_code, above the shipped 0.70 threshold,
+# with no letter anywhere in the string. This is the RED case for the
+# letter-presence gate: without it, this bare number is indistinguishable
+# from a real postal code at the threshold alone.
+PII_POSTAL_HIGH_SCORING_BARE_NUMBER = "43044"
+# The letter gate makes every bare number permanently silent for
+# contact.postal_code regardless of threshold, by design (that is the fix).
+# That means PII_POSTAL_FALSE_POSITIVE_TEXT ("94250.0", no letter) can no
+# longer serve as pii_entity_threshold_case's vehicle for proving
+# PII_DETECTOR_ENTITY_THRESHOLDS is read live: lowering the threshold cannot
+# reproduce a finding the letter gate excludes unconditionally. This
+# address-shaped replacement (has a letter, so the gate does not apply)
+# measures 0.5454 for contact.postal_code, real model, directly probed:
+# below the shipped 0.70 threshold, above a 0.50 override, so it still
+# demonstrates the dict being read live rather than baked in.
+PII_POSTAL_MIDSCORE_ADDRESS_TEXT = "Deliver to warehouse bay 94105 by Friday."
+
+# Fix round 3: CONTEXTUAL_RULES[5] reworded (see airlock.py's comment above
+# CONTEXTUAL_RULES for the measurements behind the wording and the two
+# rejected alternatives). Measured directly against the real model: the
+# shipped wording trips on 3 of these 8 ("shipment", "inventory", "ledger")
+# with no surrounding context; the reworded rule trips on 0/8.
+BARE_BUSINESS_WORDS = [
+    "shipment", "inventory", "ledger", "invoice",
+    "backlog", "vendor", "forecast", "revenue",
+]
+
 # Filler long enough to push a trailing identifier past a single 512-token
 # window under the real PII detector tokenizer: measured at 642 tokens for
 # this exact filler, comfortably past the model's own truncation limit, so an
@@ -264,6 +294,30 @@ def policy_linter_cases(unavailable: str) -> None:
         airlock.POLICY_LINTER_RULE_THRESHOLDS = original
 
 
+def rule5_bare_words_case(unavailable: str) -> None:
+    """Item-3 fix round: CLAUDE.md's "Known weaknesses" measured rule 5
+    (confidential business) firing on ordinary business vocabulary alone,
+    3/8 of BARE_BUSINESS_WORDS with no surrounding context, 52% of the
+    bake-off's false positives. The reworded CONTEXTUAL_RULES[5] (see
+    airlock.py) must be silent on all 8. policy_linter_cases above already
+    covers the paired positive control (rule5 still fires on
+    ACQUISITION_TEXT), so it is not repeated here.
+    """
+    print("\nPolicy linter: reworded rule 5 does not fire on bare business vocabulary (item-3 fix)")
+    if unavailable:
+        for word in BARE_BUSINESS_WORDS:
+            skip(f"rule5 silent on bare word: {word!r}", unavailable)
+        return
+
+    for word in BARE_BUSINESS_WORDS:
+        rules = {f["rule"] for f in airlock.scan_policy(word)}
+        check(
+            f"rule5 silent on bare word: {word!r}",
+            "rule5" not in rules,
+            ",".join(sorted(rules)) or "none",
+        )
+
+
 def pii_entity_threshold_case(unavailable: str) -> None:
     """PLAN-liquid-guard.md fix round 2: PII_DETECTOR_ENTITY_THRESHOLDS
     exists because the flat PII_DETECTOR_THRESHOLD false-flagged 2.7% of
@@ -272,6 +326,14 @@ def pii_entity_threshold_case(unavailable: str) -> None:
     override-mechanism shape as policy_linter_cases's per-rule test above:
     checks the shipped value, then proves the dict is read live rather than
     the fix happening to work only at the one value committed.
+
+    The "lowering the threshold reproduces a finding" half uses
+    PII_POSTAL_MIDSCORE_ADDRESS_TEXT, not PII_POSTAL_FALSE_POSITIVE_TEXT.
+    Item-3's letter gate (postal_code_letter_gate_case below) makes every
+    bare number permanently silent for this entity regardless of threshold,
+    so the original bare-number vehicle can no longer demonstrate the
+    threshold dict being live; PII_POSTAL_FALSE_POSITIVE_TEXT still proves
+    the "silent at the shipped threshold" half just below.
     """
     print("\nPII detector: per-entity threshold override (fix round 2)")
     if unavailable:
@@ -279,7 +341,7 @@ def pii_entity_threshold_case(unavailable: str) -> None:
             "bare number false positive: silent at the shipped threshold",
             "postal code in context: still fires at the shipped threshold",
             "override mechanism: raising the threshold silences a real postal code",
-            "override mechanism: lowering the threshold reproduces the false positive",
+            "override mechanism: lowering the threshold reproduces a finding",
         ):
             skip(name, unavailable)
         return
@@ -309,11 +371,68 @@ def pii_entity_threshold_case(unavailable: str) -> None:
         )
 
         airlock.PII_DETECTOR_ENTITY_THRESHOLDS = {"contact.postal_code": 0.50}
-        rules = {f["rule"] for f in airlock.scan_pii_model(PII_POSTAL_FALSE_POSITIVE_TEXT)}
+        rules = {f["rule"] for f in airlock.scan_pii_model(PII_POSTAL_MIDSCORE_ADDRESS_TEXT)}
         check(
-            "override mechanism: lowering the threshold reproduces the false positive",
+            "override mechanism: lowering the threshold reproduces a finding",
             "contact.postal_code" in rules,
             ",".join(sorted(rules)),
+        )
+    finally:
+        airlock.PII_DETECTOR_ENTITY_THRESHOLDS = original
+
+
+def postal_code_letter_gate_case(unavailable: str) -> None:
+    """Item-3 fix round: the false-positive and true-positive score
+    distributions for contact.postal_code overlap (CLAUDE.md's "Known
+    weaknesses"), so no threshold on this entity alone separates them
+    cleanly. PII_POSTAL_HIGH_SCORING_BARE_NUMBER ("43044", 0.7189) is a
+    directly measured case above the shipped 0.70 threshold that a threshold
+    fix cannot touch.
+
+    The mechanism: a contact.postal_code finding only counts when the
+    scanned text contains at least one letter, because a real postal code
+    always travels with an address, city, or label, and a bare extracted
+    number does not. This is a positive control in the CLAUDE.md sense: the
+    threshold-override case below proves the letter gate is a real,
+    independent filter and not just the 0.70 threshold happening to already
+    exclude this case, by lowering the threshold far enough that it
+    definitely would not exclude it, and confirming the gate still does.
+    """
+    print("\nPII detector: contact.postal_code requires a letter in the scanned text (item-3 fix)")
+    if unavailable:
+        for name in (
+            "high-scoring bare number: not blocked as a postal code",
+            "real postal code: still blocked in an address",
+            "letter gate is independent of the threshold: still silent at a near-zero threshold",
+        ):
+            skip(name, unavailable)
+        return
+
+    rules = {f["rule"] for f in airlock.scan_pii_model(PII_POSTAL_HIGH_SCORING_BARE_NUMBER)}
+    check(
+        "high-scoring bare number: not blocked as a postal code",
+        "contact.postal_code" not in rules,
+        ",".join(sorted(rules)) or "none",
+    )
+
+    rules = {f["rule"] for f in airlock.scan_pii_model(PII_POSTAL_TRUE_POSITIVE_TEXT)}
+    check(
+        "real postal code: still blocked in an address",
+        "contact.postal_code" in rules,
+        ",".join(sorted(rules)) or "none",
+    )
+
+    original = dict(airlock.PII_DETECTOR_ENTITY_THRESHOLDS)
+    try:
+        # 0.01 is far below 0.7189: if the letter gate were not independent
+        # of the threshold, this override alone would let the bare number
+        # through. It must not.
+        airlock.PII_DETECTOR_ENTITY_THRESHOLDS = {"contact.postal_code": 0.01}
+        rules = {f["rule"] for f in airlock.scan_pii_model(PII_POSTAL_HIGH_SCORING_BARE_NUMBER)}
+        check(
+            "letter gate is independent of the threshold: still silent at a near-zero threshold",
+            "contact.postal_code" not in rules,
+            ",".join(sorted(rules)) or "none",
         )
     finally:
         airlock.PII_DETECTOR_ENTITY_THRESHOLDS = original
@@ -919,7 +1038,9 @@ def main() -> int:
     run("pii_detector_cases", pii_detector_cases, unavailable)
     run("containment_positive_control_case", containment_positive_control_case)
     run("policy_linter_cases", policy_linter_cases, unavailable)
+    run("rule5_bare_words_case", rule5_bare_words_case, unavailable)
     run("pii_entity_threshold_case", pii_entity_threshold_case, unavailable)
+    run("postal_code_letter_gate_case", postal_code_letter_gate_case, unavailable)
     run("chunking_cases", chunking_cases, unavailable)
     run("prefix_derivation_case", prefix_derivation_case)
     run("fail_closed_case", fail_closed_case)
@@ -946,11 +1067,13 @@ def main() -> int:
     # checks (7)), then to 55 (PLAN-liquid-guard.md fix round 2:
     # pii_entity_threshold_case, 4 checks), then to 61 (final fix wave:
     # cli_parser_cases' --linter-threshold range validation, 6 checks), then
-    # to 62 (cleanup: evaluate_default_threshold_case, 1 check). Per
-    # CLAUDE.md, a suite that silently collects fewer checks reads like one
-    # that passed.
-    if total < 62:
-        print(f"\nWARNING: only {total} checks ran. Expected at least 62.")
+    # to 62 (cleanup: evaluate_default_threshold_case, 1 check), then to 73
+    # (item-3 fix round: rule5_bare_words_case, 8 checks, one per
+    # BARE_BUSINESS_WORDS entry, and postal_code_letter_gate_case, 3
+    # checks). Per CLAUDE.md, a suite that silently collects fewer checks
+    # reads like one that passed.
+    if total < 73:
+        print(f"\nWARNING: only {total} checks ran. Expected at least 73.")
         print("Something did not collect. Treat this as a failure, not a pass.")
         return 1
     # Skips are reported, not failed, per CLAUDE.md. But a run where every

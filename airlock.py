@@ -577,6 +577,22 @@ def _scan_pii_region(chunk: str) -> list[str]:
         entity = re.sub(r"^[BIES]-", "", label)
         if c < PII_DETECTOR_ENTITY_THRESHOLDS.get(entity, PII_DETECTOR_THRESHOLD):
             continue
+        # Narrow, entity-specific gate (item-3 fix), not a general rule: the
+        # false-positive and true-positive score distributions for
+        # contact.postal_code provably overlap (PII_DETECTOR_ENTITY_THRESHOLDS'
+        # comment above; one measured false positive scores 0.856, above the
+        # lowest measured true positive at 0.845), so no threshold on this
+        # entity alone separates them. A letter in the scanned text is a
+        # proxy for address context: a real postal code is always written
+        # alongside a street, city, state, or an explicit "zip"/"postal
+        # code" label, none of which a bare extracted number carries. Zero
+        # measured recall cost (a 600-string bare-number sweep and a
+        # six-address sweep, both in this fix's test/report), because every
+        # bare number this was built to silence has no letter by
+        # construction, and every real postal-code disclosure measured
+        # still has one.
+        if entity == "contact.postal_code" and not re.search(r"[A-Za-z]", chunk):
+            continue
         if entity not in found:
             found.append(entity)
     return found
@@ -630,13 +646,41 @@ POLICY_LINTER_RULE_THRESHOLDS: dict[int, float] = {1: 0.98, 4: 0.98}
 # in findings ("rule0" .. "rule5") and ported verbatim from eval/bakeoff.py.
 # Identifier rules are deliberately absent: the linter measures poorly on
 # exact identifiers, that coverage belongs to scan_pii_model.
+#
+# Rule 5 (confidential business) was reworded (item-3 fix). The prior
+# wording, "Flag confidential business information such as unannounced
+# acquisitions or a customer leaving", fired on ordinary business vocabulary
+# alone: measured 3/8 of a bare-word sample ("shipment", "inventory",
+# "ledger") with no surrounding context, and accounted for 52% of the
+# bake-off's false positives (CLAUDE.md, "Known weaknesses"). Re-measured
+# against eval/dataset.jsonl (contextual block-class as positives, every
+# approve-class record as negatives):
+#
+#     all 6 rules (prior wording)   recall 0.9500  false-block 0.4062
+#     rule 5 removed                recall 0.8000  false-block 0.4000
+#     rule 5 reworded (below)       recall 0.9500  false-block 0.3438
+#     bare-word trip rate:          prior 3/8, reworded 0/8
+#
+# Removing the rule costs 0.15 recall for nothing, so it earns its place;
+# the wording was the defect. Two other rewordings were measured and
+# rejected before this one, per the fix brief: an abstract
+# harm/reputational-harm framing scored 0.00 recall on the contextual set,
+# too vague for the model to match anything; an event-list framing (naming
+# categories like acquisitions and customer churn without a non-public/
+# unannounced qualifier) kept the dataset-level false-block rate high, the
+# same defect as the prior wording. The wording below adds the qualifier
+# ("has not been announced") and concrete examples instead of a bare noun
+# list, which is what separates announced/ordinary business talk from an
+# actual leak.
 CONTEXTUAL_RULES: list[str] = [
     "Flag disclosure of a medical condition, diagnosis, treatment, or mental health.",
     "Flag disclosure of financial hardship, debt, bankruptcy, or inability to pay.",
     "Flag disclosure of a lawsuit, legal dispute, settlement, or investigation.",
     "Flag disclosure of addiction, recovery, or substance use.",
     "Flag disclosure of immigration or visa status.",
-    "Flag confidential business information such as unannounced acquisitions or a customer leaving.",
+    "Flag disclosure of non-public company information that has not been "
+    "announced, such as a pending acquisition, a major customer ending its "
+    "contract, or an internal investigation.",
 ]
 
 # max_length=2048 tokens, minus the rule prefix (measured 92 tokens for the

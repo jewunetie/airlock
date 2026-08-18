@@ -18,3 +18,7 @@ decisions*.json
 # Eval measurement outputs. Machine-specific timings that churn on every
 # run, and the figures that matter are written up in eval/README.md.
 eval/results/
+
+# SDD process artifacts: implementer reports and ledgers. Scratch for how the
+# work was done, not part of the tool. Kept on disk, never committed.
+.superpowers/

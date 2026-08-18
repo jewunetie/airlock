@@ -7,7 +7,7 @@
 #     "transformers>=5.15.0,<5.16.0",
 # ]
 # ///
-"""Tests for the round-reassembly guard. See PLAN-round-reassembly.md.
+"""Tests for the round-reassembly guard.
 
     uv run --script tests/test_round_guard.py
 
@@ -146,8 +146,7 @@ def run_with_stub(session, jobs, answers):
 
 
 def session_over(root, allow_writes=False):
-    # Session signature per task-2-brief.md (PLAN-liquid-guard.md): the guard
-    # is now the two local encoders, unstubbed and run for real here, same as
+    # The guard is the two local encoders, unstubbed and run for real here, same as
     # every other real evaluate_session call in this suite. Only ollama_chat
     # (the worker) is stubbed, by run_with_stub below.
     return airlock.Session(
@@ -194,9 +193,9 @@ def task1_labelled_ein() -> None:
 def task2_reassembly() -> None:
     print("\nTask 2: source-anchored identifier reassembly detection")
 
-    # Matches PLAN-round-reassembly.md's own illustrative example. Not a real
-    # person's identifier; an SSN carries no vendor shape for secret scanning
-    # to trip on, unlike the credential prefixes fake_credential exists for.
+    # An illustrative SSN, not a real person's identifier; it carries no
+    # vendor shape for secret scanning to trip on, unlike the credential
+    # prefixes fake_credential exists for.
     ssn_sources = {airlock.normalise_identifier("912-84-7731")}
 
     check(
@@ -289,10 +288,9 @@ def task3_wiring() -> None:
     print("\nTask 3: wiring the source-anchored check into run_jobs")
 
     # Scattered fragments: three job results carry the SSN's groups, with
-    # benign job results between them. This is the arrangement the plan's own
-    # measurement shows the pre-existing evaluate_session(combined) check
-    # misses (PLAN-round-reassembly.md's placement table: 0.00 detection at
-    # 9 filler jobs).
+    # benign job results between them. This is the arrangement that measured
+    # 0.00 detection at 9 filler jobs for the pre-existing
+    # evaluate_session(combined) check on its own.
     tmp = Path(tempfile.mkdtemp(prefix="airlock-round-guard-test3-"))
     (tmp / "record.txt").write_text("Client SSN is 912-84-7731, filed Monday.\n")
     session = session_over(tmp)
@@ -718,15 +716,15 @@ def task4_digit_projection() -> None:
 
 
 def task5_order_independence() -> None:
-    """PLAN-cross-round.md Task 2: out-of-order jobs within a single round.
+    """Out-of-order jobs within a single round.
 
     reassembles_identifier's subset-concatenation pass preserves job order,
     so a caller that issues its fragments out of order defeats it entirely.
-    Task 1 (advance_reassembly_state) already built an order-independent,
-    piece-bounded reachability check for cross-round accumulation; this
-    reuses that same primitive on one round's values via a throwaway state
-    dict, rather than adding permutation logic, per the coordinator's own
-    measurement (reversed/shuffled/scattered-reversed all order-free=True).
+    advance_reassembly_state already has an order-independent, piece-bounded
+    reachability check for cross-round accumulation; this reuses that same
+    primitive on one round's values via a throwaway state dict, rather than
+    adding permutation logic (reversed/shuffled/scattered-reversed all
+    order-free=True).
     """
     print("\nTask 5: order-independent reassembly within one round")
 
@@ -783,7 +781,7 @@ def task5_order_independence() -> None:
 
 
 def task6_alnum_run_projection() -> None:
-    """PLAN-cross-round.md Task 3: alphanumeric padding.
+    """Alphanumeric padding.
 
     The digits-only projection (Task 4 above) cannot help an identifier
     whose letters carry meaning, such as an API key: discarding the letters

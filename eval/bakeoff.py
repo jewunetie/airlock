@@ -21,9 +21,8 @@ and GUARD_SCHEMA, a different mode in which granite performs differently
 (spot-checked: native scoring caught 2 of 4 contextual cases, GUARD_PROMPT
 caught 4 of 4). The comparison against granite's shipped configuration was
 never run; treat config C's results as evidence about granite's native
-scoring mode only. See PLAN-liquid-guard.md for the full account. airlock.py
-no longer uses granite at all, so config C also no longer reflects "the
-current architecture" in any sense.
+scoring mode only. airlock.py no longer uses granite at all, so config C
+also no longer reflects "the current architecture" in any sense.
 
 Positive class is "block". Precision, recall and F1 are computed with respect
 to blocking, so recall is the fraction of genuinely sensitive messages caught

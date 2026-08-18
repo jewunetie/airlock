@@ -95,7 +95,7 @@ evaluated research contributions." The PII-Detector, by contrast, is
 benchmarked on six public corpora and is best on five. The only evidence for
 the Policy Linter is this project's own `eval/`, on a synthetic dataset built
 for this project. A later reader must not assume it was measured externally;
-it was not, and `PLAN-liquid-guard.md` records the evidence gap in full.
+it was not.
 
 **`eval/`'s numbers are an upper bound, not field performance.** The
 PII-Detector scored 1.00 precision on `eval/dataset.jsonl` against 0.428 and
@@ -206,21 +206,20 @@ version of this gap.
 so a caller issuing fragments out of order defeated it, and its digits-only
 projection could not help an alphanumeric identifier such as an API key,
 since discarding the letters would discard what makes the match meaningful.
-Both are closed in `PLAN-cross-round.md` Tasks 2 and 3: order independence
-reuses `advance_reassembly_state`'s reachability primitive on a
-round-scoped, throwaway state (no new algorithm, and it inherits that
-primitive's `REASSEMBLY_PIECE_BOUND` cap); alphanumeric padding is closed by
-`_alnum_runs`, extracting maximal alphanumeric runs from each raw value and
-running the same order-free pass over the expanded run list. Measured false
-blocking stayed at 0.000 in every check re-run for this change: the 160
-approve-labelled records in `eval/dataset.jsonl`, used as a wider prose
-corpus than the twelve hand-written phrases the run-projection design was
-first tried against (400 rounds, `task-2-3-report.md`); the existing
-six/eight/nine-digit residual sweep in `eval/reassembly_residuals.py`
-(unchanged from its prior figures); and `eval/public_corpora.py`'s 877-record
-stack measurement (unaffected in principle, since it calls `evaluate()`
-directly and never touches `reassembles_identifier`, but re-run anyway per
-`PLAN-cross-round.md`'s own instruction to treat that as the deciding
+Both are closed: order independence reuses `advance_reassembly_state`'s
+reachability primitive on a round-scoped, throwaway state (no new
+algorithm, and it inherits that primitive's `REASSEMBLY_PIECE_BOUND` cap);
+alphanumeric padding is closed by `_alnum_runs`, extracting maximal
+alphanumeric runs from each raw value and running the same order-free pass
+over the expanded run list. Measured false blocking stayed at 0.000 in
+every check re-run for this change: the 160 approve-labelled records in
+`eval/dataset.jsonl`, used as a wider prose corpus than the twelve
+hand-written phrases the run-projection design was first tried against
+(400 rounds, 0/400); the existing six/eight/nine-digit residual sweep in
+`eval/reassembly_residuals.py` (unchanged from its prior figures); and
+`eval/public_corpora.py`'s 877-record stack measurement (unaffected in
+principle, since it calls `evaluate()` directly and never touches
+`reassembles_identifier`, but re-run anyway to treat that as the deciding
 check). What remains OPEN, stated plainly rather than implied by omission:
 overlap-based reassembly (merging `"91284"` and `"847731"` via the shared
 `"84"` rather than concatenating whole pieces) is still uncovered by any

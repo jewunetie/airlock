@@ -246,9 +246,9 @@ across all four corpora): `pii-patterns` 293, `pii-detector` 356, `secrets`
 79, `policy-linter` 8. The two deterministic layers (`secrets` +
 `pii-patterns`, 372) catch a comparable share to the PII-Detector encoder
 alone (356); the Policy-Linter's contribution is small in absolute count but
-is not redundant with the others; see `PLAN-liquid-guard.md` and the "Known
-weaknesses" note in `CLAUDE.md` on rule 5's noise/recall tradeoff for why it
-stays. This is the number nobody had before this script: the model card
+is not redundant with the others; see the "Known weaknesses" note in
+`CLAUDE.md` on rule 5's noise/recall tradeoff for why it stays. This is the
+number nobody had before this script: the model card
 covers the PII-Detector encoder alone, not its contribution relative to the
 regex layers ahead of it or the linter behind it.
 

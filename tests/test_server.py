@@ -459,7 +459,7 @@ def group_b3() -> None:
     directly, never run_jobs itself. It does not cover fragments scattered
     among benign job results, which is the arrangement that actually defeats
     the shape-based scanners; see the round-level tests driving run_jobs in
-    tests/test_round_guard.py (PLAN-round-reassembly.md) for that coverage.
+    tests/test_round_guard.py for that coverage.
     """
     print("\nB3. Split-across-jobs reconstruction")
     fragments = ["912", "84", "7731"]

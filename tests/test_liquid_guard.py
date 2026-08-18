@@ -78,18 +78,18 @@ CLEAN_POLICY_TEXT = (
     "The README describes how to set up the development environment and "
     "run the test suite."
 )
-# rule1 (financial hardship) scores 0.946 here: below the PLAN's 0.98
-# override, above a 0.50 threshold. Picked by direct measurement against the
-# real model, not guessed.
+# rule1 (financial hardship) scores 0.946 here: below the 0.98 override,
+# above a 0.50 threshold. Picked by direct measurement against the real
+# model, not guessed.
 BORDERLINE_FINANCIAL_TEXT = "Money has been a bit tight lately with all the bills piling up."
 
-# PLAN-liquid-guard.md fix round 2: the exact tax-workflow defect. run_jobs
-# hands the guard str(answer).strip() for a "number"-shaped job, i.e. a bare,
-# context-free numeric string. Measured against the real model:
-# contact.postal_code = 0.545, inside the coordinator's measured
-# false-positive cluster (0.524-0.565, 8/300 sampled). Below the shipped
-# PII_DETECTOR_ENTITY_THRESHOLDS override of 0.70, above the flat
-# PII_DETECTOR_THRESHOLD of 0.5 the bug shipped at.
+# The exact tax-workflow defect: run_jobs hands the guard
+# str(answer).strip() for a "number"-shaped job, i.e. a bare, context-free
+# numeric string. Measured against the real model: contact.postal_code =
+# 0.545, inside the measured false-positive cluster (0.524-0.565, 8/300
+# sampled; see PII_DETECTOR_ENTITY_THRESHOLDS' comment in airlock.py).
+# Below the shipped PII_DETECTOR_ENTITY_THRESHOLDS override of 0.70, above
+# the flat PII_DETECTOR_THRESHOLD of 0.5 the bug shipped at.
 PII_POSTAL_FALSE_POSITIVE_TEXT = "94250.0"
 # A real postal code with the surrounding context a genuine disclosure would
 # have. Measured: contact.postal_code = 0.911, inside the coordinator's
@@ -319,8 +319,8 @@ def rule5_bare_words_case(unavailable: str) -> None:
 
 
 def pii_entity_threshold_case(unavailable: str) -> None:
-    """PLAN-liquid-guard.md fix round 2: PII_DETECTOR_ENTITY_THRESHOLDS
-    exists because the flat PII_DETECTOR_THRESHOLD false-flagged 2.7% of
+    """PII_DETECTOR_ENTITY_THRESHOLDS exists because the flat
+    PII_DETECTOR_THRESHOLD false-flagged 2.7% of
     bare number-shaped job answers (measured 8/300) as contact.postal_code,
     landing on the tax-extraction workflow test_tax_e2e.py exercises. Same
     override-mechanism shape as policy_linter_cases's per-rule test above:
@@ -517,12 +517,8 @@ def fail_closed_case() -> None:
 
 
 # --------------------------------------------------------------------------
-# Task 2: evaluate() rewired onto secrets -> pii-patterns -> pii-detector ->
-# policy-linter, and the CLI/session/server surface that configures it. See
-# task-2-brief.md and the Task 3 section of PLAN-liquid-guard.md; the two
-# were merged into one implementation task because evaluate()'s signature and
-# its call sites cannot be verified independently (see the merge ruling in
-# progress.md).
+# evaluate() rewired onto secrets -> pii-patterns -> pii-detector ->
+# policy-linter, and the CLI/session/server surface that configures it.
 # --------------------------------------------------------------------------
 
 CRED_ALPHABET = string.ascii_letters + string.digits
@@ -1062,16 +1058,8 @@ def main() -> int:
         print("failed:")
         for name in FAIL:
             print(f"  - {name}")
-    # Raised from 38 to 51 (Task 4: check()'s formatting (2), the
-    # banner/config-screen smoke case (4), and cmd_doctor's real encoder
-    # checks (7)), then to 55 (PLAN-liquid-guard.md fix round 2:
-    # pii_entity_threshold_case, 4 checks), then to 61 (final fix wave:
-    # cli_parser_cases' --linter-threshold range validation, 6 checks), then
-    # to 62 (cleanup: evaluate_default_threshold_case, 1 check), then to 73
-    # (item-3 fix round: rule5_bare_words_case, 8 checks, one per
-    # BARE_BUSINESS_WORDS entry, and postal_code_letter_gate_case, 3
-    # checks). Per CLAUDE.md, a suite that silently collects fewer checks
-    # reads like one that passed.
+    # Per CLAUDE.md, a suite that silently collects fewer checks reads like
+    # one that passed.
     if total < 73:
         print(f"\nWARNING: only {total} checks ran. Expected at least 73.")
         print("Something did not collect. Treat this as a failure, not a pass.")

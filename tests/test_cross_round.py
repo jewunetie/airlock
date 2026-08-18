@@ -7,7 +7,7 @@
 #     "transformers>=5.15.0,<5.16.0",
 # ]
 # ///
-"""Tests for cross-round reassembly. See PLAN-cross-round.md Task 1.
+"""Tests for cross-round reassembly.
 
     uv run --script tests/test_cross_round.py
 
@@ -61,11 +61,10 @@ def skip(name: str, why: str) -> None:
     print(f"  skip  {name}  [{why}]")
 
 
-# Same illustrative SSN used throughout tests/test_round_guard.py: not a real
-# person's identifier, PLAN-round-reassembly.md's own example, and carries no
-# vendor shape for secret scanning to trip on (see fake_credential/
-# CREDENTIAL_SHAPES in tests/test_server.py for why a real secret would need
-# to be generated instead).
+# Same illustrative SSN used throughout tests/test_round_guard.py: not a
+# real person's identifier, and carries no vendor shape for secret scanning
+# to trip on (see fake_credential/CREDENTIAL_SHAPES in tests/test_server.py
+# for why a real secret would need to be generated instead).
 SSN = "912-84-7731"
 
 

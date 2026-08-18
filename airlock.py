@@ -2295,6 +2295,11 @@ def run_worker(
 
     history: list[str] = []
     draft = ""
+    # Signatures of sandbox actions already run this session, so a repeat can
+    # be caught before it burns a step: a 0.8B worker measured spending its
+    # entire step budget on eight identical `list` calls, never reaching an
+    # answer it already had after the first one.
+    seen_actions: set[tuple[str, str | None, str | None]] = set()
     try:
         listing = "\n".join(session.sandbox.list_dir(".")) or "(empty)"
     except SandboxError as exc:
@@ -2322,6 +2327,23 @@ def run_worker(
         # Hand-rolled dispatch rather than Ollama's native tool calling, for
         # the reliability reason documented on ollama_chat above.
         action = str(step.get("action", "")).lower()
+
+        # A repeated action is fed back as input, the same way sandbox
+        # refusals already are, rather than executed again: the model already
+        # has this result in history and gains nothing from a second copy of
+        # it, only a step closer to running out.
+        signature = (action, step.get("path"), step.get("query"))
+        if action in {"list", "read", "search", "write"} and signature in seen_actions:
+            note("repeated", f"{action} {step.get('path') or step.get('query') or ''}".strip())
+            result = (
+                f"you already ran {action} with these exact arguments; the result "
+                "is already above in what you have done so far. Do not repeat it: "
+                "answer the question now with what you already know."
+            )
+            history.append(f"{action} -> {result[:600]}")
+            continue
+        seen_actions.add(signature)
+
         try:
             if action == "list":
                 target = step.get("path", ".")
@@ -2376,6 +2398,9 @@ def run_worker(
     if not draft:
         return envelope(session, "blocked", "", ["the local model produced no answer"])
 
+    # Concerns from the previous revise verdict, to notice when a revision
+    # changed nothing.
+    previous_concerns: list[str] | None = None
     for attempt in range(MAX_REVISIONS):
         note("guard", f"checking (attempt {attempt + 1})")
         verdict = evaluate_session(session, draft)
@@ -2396,6 +2421,25 @@ def run_worker(
             session.blocked += 1
             note("blocked", "; ".join(verdict.concerns))
             return envelope(session, "blocked", "", verdict.concerns)
+
+        # The same rejection reason twice in a row means the last revision
+        # did not change anything the guard cares about, most often because
+        # the answer's whole point was the withheld content (naming a file
+        # the operator cannot know exists, for example): no rewording fixes
+        # that, so the remaining revisions would just repeat this. Stop here
+        # rather than spend them, and say plainly why, without repeating what
+        # was withheld: the message must not name the file, path, or content,
+        # so sanitise_concerns (via envelope) never sees them either.
+        if previous_concerns is not None and set(verdict.concerns) == set(previous_concerns):
+            session.blocked += 1
+            note("blocked", "repeated guard rejection")
+            return envelope(
+                session, "blocked", "",
+                ["the question cannot be answered without disclosing content "
+                 "the guard withholds, and revising the answer did not change "
+                 "that"],
+            )
+        previous_concerns = verdict.concerns
 
         session.revisions += 1
         note("revise", "; ".join(verdict.concerns))

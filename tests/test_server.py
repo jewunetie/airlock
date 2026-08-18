@@ -345,6 +345,124 @@ def group_b2() -> None:
         airlock.ollama_chat = real
 
 
+def group_b4() -> None:
+    """Item-5: a looping worker gets nudged, and futile revision stops early.
+
+    Measured against the real model (see PLAN item-5): "How many files are
+    here, roughly?" looped on `list` for all 8 steps and never answered.
+    "Which file mentions a vendor contract?" answered, got rejected by the
+    guard for naming content, and burned all three revisions restating the
+    same unrevisable answer. Both are reproduced here with a scripted
+    ollama_chat, deterministically and without needing Ollama.
+    """
+    print("\nB4. Worker loop and revision-budget fixes")
+
+    def make_session() -> airlock.Session:
+        return airlock.Session(
+            session_id="test-b4", objective="x",
+            sandbox=airlock.Sandbox(root=Path("."), allow_writes=False),
+            worker_model="stub",
+        )
+
+    real = airlock.ollama_chat
+    try:
+        # Case 1: a worker that repeats the same action gets a nudge fed back
+        # as input (same pattern as sandbox refusals), and reaches an answer
+        # well inside the step budget instead of being run to exhaustion.
+        prompts: list[str] = []
+        loop_replies = [
+            {"action": "list", "path": "."},
+            {"action": "list", "path": "."},
+            {"action": "answer", "answer": "Two planning files, no personal data."},
+        ]
+
+        def scripted_loop(_model: str, prompt: str, _schema: dict) -> dict:
+            prompts.append(prompt)
+            return loop_replies.pop(0) if loop_replies else {"action": "list", "path": "."}
+
+        airlock.ollama_chat = scripted_loop
+        out = airlock.run_worker(make_session(), "how many files are here, roughly?")
+        check(
+            "a repeated action still reaches an answer, not step exhaustion",
+            out.get("status") == "approved",
+            f"{out.get('status')}: {out.get('guard_concerns')}",
+        )
+        check(
+            "the repeat is fed back to the model before its next turn",
+            len(prompts) >= 3 and any(
+                w in prompts[2].lower() for w in ("already", "repeat")
+            ),
+            prompts[2][-300:] if len(prompts) >= 3 else f"only {len(prompts)} prompts",
+        )
+
+        # Positive control: a worker that answers on its very first turn is
+        # unaffected by the repeat check (no repeat ever occurs).
+        def scripted_immediate(_model: str, _prompt: str, _schema: dict) -> dict:
+            return {"action": "answer", "answer": "Two planning files, no personal data."}
+
+        airlock.ollama_chat = scripted_immediate
+        out = airlock.run_worker(make_session(), "what is here?")
+        check(
+            "a worker that answers immediately is unaffected",
+            out.get("status") == "approved",
+            f"{out.get('status')}: {out.get('guard_concerns')}",
+        )
+
+        # Case 2: a worker whose answer keeps getting rejected for the same
+        # reason stops revising early instead of burning every revision on an
+        # answer it cannot fix. The secret is generated per CLAUDE.md's
+        # testing conventions, never a literal.
+        secret = fake_credential("sk_live_", 24)
+
+        def scripted_unrevisable(_model: str, _prompt: str, _schema: dict) -> dict:
+            return {"action": "answer", "answer": secret}
+
+        airlock.ollama_chat = scripted_unrevisable
+        session = make_session()
+        out = airlock.run_worker(session, "what is the vendor key?")
+        check(
+            "identical repeated guard rejections stop before all revisions are spent",
+            out.get("status") == "blocked" and session.revisions < airlock.MAX_REVISIONS,
+            f"status={out.get('status')} revisions={session.revisions}",
+        )
+        blob = json.dumps(out)
+        check(
+            "the stop-early concern names neither the file, path, nor the "
+            "withheld content",
+            secret not in blob and str(Path(".").resolve()) not in blob,
+            blob[:200],
+        )
+        check(
+            "no concern text contains a path separator",
+            not any("/" in c for c in out.get("guard_concerns", [])),
+            str(out.get("guard_concerns")),
+        )
+
+        # Positive control: a rejection that IS successfully revised still
+        # works, i.e. the early-stop only fires on a repeated identical
+        # reason, not on every rejection.
+        revise_replies = [
+            {"action": "answer", "answer": secret},
+            {"action": "answer", "answer": "It is a general business document."},
+        ]
+
+        def scripted_revisable(_model: str, _prompt: str, _schema: dict) -> dict:
+            return revise_replies.pop(0) if revise_replies else {
+                "action": "answer", "answer": "It is a general business document."
+            }
+
+        airlock.ollama_chat = scripted_revisable
+        session = make_session()
+        out = airlock.run_worker(session, "what is the vendor key?")
+        check(
+            "a rejection that is then successfully revised still approves",
+            out.get("status") == "approved" and session.revisions == 1,
+            f"status={out.get('status')} revisions={session.revisions}",
+        )
+    finally:
+        airlock.ollama_chat = real
+
+
 # Every check group_c performs on a run that completes, in order. Each early
 # return below must skip() everything in this list not already recorded via
 # check(), so a suite that exits early collects exactly as many checks as one
@@ -555,6 +673,7 @@ def main() -> int:
         run_group("group B", group_b, False)
         run_group("group B2", lambda _root: group_b2(), False)
         run_group("group B3", lambda _root: group_b3(), False)
+        run_group("group B4", lambda _root: group_b4(), False)
         run_group("group C", group_c, True)
         run_group("group C prereqs", group_c_prereq_counts, True)
     finally:

@@ -1,0 +1,40 @@
+[project]
+name = "airlock"
+dynamic = ["version"]
+description = "A guarded local model that works over one directory, exposed as an MCP server."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+# Kept in exact sync with the PEP 723 header at the top of airlock.py.
+# tests/test_packaging.py asserts the two lists agree; see CLAUDE.md for why
+# this is a checked invariant rather than a single source of truth.
+dependencies = [
+    "mcp[cli]>=2.0.0,<2.1.0",
+    "torch>=2.13.0,<2.14.0",
+    "transformers>=5.15.0,<5.16.0",
+    "rich>=13.7",
+    "detect-secrets>=1.5",
+    "pypdf>=5.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/jewunetie/airlock"
+Repository = "https://github.com/jewunetie/airlock"
+
+[project.scripts]
+airlock = "airlock:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# airlock is one module, not a package: this tells hatchling to build a
+# wheel around airlock.py directly instead of expecting a directory.
+[tool.hatch.build.targets.wheel]
+py-modules = ["airlock"]
+
+# Reads __version__ out of airlock.py instead of duplicating it here, so
+# there is exactly one version number in the repository, not two that can
+# drift apart the way the dependency lists can.
+[tool.hatch.version]
+path = "airlock.py"

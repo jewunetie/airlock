@@ -42,14 +42,14 @@ jobs:
           restore-keys: |
             hf-models-
 
-      # Five suites, one step each for clear per-suite pass/fail in the
+      # Six suites, one step each for clear per-suite pass/fail in the
       # Actions UI. Each script's own main() already enforces a low-total
       # floor (CLAUDE.md: a suite that silently collects fewer checks than
       # expected reads exactly like one that passed) and exits non-zero on
       # either a real failure or an implausibly small collected count, so
       # a green step here really does mean both.
       #
-      # None of the five need Ollama to pass: every Ollama-dependent check
+      # None of the six need Ollama to pass: every Ollama-dependent check
       # in all of them is written to report itself as an INCONCLUSIVE skip
       # rather than a failure when Ollama is unreachable, which a hosted
       # runner always is (no Ollama here on purpose). test_tax_e2e.py got
@@ -60,6 +60,14 @@ jobs:
       # meaningful rather than vacuous; do not add Ollama just to turn
       # those skips into passes, and do not paper over a suite that stops
       # reporting them as skips or reintroduce continue-on-error instead.
+      #
+      # test_packaging.py needs neither Ollama nor the guard encoders (it
+      # only parses airlock.py's PEP 723 header and pyproject.toml), so it
+      # runs first as the fastest possible signal that the two dependency
+      # declarations have drifted apart.
+      - name: test_packaging.py
+        run: uv run --script tests/test_packaging.py
+
       - name: test_liquid_guard.py
         run: uv run --script tests/test_liquid_guard.py
 

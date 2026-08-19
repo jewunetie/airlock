@@ -65,6 +65,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import textwrap
@@ -2938,36 +2939,43 @@ def render_mcp_help(args: argparse.Namespace) -> None:
     Shown because a user who has just started chatting has no way to discover
     that the same workspace can be served to a cloud assistant, and the paths
     have to be absolute, which is the detail people get wrong.
+
+    Prefers `"command": "airlock"` when that name resolves on PATH, since a
+    name survives the checkout moving or being upgraded and a filesystem
+    path does not: registering the absolute-path form in a client config and
+    then moving the checkout breaks that registration silently. Falls back
+    to the `uv run --script` form, with an absolute path to this file, when
+    airlock is not installed, since that form works with nothing installed
+    beyond uv. Detected with shutil.which rather than assumed, and the
+    printed config states which form was chosen and why.
     """
     root = Path(args.root).expanduser().resolve()
-    script = Path(__file__).resolve()
-    config = {
-        "mcpServers": {
-            "airlock": {
-                "command": "uv",
-                "args": [
-                    "run", "--script", str(script),
-                    "serve", "--root", str(root),
-                    "--model", args.model,
-                ],
-            }
-        }
-    }
+    on_path = shutil.which("airlock")
+    if on_path:
+        command = "airlock"
+        tool_args = []
+        reason = f"using the installed 'airlock' command, found on PATH at {on_path}"
+    else:
+        command = "uv"
+        tool_args = ["run", "--script", str(Path(__file__).resolve())]
+        reason = "'airlock' is not on PATH, falling back to uv run --script"
+    tool_args += ["serve", "--root", str(root), "--model", args.model]
+
+    config = {"mcpServers": {"airlock": {"command": command, "args": tool_args}}}
+    claude_code_cmd = f"claude mcp add airlock -- {command} {' '.join(tool_args)}"
+
     console.print(
         Panel(
             Group(
                 Text("Serve this workspace to a cloud assistant.", style="bold"),
                 Text(f"airlock v{__version__}", style="dim"),
+                Text(reason, style="dim"),
                 Text(""),
                 Text("Claude Desktop, in claude_desktop_config.json:", style="dim"),
                 Text(json.dumps(config, indent=2), style="cyan"),
                 Text(""),
                 Text("Claude Code:", style="dim"),
-                Text(
-                    f"claude mcp add airlock -- uv run --script {script} "
-                    f"serve --root {root}",
-                    style="cyan",
-                ),
+                Text(claude_code_cmd, style="cyan"),
                 Text(""),
                 Text(
                     "The assistant receives guarded answers, never your files. "
@@ -3762,6 +3770,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  airlock serve --root ~/project   run as an MCP server\n"
         ),
     )
+    parser.add_argument("--version", action="version", version=f"airlock {__version__}")
     parser.set_defaults(func=cmd_quickstart)
 
     sub = parser.add_subparsers(dest="command")

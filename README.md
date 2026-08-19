@@ -147,13 +147,45 @@ which is not what this does.
 Tool annotations are computed at startup from `--allow-writes`, so
 `airlock_ask` reports `readOnlyHint: true` only when it is actually read-only.
 
+## Install
+
+Two ways to get `airlock` on your `PATH`, and one way to run it without installing anything.
+
+**`uv tool install`** (primary path):
+
+```sh
+git clone https://github.com/jewunetie/airlock.git
+cd airlock
+uv tool install .
+```
+
+This registers an `airlock` command backed by its own isolated environment, the same way `uv tool install` works for any Python CLI. Update by pulling and re-running the same command; remove with `uv tool uninstall airlock`.
+
+**Homebrew** (primary path, macOS/Linux): a formula lives at [`Formula/airlock.rb`](Formula/airlock.rb). It is not yet published to a tap, so for now install it straight from the checkout:
+
+```sh
+brew install --formula Formula/airlock.rb
+```
+
+**Run the script directly** (alternative, for reading or hacking on the source): `airlock.py` keeps its PEP 723 header, so it stays runnable with nothing installed beforehand beyond `uv` itself:
+
+```sh
+git clone https://github.com/jewunetie/airlock.git
+cd airlock
+./airlock.py doctor
+```
+
+`uv` resolves the dependencies declared in that header on first run. This is the form every example below uses interchangeably with the installed `airlock` command; swap `./airlock.py` for `airlock` once it is on `PATH`.
+
+Either way, a single file is still what you are trusting: `uv tool install` and the Homebrew formula both build from the same `airlock.py`, not a restructured package, so reading that one file end to end still tells you everything the tool does. See the "Shape" section of CLAUDE.md for why that property, not the ability to run with zero setup, is what this project actually protects.
+
 ## Requirements
 
 - [uv](https://docs.astral.sh/uv/)
 - [Ollama](https://ollama.com/) running locally, for the worker model
 - `torch` and `transformers`, for the two guard encoders
 
-Dependencies are declared inline in `airlock.py` using PEP 723, so `uv` resolves them on first run. There is nothing to install beforehand.
+`torch`, `transformers`, and the rest of `airlock`'s dependencies total roughly 2.6GB with the two guard encoders' model weights. Installed via `uv tool install` or Homebrew, they are resolved once into that isolated environment. Run directly with `uv run --script`, they are declared inline in `airlock.py` via PEP 723 and resolved into a cache on first run instead. Either way there is no separate `pip install` step.
 
 ```sh
 ollama pull qwen3.5:0.8B               # worker
@@ -223,7 +255,26 @@ Run this first. It catches nearly every misconfiguration.
 
 ## Use as an MCP server
 
-Claude Desktop, in `claude_desktop_config.json`:
+If `airlock` is installed and on `PATH` (see [Install](#install)), Claude Desktop, in `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "airlock": {
+      "command": "airlock",
+      "args": ["serve", "--root", "/absolute/path/to/private-directory"]
+    }
+  }
+}
+```
+
+Claude Code:
+
+```sh
+claude mcp add airlock -- airlock serve --root /absolute/path/to/private-directory
+```
+
+A command name survives the checkout moving or being upgraded; a filesystem path does not. If `airlock` is not installed, fall back to running the script directly, with an absolute path since MCP clients do not resolve relative ones:
 
 ```json
 {
@@ -239,14 +290,12 @@ Claude Desktop, in `claude_desktop_config.json`:
 }
 ```
 
-Claude Code:
-
 ```sh
 claude mcp add airlock -- uv run --script /absolute/path/to/airlock.py \
   serve --root /absolute/path/to/private-directory
 ```
 
-Both paths must be absolute. `--root` is the only directory the worker can reach.
+`--root` is the only directory the worker can reach in either form. Rather than guess which form applies, run `/mcp` inside an interactive session (or `airlock` with no arguments, then `/mcp`): it detects whether `airlock` resolves on `PATH` and prints the correct config for your actual setup, along with which form it chose and why.
 
 ### Watching what happens
 
@@ -283,6 +332,8 @@ verdicts without message content.
 ./airlock.py guard "Jane Doe, 555-555-0100"
 ./airlock.py doctor --root ~/notes
 ```
+
+If `airlock` is installed, swap `./airlock.py` for `airlock` in any of these; both run the same code.
 
 `guard` is the fastest way to understand the guard's behaviour. Feed it text and it reports the decision, the layers that ran, and what it found.
 

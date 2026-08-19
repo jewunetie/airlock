@@ -9,10 +9,55 @@ User-facing behaviour belongs in README.md. Do not repeat it here.
 ## Shape
 
 One file, `airlock.py`, with PEP 723 inline dependencies. Tests live in
-`tests/`, never in the shipped file. The single-file structure is deliberate:
-it can be run with `uv run --script` from anywhere with nothing installed.
+`tests/`, never in the shipped file. Keep it that way: new helpers go in the
+same file unless they are test-only.
 
-Keep it that way. New helpers go in the same file unless they are test-only.
+**Why a single file, and why that claim changed.** The single-file structure
+used to be justified as "no install needed": `uv run --script` resolves the
+PEP 723 header on first run, so there was nothing to set up beforehand. That
+claim has expired and this file said something false until it was corrected
+here. airlock now pulls `torch`, `transformers`, `mcp[cli]`,
+`detect-secrets`, and `pypdf`, plus roughly 2.6GB of encoder model weights,
+and needs Ollama installed separately for the worker model. None of that is
+"nothing," and pretending otherwise in the file that exists to record why
+things are true would defeat the point of this file.
+
+The real reason the file stays single is **auditability**, not install
+cost: a privacy tool that reads a directory and decides what may leave it is
+exactly the kind of thing a user should be able to read end to end before
+trusting it with their documents, and a single file is what makes "read it
+end to end" a realistic thing to ask of someone. Splitting `airlock.py` into
+a package would not remove any dependency; it would only spread the same
+trust surface across files a reader has to reassemble themselves. `uv run
+--script airlock.py` still works, unchanged, for exactly that reading and
+hacking use case.
+
+`pyproject.toml`, `uv tool install .`, and the Homebrew formula in
+`Formula/airlock.rb` exist alongside the single file, not instead of it: all
+three build from the same `airlock.py` (see `[tool.hatch.build.targets.wheel]`
+in `pyproject.toml`), never a restructured package. They exist because
+registering airlock as an MCP server previously meant writing an absolute
+path to `airlock.py` into a client config; move the checkout and every
+registration breaks, silently, and several clients only surface that after a
+full restart. A name on `PATH` survives a move or an upgrade; a filesystem
+path does not. `render_mcp_help` now detects whether `airlock` resolves on
+`PATH` (via `shutil.which`) and prints whichever config is actually correct,
+falling back to the absolute-path `uv run --script` form when it is not
+installed, rather than assuming one or the other.
+
+The PEP 723 header and `pyproject.toml`'s `[project.dependencies]` now both
+declare the same dependency list, and nothing keeps them in sync
+automatically: no native mechanism ties a PEP 723 inline block to a sibling
+pyproject.toml's dependencies, and a custom hatchling metadata hook that
+derived one from the other was considered and rejected, because it would
+make `pyproject.toml`'s dependency list dynamic and unreadable at a glance,
+the same auditability cost splitting the module would carry.
+`tests/test_packaging.py` is the safety net instead: it parses both and
+fails if they disagree, on names or version bounds, needs neither models nor
+Ollama, and runs in CI alongside the other suites. The version number does
+not have this problem: `[tool.hatch.version]` reads `__version__` directly
+out of `airlock.py`, so there is exactly one version number in the
+repository, not two that can drift the way the dependency lists could.
 
 `eval/` is a third thing: the measurement harness behind the numbers cited in
 `airlock.py`'s docstrings (padding-shape detection, round-shape false

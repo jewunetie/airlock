@@ -1,9 +1,19 @@
+# NOT YET FUNCTIONAL. No tagged release exists in this repository, so the
+# `url` below 404s and the `sha256` below is a placeholder, not a real
+# digest: `brew install --formula Formula/airlock.rb` fails today, on
+# purpose rather than silently, on either the download or the checksum.
+# This formula activates on the first tagged release. To make it live:
+#   1. Cut a `vX.Y.Z` git tag matching airlock.py's __version__.
+#   2. Compute the release tarball's digest:
+#        curl -L https://github.com/jewunetie/airlock/archive/refs/tags/vX.Y.Z.tar.gz \
+#          | shasum -a 256
+#   3. Replace both the `url` version and the `sha256` value below with
+#      the real ones, and remove this banner.
+# README.md's Install section must not call Homebrew a working path until
+# this is done; keep the two in sync.
 class Airlock < Formula
   desc "Guarded local model that answers questions over one directory via MCP"
   homepage "https://github.com/jewunetie/airlock"
-  # No tagged release exists yet. This URL and sha256 are placeholders for
-  # the first `vX.Y.Z` tag; update both together, and keep the version
-  # below in step with airlock.py's __version__, when that tag is cut.
   url "https://github.com/jewunetie/airlock/archive/refs/tags/v0.1.0.tar.gz"
   sha256 "0000000000000000000000000000000000000000000000000000000000000000"
   license "MIT"

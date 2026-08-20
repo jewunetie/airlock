@@ -40,10 +40,56 @@ registering airlock as an MCP server previously meant writing an absolute
 path to `airlock.py` into a client config; move the checkout and every
 registration breaks, silently, and several clients only surface that after a
 full restart. A name on `PATH` survives a move or an upgrade; a filesystem
-path does not. `render_mcp_help` now detects whether `airlock` resolves on
+path does not. `render_mcp_help` detects whether `airlock` resolves on
 `PATH` (via `shutil.which`) and prints whichever config is actually correct,
 falling back to the absolute-path `uv run --script` form when it is not
 installed, rather than assuming one or the other.
+
+**A bare `"airlock"` on PATH is not enough; GUI-launched clients need the
+resolved absolute path instead, and that is not the same fix as "found on
+PATH".** An earlier version of this fix emitted `"command": "airlock"`
+whenever `shutil.which` found it, which works for Claude Code, Codex, and
+Gemini CLI, since each starts as a child of the user's interactive shell
+and inherits its `PATH`. It does not work for Claude Desktop, Cursor,
+VS Code, or Zed: those are started by the window manager or `launchd`, not
+a shell, and on this machine `launchctl getenv PATH` is empty, so a
+Dock-launched app gets the system default `/usr/bin:/bin:/usr/sbin:/sbin`,
+which contains neither `~/.local/bin` (`uv tool install`) nor
+`/opt/homebrew/bin` (Homebrew). A bare name in a GUI client's config is a
+silent command-not-found there, and shipping it was a regression: the
+pre-packaging version emitted the `uv run --script` absolute-path form
+unconditionally, which did work for Desktop. `_airlock_launch_forms` now
+returns one form per launch kind, keyed off `MCP_CLIENTS[client]["launch"]`
+(`"shell"` or `"gui"`), not one shared form.
+
+**`shutil.which` can resolve to a path that will not exist once the
+process exits, and emitting that into a client's config registers a
+command that breaks on the next launch.** Hit directly while testing this
+fix: running from inside an ephemeral `uv run --script` venv (a git
+worktree's own `.venv`), `shutil.which("airlock")` resolved to
+`<worktree>/.venv/bin/airlock`, a path that disappears with the worktree.
+`_looks_ephemeral` checks the found path, and what it points to if it is a
+symlink, for path components that mark a venv, temp dir, or build cache,
+and treats a match the same as "not found": both launch forms fall back to
+`uv run --script <absolute path to airlock.py>`. The emitted GUI path is
+deliberately the symlink `shutil.which` reports (`~/.local/bin/airlock`,
+`/opt/homebrew/bin/airlock`), not its fully resolved target: both
+`uv tool install` and Homebrew put a stable symlink at that documented
+location pointing into an internal per-tool venv, and dereferencing it
+would print an unrecognisable implementation path instead, even though
+both forms happen to work.
+
+**`/mcp` is a slash command, reachable only inside an interactive chat
+session; a setup script has no session to run it in.** `airlock mcp
+[--client NAME] [--json]` is the non-interactive equivalent:
+`--client` picks one of `MCP_CLIENTS`' seven supported clients and emits
+its own schema (`mcpServers` for claude-code/claude-desktop/cursor/
+gemini-cli, TOML `mcp_servers` for codex, `servers` with `"type": "stdio"`
+for vscode, `context_servers` with `"source": "custom"` for zed);
+`--json` strips it to parseable output only, so a script can pipe it
+straight into a client's config file. Extend `MCP_CLIENTS` only after
+checking a client's real schema, never by assuming it matches one already
+there; the four that share `mcpServers` were confirmed to, not guessed.
 
 The PEP 723 header and `pyproject.toml`'s `[project.dependencies]` now both
 declare the same dependency list, and nothing keeps them in sync

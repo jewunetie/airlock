@@ -68,6 +68,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import textwrap
 import urllib.error
 import urllib.request
@@ -2933,36 +2934,178 @@ def _config_loop(session: Session, args: argparse.Namespace, notices: list[str])
                     notices.append("[red]out of range:[/red] must be between 0.0 and 1.0")
 
 
+# --------------------------------------------------------------------------
+# MCP client configuration
+# --------------------------------------------------------------------------
+# Two families of MCP client need two different launch forms for the same
+# command, not just cosmetic ones. Shell-launched clients (Claude Code,
+# Codex, Gemini CLI) start as a child of the user's interactive shell and
+# inherit its PATH, so the bare "airlock" name resolves for them exactly as
+# it does in this process. GUI-launched clients (Claude Desktop, Cursor, VS
+# Code, Zed) are started by the window manager/launchd, not a shell:
+# verified on this machine, `launchctl getenv PATH` is empty, so a
+# Dock-launched app gets the system default `/usr/bin:/bin:/usr/sbin:/sbin`,
+# which contains neither `~/.local/bin` (uv tool install) nor
+# `/opt/homebrew/bin` (Homebrew). A bare "airlock" in a GUI client's config
+# is therefore a silent command-not-found there; only the resolved absolute
+# path works.
+_EPHEMERAL_PATH_MARKERS = {".venv", "venv", "build", "builds-v0", "tmp", "temp"}
+
+
+def _looks_ephemeral(path: Path) -> bool:
+    """True if `path` sits inside a venv, temp dir, or build cache.
+
+    A resolution like that works only because the current process happens
+    to be running inside it (an ephemeral `uv run --script` venv, a git
+    worktree's own .venv, a uv build cache used to compile a wheel), not
+    because a stable "airlock" install exists there. Checked by path
+    component instead of an allowlist of known install prefixes, since uv
+    tool install and Homebrew are not the only ways a package ends up on
+    PATH, and naming what is known to be unstable is the more robust rule
+    than naming everywhere considered stable.
+    """
+    parts = {p.lower() for p in path.parts}
+    if parts & _EPHEMERAL_PATH_MARKERS:
+        return True
+    try:
+        return path.is_relative_to(Path(tempfile.gettempdir()).resolve())
+    except OSError:
+        return False
+
+
+def _airlock_launch_forms(script_path: Path) -> tuple[dict[str, Any], dict[str, Any], str]:
+    """Decide how to launch airlock for shell- and GUI-launched MCP clients.
+
+    Returns (shell_form, gui_form, reason). Each form is a
+    {"command": str, "args": list[str]} launch prefix; a caller appends the
+    `serve --root ... --model ...` arguments after it.
+
+    Prefers the installed "airlock" command, found through shutil.which,
+    over the `uv run --script` fallback, since a name on PATH survives the
+    checkout moving or being upgraded and a filesystem path does not. But
+    shutil.which can resolve to a path that will not exist once this
+    process exits, if this process happens to be running inside an
+    ephemeral uv venv. Emitting that path into a client's config would
+    register a command that works today and breaks silently on the next
+    launch, so an ephemeral-looking resolution is treated the same as "not
+    found": both forms fall back to `uv run --script <absolute path>`,
+    which needs nothing installed beyond uv itself.
+
+    The emitted GUI path is the one shutil.which reports, not its fully
+    resolved target: `uv tool install` and Homebrew both put a stable
+    symlink on PATH (`~/.local/bin/airlock`, `/opt/homebrew/bin/airlock`)
+    pointing at an internal venv, and that symlink is the documented,
+    recognisable location, not an implementation detail to dereference
+    away. The ephemeral check still looks at both the symlink and what it
+    points to, since either could turn out to be the doomed path.
+    """
+    fallback_args = ["run", "--script", str(script_path)]
+    which_path = shutil.which("airlock")
+
+    if which_path is None:
+        reason = "'airlock' is not on PATH, falling back to uv run --script"
+        form = {"command": "uv", "args": list(fallback_args)}
+        return dict(form), dict(form), reason
+
+    candidate = Path(which_path)
+    if not candidate.is_absolute():
+        candidate = candidate.resolve()
+
+    if _looks_ephemeral(candidate) or _looks_ephemeral(candidate.resolve()):
+        reason = (
+            f"'airlock' resolved to {candidate}, which looks ephemeral (inside a "
+            "venv, temp dir, or build cache) and may not exist later, falling "
+            "back to uv run --script"
+        )
+        form = {"command": "uv", "args": list(fallback_args)}
+        return dict(form), dict(form), reason
+
+    reason = f"using the installed 'airlock' command, found on PATH at {candidate}"
+    shell_form = {"command": "airlock", "args": []}
+    gui_form = {"command": str(candidate), "args": []}
+    return shell_form, gui_form, reason
+
+
+# Client -> (which launch form it needs, which config schema it reads).
+# Contracts as verified against each client's own docs: claude-code,
+# claude-desktop, cursor and gemini-cli share the "mcpServers" JSON key;
+# codex reads TOML under "mcp_servers", snake_case; vscode requires a
+# "type": "stdio" field under "servers"; zed requires a "source": "custom"
+# field under "context_servers". Extend this dict only after checking a
+# client's real schema, not by guessing it matches one already here.
+MCP_CLIENTS: dict[str, dict[str, str]] = {
+    "claude-code": {"launch": "shell", "schema": "mcpServers"},
+    "gemini-cli": {"launch": "shell", "schema": "mcpServers"},
+    "codex": {"launch": "shell", "schema": "codex"},
+    "claude-desktop": {"launch": "gui", "schema": "mcpServers"},
+    "cursor": {"launch": "gui", "schema": "mcpServers"},
+    "vscode": {"launch": "gui", "schema": "vscode"},
+    "zed": {"launch": "gui", "schema": "zed"},
+}
+
+
+def _toml_str(value: str) -> str:
+    """Minimal TOML basic-string quoting for the two fields codex needs.
+
+    Command names and script paths never carry control characters or other
+    TOML-special bytes, so this is not a general TOML writer, just enough of
+    one for `command` and `args`. Adding a TOML-writing dependency for that
+    would be the wrong trade per CLAUDE.md's dependency ladder; tomllib in
+    the standard library only reads.
+    """
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def render_client_config(client: str, form: dict[str, Any], server_args: list[str]) -> str:
+    """Render one MCP client's config as text, in its own schema.
+
+    `form` is a {"command", "args"} launch prefix from
+    `_airlock_launch_forms`; `server_args` is the `serve --root ...` tail
+    appended after it.
+    """
+    command = form["command"]
+    args = form["args"] + server_args
+    schema = MCP_CLIENTS[client]["schema"]
+
+    if schema == "codex":
+        args_toml = ", ".join(_toml_str(a) for a in args)
+        return (
+            "[mcp_servers.airlock]\n"
+            f"command = {_toml_str(command)}\n"
+            f"args = [{args_toml}]\n"
+        )
+    if schema == "vscode":
+        config = {"servers": {"airlock": {"type": "stdio", "command": command, "args": args}}}
+    elif schema == "zed":
+        config = {
+            "context_servers": {
+                "airlock": {"source": "custom", "command": command, "args": args}
+            }
+        }
+    else:  # mcpServers: claude-code, claude-desktop, cursor, gemini-cli
+        config = {"mcpServers": {"airlock": {"command": command, "args": args}}}
+    return json.dumps(config, indent=2)
+
+
 def render_mcp_help(args: argparse.Namespace) -> None:
     """Print ready-to-paste client configuration for this exact workspace.
 
-    Shown because a user who has just started chatting has no way to discover
-    that the same workspace can be served to a cloud assistant, and the paths
-    have to be absolute, which is the detail people get wrong.
-
-    Prefers `"command": "airlock"` when that name resolves on PATH, since a
-    name survives the checkout moving or being upgraded and a filesystem
-    path does not: registering the absolute-path form in a client config and
-    then moving the checkout breaks that registration silently. Falls back
-    to the `uv run --script` form, with an absolute path to this file, when
-    airlock is not installed, since that form works with nothing installed
-    beyond uv. Detected with shutil.which rather than assumed, and the
-    printed config states which form was chosen and why.
+    Shown because a user who has just started chatting has no way to
+    discover that the same workspace can be served to a cloud assistant,
+    and GUI clients need an absolute path, which is the detail people get
+    wrong. See `_airlock_launch_forms` for why shell- and GUI-launched
+    clients need different forms, and `airlock mcp --client NAME --json`
+    for a non-interactive way to get any one client's exact config.
     """
     root = Path(args.root).expanduser().resolve()
-    on_path = shutil.which("airlock")
-    if on_path:
-        command = "airlock"
-        tool_args = []
-        reason = f"using the installed 'airlock' command, found on PATH at {on_path}"
-    else:
-        command = "uv"
-        tool_args = ["run", "--script", str(Path(__file__).resolve())]
-        reason = "'airlock' is not on PATH, falling back to uv run --script"
-    tool_args += ["serve", "--root", str(root), "--model", args.model]
+    shell_form, gui_form, reason = _airlock_launch_forms(Path(__file__).resolve())
+    server_args = ["serve", "--root", str(root), "--model", args.model]
 
-    config = {"mcpServers": {"airlock": {"command": command, "args": tool_args}}}
-    claude_code_cmd = f"claude mcp add airlock -- {command} {' '.join(tool_args)}"
+    gui_config = render_client_config("claude-desktop", gui_form, server_args)
+    claude_code_cmd = (
+        f"claude mcp add airlock -- {shell_form['command']} "
+        f"{' '.join(shell_form['args'] + server_args)}"
+    )
 
     console.print(
         Panel(
@@ -2971,11 +3114,24 @@ def render_mcp_help(args: argparse.Namespace) -> None:
                 Text(f"airlock v{__version__}", style="dim"),
                 Text(reason, style="dim"),
                 Text(""),
-                Text("Claude Desktop, in claude_desktop_config.json:", style="dim"),
-                Text(json.dumps(config, indent=2), style="cyan"),
+                Text(
+                    "Claude Desktop, Cursor, VS Code, Zed "
+                    "(GUI-launched, need an absolute path):",
+                    style="dim",
+                ),
+                Text(gui_config, style="cyan"),
                 Text(""),
-                Text("Claude Code:", style="dim"),
+                Text(
+                    "Claude Code, Codex, Gemini CLI (shell-launched, inherit PATH):",
+                    style="dim",
+                ),
                 Text(claude_code_cmd, style="cyan"),
+                Text(""),
+                Text(
+                    "Run 'airlock mcp --client NAME --json' for any client's exact "
+                    "schema, including codex's TOML and vscode/zed's own keys.",
+                    style="dim",
+                ),
                 Text(""),
                 Text(
                     "The assistant receives guarded answers, never your files. "
@@ -2988,6 +3144,52 @@ def render_mcp_help(args: argparse.Namespace) -> None:
             padding=(1, 2),
         )
     )
+
+
+def cmd_mcp(args: argparse.Namespace) -> int:
+    """Non-interactive `airlock mcp`: print or emit one client's config.
+
+    Exists because `/mcp` is a slash command reachable only inside an
+    interactive chat session, and a setup script has no session to run it
+    in. `--client` picks one client's exact schema (see MCP_CLIENTS);
+    `--json` strips the output down to parseable config only (TOML for
+    codex, JSON otherwise), so a script can pipe it straight into a
+    client's config file.
+    """
+    if args.json and not args.client:
+        err_console.print("[red]error:[/red] --json requires --client")
+        return 2
+
+    if not args.client:
+        render_mcp_help(args)
+        return 0
+
+    root = Path(args.root).expanduser().resolve()
+    shell_form, gui_form, reason = _airlock_launch_forms(Path(__file__).resolve())
+    server_args = ["serve", "--root", str(root), "--model", args.model]
+
+    launch = MCP_CLIENTS[args.client]["launch"]
+    form = gui_form if launch == "gui" else shell_form
+    text = render_client_config(args.client, form, server_args)
+
+    if args.json:
+        print(text)
+        return 0
+
+    console.print(
+        Panel(
+            Group(
+                Text(f"{args.client} ({launch}-launched)", style="bold"),
+                Text(reason, style="dim"),
+                Text(""),
+                Text(text, style="cyan"),
+            ),
+            title="connect over MCP",
+            border_style="magenta",
+            padding=(1, 2),
+        )
+    )
+    return 0
 
 
 def cmd_chat(args: argparse.Namespace) -> int:
@@ -3768,6 +3970,7 @@ def build_parser() -> argparse.ArgumentParser:
             '  airlock ask --root . "what topics do these files cover?"\n'
             '  airlock guard "Jane Doe, 555-555-0100"\n'
             "  airlock serve --root ~/project   run as an MCP server\n"
+            "  airlock mcp --client claude-desktop --json   print one client's config\n"
         ),
     )
     parser.add_argument("--version", action="version", version=f"airlock {__version__}")
@@ -3790,6 +3993,21 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("serve", parents=[common], help="Run as an MCP server.").set_defaults(
         func=cmd_serve
     )
+
+    p_mcp = sub.add_parser(
+        "mcp", parents=[common], help="Print or emit MCP client configuration."
+    )
+    p_mcp.add_argument(
+        "--client",
+        choices=sorted(MCP_CLIENTS),
+        help="Emit config for one client only, in that client's own schema.",
+    )
+    p_mcp.add_argument(
+        "--json",
+        action="store_true",
+        help="Machine-readable output only, nothing decorative. Requires --client.",
+    )
+    p_mcp.set_defaults(func=cmd_mcp)
     return parser
 
 

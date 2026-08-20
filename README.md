@@ -149,7 +149,7 @@ Tool annotations are computed at startup from `--allow-writes`, so
 
 ## Install
 
-Two ways to get `airlock` on your `PATH`, and one way to run it without installing anything.
+One way to get `airlock` on your `PATH` today, one way coming once a release is tagged, and one way to run it without installing anything.
 
 **`uv tool install`** (primary path):
 
@@ -161,11 +161,7 @@ uv tool install .
 
 This registers an `airlock` command backed by its own isolated environment, the same way `uv tool install` works for any Python CLI. Update by pulling and re-running the same command; remove with `uv tool uninstall airlock`.
 
-**Homebrew** (primary path, macOS/Linux): a formula lives at [`Formula/airlock.rb`](Formula/airlock.rb). It is not yet published to a tap, so for now install it straight from the checkout:
-
-```sh
-brew install --formula Formula/airlock.rb
-```
+**Homebrew** (not yet a working install path): a formula lives at [`Formula/airlock.rb`](Formula/airlock.rb), but no tagged release exists in this repository yet, and the formula's `url` and `sha256` are placeholders, not real values. `brew install --formula Formula/airlock.rb` fails today; do not run it. The formula activates once the first `vX.Y.Z` tag is cut and those two fields are filled in with the real release digest; see the banner at the top of `Formula/airlock.rb` for the exact steps.
 
 **Run the script directly** (alternative, for reading or hacking on the source): `airlock.py` keeps its PEP 723 header, so it stays runnable with nothing installed beforehand beyond `uv` itself:
 
@@ -255,26 +251,36 @@ Run this first. It catches nearly every misconfiguration.
 
 ## Use as an MCP server
 
-If `airlock` is installed and on `PATH` (see [Install](#install)), Claude Desktop, in `claude_desktop_config.json`:
+Two families of client need two different launch forms for the same
+command. **Shell-launched** clients (Claude Code, Codex, Gemini CLI) start
+as a child of your interactive shell and inherit its `PATH`, so the bare
+`airlock` command name resolves for them. **GUI-launched** clients (Claude
+Desktop, Cursor, VS Code, Zed) are started by the window manager or
+`launchd`, not a shell, and typically get a minimal default `PATH` that does
+not include where `uv tool install` (`~/.local/bin`) or Homebrew
+(`/opt/homebrew/bin`, `/usr/local/bin`) put the command; they need the
+resolved absolute path instead.
+
+Claude Desktop, in `claude_desktop_config.json` (GUI-launched, absolute path):
 
 ```json
 {
   "mcpServers": {
     "airlock": {
-      "command": "airlock",
+      "command": "/absolute/path/to/airlock",
       "args": ["serve", "--root", "/absolute/path/to/private-directory"]
     }
   }
 }
 ```
 
-Claude Code:
+Claude Code (shell-launched, bare name):
 
 ```sh
 claude mcp add airlock -- airlock serve --root /absolute/path/to/private-directory
 ```
 
-A command name survives the checkout moving or being upgraded; a filesystem path does not. If `airlock` is not installed, fall back to running the script directly, with an absolute path since MCP clients do not resolve relative ones:
+If `airlock` is not installed, both forms fall back to running the script directly, with an absolute path since MCP clients do not resolve relative ones:
 
 ```json
 {
@@ -295,7 +301,16 @@ claude mcp add airlock -- uv run --script /absolute/path/to/airlock.py \
   serve --root /absolute/path/to/private-directory
 ```
 
-`--root` is the only directory the worker can reach in either form. Rather than guess which form applies, run `/mcp` inside an interactive session (or `airlock` with no arguments, then `/mcp`): it detects whether `airlock` resolves on `PATH` and prints the correct config for your actual setup, along with which form it chose and why.
+`--root` is the only directory the worker can reach in any form.
+
+Rather than work out which form and which client schema applies by hand, ask airlock directly. Interactively, run `/mcp` inside a session (or `airlock` with no arguments, then `/mcp`); it detects whether `airlock` resolves on `PATH`, whether that resolution looks stable or ephemeral, and prints the correct config along with which form it chose and why. Non-interactively, for setup scripts that have no session to run `/mcp` in:
+
+```sh
+airlock mcp --client claude-desktop            # human-readable panel for one client
+airlock mcp --client claude-desktop --json      # machine-readable only, safe to pipe
+```
+
+`--client` accepts `claude-code`, `claude-desktop`, `cursor`, `gemini-cli`, `codex`, `vscode`, and `zed`, each emitted in that client's own schema: `codex` emits TOML under `mcp_servers` (snake_case) instead of JSON; `vscode` emits JSON under `servers` with a required `"type": "stdio"` field; `zed` emits JSON under `context_servers` with a required `"source": "custom"` field; the rest share the `mcpServers` key shown above. `--json` requires `--client` and prints nothing but the parseable config, no panel or commentary, so a script can write it straight into a client's config file.
 
 ### Watching what happens
 

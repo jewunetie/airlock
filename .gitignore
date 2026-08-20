@@ -6,6 +6,11 @@ __pycache__/
 
 # uv
 .uv/
+# Not committed: consumers install via `uv tool install .` or Homebrew, both
+# of which resolve fresh, and both dependency lists already carry upper
+# bounds (see tests/test_packaging.py); a lockfile here would only pin this
+# maintainer's dev-time resolution and go stale immediately.
+uv.lock
 
 # Guard decision traces. These record what the guard saw, so they can contain
 # fragments of the private content airlock exists to protect. Never commit them.

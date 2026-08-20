@@ -32,10 +32,12 @@ import argparse
 import contextlib
 import importlib.util
 import io
+import json
 import secrets
 import string
 import sys
 import tempfile
+import tomllib
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -738,6 +740,162 @@ def cli_parser_cases() -> None:
     )
 
 
+def mcp_cli_cases() -> None:
+    """Fix items 1 and 2 (mcp-cli-path): GUI-launched clients need an
+    absolute path, shell-launched clients need the bare name, an
+    ephemeral-looking `shutil.which` resolution must not be emitted as a
+    live path, and `airlock mcp --client NAME [--json]` is a non-interactive
+    way to get any one client's exact schema. All of this is parser- and
+    string-level, no model or Ollama needed, so none of these may skip.
+    """
+    print("\nMCP CLI: shell vs GUI launch forms, ephemeral fallback, per-client schemas")
+
+    original_which = airlock.shutil.which
+
+    def fake_which(stable_path):
+        return lambda name: stable_path if name == "airlock" else None
+
+    script_path = Path("/does/not/matter/airlock.py")
+
+    # A stable install (not inside a venv/temp/build dir) resolves to an
+    # absolute path for GUI clients, and the bare name for shell clients.
+    try:
+        airlock.shutil.which = fake_which("/opt/homebrew/bin/airlock")
+        shell_form, gui_form, reason = airlock._airlock_launch_forms(script_path)
+    finally:
+        airlock.shutil.which = original_which
+    check(
+        "shell form is the bare command for a stable install",
+        shell_form["command"] == "airlock",
+        shell_form["command"],
+    )
+    check(
+        "GUI form is an absolute path for a stable install",
+        gui_form["command"] == "/opt/homebrew/bin/airlock",
+        gui_form["command"],
+    )
+    check("stable install is not reported as a fallback", "falling back" not in reason, reason)
+
+    # An ephemeral-looking resolution (inside a .venv) must not be emitted
+    # as a live path in either form: both fall back to uv run --script.
+    try:
+        airlock.shutil.which = fake_which("/tmp/some-worktree/.venv/bin/airlock")
+        eph_shell, eph_gui, eph_reason = airlock._airlock_launch_forms(script_path)
+    finally:
+        airlock.shutil.which = original_which
+    expected_fallback = {"command": "uv", "args": ["run", "--script", str(script_path)]}
+    check(
+        "ephemeral .venv resolution falls back for the shell form",
+        eph_shell == expected_fallback,
+        str(eph_shell),
+    )
+    check(
+        "ephemeral .venv resolution falls back for the GUI form",
+        eph_gui == expected_fallback,
+        str(eph_gui),
+    )
+    check("ephemeral resolution is reported as ephemeral", "ephemeral" in eph_reason, eph_reason)
+
+    # Not on PATH at all: same uv run --script fallback.
+    try:
+        airlock.shutil.which = lambda name: None
+        none_shell, none_gui, _ = airlock._airlock_launch_forms(script_path)
+    finally:
+        airlock.shutil.which = original_which
+    check(
+        "not-on-PATH falls back to uv run --script",
+        none_shell["command"] == "uv" and none_gui["command"] == "uv",
+        str((none_shell, none_gui)),
+    )
+
+    # Per-client schemas, using the stable-install forms from above.
+    server_args = ["serve", "--root", "/private/workspace", "--model", "qwen3.5:0.8B"]
+
+    codex_text = airlock.render_client_config("codex", shell_form, server_args)
+    codex_toml = tomllib.loads(codex_text)
+    check(
+        "codex emits TOML under mcp_servers",
+        "mcp_servers" in codex_toml and "airlock" in codex_toml["mcp_servers"],
+        codex_text,
+    )
+    check(
+        "codex's command/args match the shell form",
+        codex_toml["mcp_servers"]["airlock"]["command"] == shell_form["command"]
+        and codex_toml["mcp_servers"]["airlock"]["args"] == shell_form["args"] + server_args,
+        str(codex_toml),
+    )
+
+    vscode_config = json.loads(airlock.render_client_config("vscode", gui_form, server_args))
+    check(
+        "vscode emits servers with type: stdio",
+        vscode_config.get("servers", {}).get("airlock", {}).get("type") == "stdio",
+        str(vscode_config),
+    )
+
+    zed_config = json.loads(airlock.render_client_config("zed", gui_form, server_args))
+    check(
+        "zed emits context_servers with source: custom",
+        zed_config.get("context_servers", {}).get("airlock", {}).get("source") == "custom",
+        str(zed_config),
+    )
+
+    for client in ("claude-code", "claude-desktop", "cursor", "gemini-cli"):
+        form = gui_form if airlock.MCP_CLIENTS[client]["launch"] == "gui" else shell_form
+        config = json.loads(airlock.render_client_config(client, form, server_args))
+        check(
+            f"{client} emits mcpServers",
+            "mcpServers" in config and "airlock" in config["mcpServers"],
+            str(config),
+        )
+
+    # --json output is parseable and carries no decoration (no ANSI, no
+    # surrounding prose) for every client, so a script can pipe it straight
+    # into a config file or a TOML parser.
+    parser = airlock.build_parser()
+    try:
+        airlock.shutil.which = fake_which("/opt/homebrew/bin/airlock")
+        for client in airlock.MCP_CLIENTS:
+            args = parser.parse_args(
+                ["mcp", "--client", client, "--json", "--root", "/private/workspace"]
+            )
+            for name, value in airlock.CLI_DEFAULTS.items():
+                if not hasattr(args, name):
+                    setattr(args, name, value)
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc = airlock.cmd_mcp(args)
+            output = buf.getvalue()
+            check(f"--json --client {client} exits 0", rc == 0, str(rc))
+            if airlock.MCP_CLIENTS[client]["schema"] == "codex":
+                try:
+                    tomllib.loads(output)
+                    parses = True
+                except tomllib.TOMLDecodeError:
+                    parses = False
+            else:
+                try:
+                    json.loads(output)
+                    parses = True
+                except json.JSONDecodeError:
+                    parses = False
+            check(f"--json --client {client} output parses cleanly", parses, output[:200])
+            check(
+                f"--json --client {client} output has no ANSI/decoration",
+                "\x1b[" not in output and "connect over MCP" not in output,
+                output[:200],
+            )
+    finally:
+        airlock.shutil.which = original_which
+
+    # --json without --client is a usage error, not silently ignored.
+    args = parser.parse_args(["mcp", "--json", "--root", "/private/workspace"])
+    for name, value in airlock.CLI_DEFAULTS.items():
+        if not hasattr(args, name):
+            setattr(args, name, value)
+    rc = airlock.cmd_mcp(args)
+    check("--json without --client is rejected, not silently ignored", rc != 0, str(rc))
+
+
 def chunk_text_step_guard_case() -> None:
     """The one-line guard the re-reviewer flagged (fix round 1): _chunk_text
     never asserted step > 0. Current constants (500-200, 1800-400) are safe,
@@ -1044,6 +1202,7 @@ def main() -> int:
     run("evaluate_fail_closed_cases", evaluate_fail_closed_cases)
     run("evaluate_default_threshold_case", evaluate_default_threshold_case)
     run("cli_parser_cases", cli_parser_cases)
+    run("mcp_cli_cases", mcp_cli_cases)
     run("chunk_text_step_guard_case", chunk_text_step_guard_case)
     run("dense_non_ascii_truncation_case", dense_non_ascii_truncation_case, unavailable)
     run("worker_step_exhaustion_case", worker_step_exhaustion_case)
@@ -1060,8 +1219,8 @@ def main() -> int:
             print(f"  - {name}")
     # Per CLAUDE.md, a suite that silently collects fewer checks reads like
     # one that passed.
-    if total < 73:
-        print(f"\nWARNING: only {total} checks ran. Expected at least 73.")
+    if total < 110:
+        print(f"\nWARNING: only {total} checks ran. Expected at least 110.")
         print("Something did not collect. Treat this as a failure, not a pass.")
         return 1
     # Skips are reported, not failed, per CLAUDE.md. But a run where every

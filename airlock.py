@@ -23,11 +23,11 @@ external one, where everything is inspected before it is allowed through.
 
 Modes
 -----
-    airlock doctor              check that everything is set up
-    airlock                     talk to the local model interactively (default)
-    airlock ask "question"      one-shot question
-    airlock guard "text"        test whether text would pass the guard
-    airlock serve               run as an MCP server for a cloud assistant
+    airlock FOLDER              connect that folder to an assistant (default)
+    airlock status              what is connected, and whether it works
+    airlock disconnect          remove airlock from an assistant
+    airlock check "text"        test whether text would pass the guard
+    airlock chat FOLDER         talk to the local model yourself
 
 Follows the local-plus-cloud split of the Minions protocol (Stanford Hazy
 Research, ICML 2025), adding the content guard that work did not have. See
@@ -64,10 +64,14 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import hmac
+import itertools
 import re
+import secrets
 import shutil
 import subprocess
 import sys
+import threading
 import tempfile
 import textwrap
 import urllib.error
@@ -77,6 +81,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
 from functools import lru_cache
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable, Literal
 
@@ -897,7 +902,7 @@ class Sandbox:
         """Write a file, refusing unless writes were explicitly enabled."""
         if not self.allow_writes:
             raise SandboxError(
-                "Writes are disabled. Enable with --allow-writes, or /config writes on."
+                "Writes are disabled. Enable with --write, or /config writes on."
             )
         target = self.resolve(relative)
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -2659,7 +2664,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     console.print()
     console.print(
-        "[bold green]Ready.[/bold green] Run [cyan]airlock[/cyan] to start a session."
+        "[bold green]Ready.[/bold green] Run [cyan]airlock <folder>[/cyan] to connect it "
+        "to an assistant, or [cyan]airlock chat <folder>[/cyan] to ask it yourself."
         if ok
         else "[bold red]Not ready.[/bold red] Fix the items above."
     )
@@ -2978,7 +2984,7 @@ def _airlock_launch_forms(script_path: Path) -> tuple[dict[str, Any], dict[str, 
 
     Returns (shell_form, gui_form, reason). Each form is a
     {"command": str, "args": list[str]} launch prefix; a caller appends the
-    `serve --root ... --model ...` arguments after it.
+    `serve FOLDER --model ...` arguments after it.
 
     Prefers the installed "airlock" command, found through shutil.which,
     over the `uv run --script` fallback, since a name on PATH survives the
@@ -3060,7 +3066,7 @@ def render_client_config(client: str, form: dict[str, Any], server_args: list[st
     """Render one MCP client's config as text, in its own schema.
 
     `form` is a {"command", "args"} launch prefix from
-    `_airlock_launch_forms`; `server_args` is the `serve --root ...` tail
+    `_airlock_launch_forms`; `server_args` is the `serve FOLDER ...` tail
     appended after it.
     """
     command = form["command"]
@@ -3087,6 +3093,190 @@ def render_client_config(client: str, form: dict[str, Any], server_args: list[st
     return json.dumps(config, indent=2)
 
 
+# Where each client keeps its MCP configuration, most specific first. Every
+# path here was verified by looking for it on a real machine, not recalled;
+# the ones that could not be checked directly are simply absent, which costs
+# nothing because of the rule below.
+#
+# airlock only ever writes to a candidate that already exists, or whose
+# parent directory already exists (which is itself evidence the client is
+# installed and has a config directory). It never creates a directory tree.
+# A path this table gets wrong therefore cannot produce a stray file in the
+# wrong place; it degrades to "airlock could not find your config", which is
+# a message, not damage.
+CLIENT_CONFIG_PATHS: dict[str, list[str]] = {
+    "claude-desktop": [
+        "~/Library/Application Support/Claude/claude_desktop_config.json",
+        "~/.config/Claude/claude_desktop_config.json",
+        "~/AppData/Roaming/Claude/claude_desktop_config.json",
+    ],
+    "claude-code": ["~/.claude.json"],
+    "cursor": ["~/.cursor/mcp.json"],
+    "vscode": [
+        "~/Library/Application Support/Code/User/mcp.json",
+        "~/.config/Code/User/mcp.json",
+        "~/AppData/Roaming/Code/User/mcp.json",
+    ],
+    "zed": ["~/.config/zed/settings.json"],
+    "codex": ["~/.codex/config.toml"],
+    "gemini-cli": ["~/.gemini/settings.json"],
+}
+
+CLIENT_LABELS: dict[str, str] = {
+    "claude-desktop": "Claude Desktop",
+    "claude-code": "Claude Code",
+    "cursor": "Cursor",
+    "vscode": "VS Code",
+    "zed": "Zed",
+    "codex": "Codex",
+    "gemini-cli": "Gemini CLI",
+}
+
+
+def client_config_path(client: str) -> Path | None:
+    """The config file airlock may write for this client, or None.
+
+    Usable means the file exists, or its directory does. Creating a whole
+    tree would mean guessing that a client is installed from nothing but a
+    path this table happens to contain.
+    """
+    home = Path.home()
+    for candidate in CLIENT_CONFIG_PATHS.get(client, []):
+        path = Path(candidate).expanduser()
+        if path.exists():
+            return path
+        # A config directory that exists is evidence the client is installed.
+        # The home directory is not: it always exists, so this rule applied to
+        # a dotfile sitting directly in $HOME (~/.claude.json) reported every
+        # machine as having Claude Code installed.
+        if path.parent.is_dir() and path.parent != home:
+            return path
+    return None
+
+
+def installed_clients() -> list[str]:
+    """Clients that look installed, in the order they are offered."""
+    return [c for c in MCP_CLIENTS if client_config_path(c) is not None]
+
+
+@dataclass
+class Registration:
+    """The result of writing (or planning to write) one client's config."""
+
+    client: str
+    path: Path
+    action: Literal["added", "updated", "unchanged", "removed", "absent"]
+    backup: Path | None = None
+
+
+def _server_args(root: Path, args: argparse.Namespace) -> list[str]:
+    """The `serve ...` tail a client is configured to run."""
+    tail = ["serve", str(root), "--model", args.model]
+    if getattr(args, "write", False):
+        tail.append("--write")
+    ask = getattr(args, "ask", "writes")
+    if ask != "writes":
+        tail += ["--ask", ask]
+    if not getattr(args, "no_ui", False):
+        tail.append("--ui")
+    return tail
+
+
+def airlock_launch_entry(root: Path, args: argparse.Namespace, client: str) -> dict[str, Any]:
+    """The {"command", "args"} a client should run, in that client's flavour."""
+    shell_form, gui_form, _ = _airlock_launch_forms(Path(__file__).resolve())
+    form = gui_form if MCP_CLIENTS[client]["launch"] == "gui" else shell_form
+    return {"command": form["command"], "args": form["args"] + _server_args(root, args)}
+
+
+def _merge_json_config(text: str, client: str, entry: dict[str, Any] | None) -> str:
+    """Add, replace or remove airlock inside one client's JSON config.
+
+    Every other key in the file is preserved untouched, because this is
+    somebody's live configuration and airlock is one entry in it.
+    """
+    schema = MCP_CLIENTS[client]["schema"]
+    key = {"vscode": "servers", "zed": "context_servers"}.get(schema, "mcpServers")
+    data = json.loads(text) if text.strip() else {}
+    if not isinstance(data, dict):
+        raise ValueError("config file is not a JSON object")
+    servers = data.get(key)
+    if not isinstance(servers, dict):
+        servers = {}
+    if entry is None:
+        servers.pop("airlock", None)
+    elif schema == "vscode":
+        servers["airlock"] = {"type": "stdio", **entry}
+    elif schema == "zed":
+        servers["airlock"] = {"source": "custom", **entry}
+    else:
+        servers["airlock"] = dict(entry)
+    if servers or entry is not None:
+        data[key] = servers
+    return json.dumps(data, indent=2) + "\n"
+
+
+# Matches codex's own airlock block: the table header through to the next
+# table header at the start of a line, or end of file. tomllib reads TOML and
+# cannot write it, and a TOML writer is a dependency for one section of one
+# file.
+#
+# Deliberately not "everything up to the next [". The block's own body
+# contains one: `args = ["serve", ...]`. That version stopped the match in
+# the middle of the args line, so replacing or removing airlock left the
+# remainder of the array behind and the file no longer parsed as TOML.
+_CODEX_BLOCK = re.compile(r"(?ms)^\[mcp_servers\.airlock\].*?(?=^\[|\Z)")
+
+
+def _merge_toml_config(text: str, entry: dict[str, Any] | None) -> str:
+    """Add, replace or remove codex's [mcp_servers.airlock] table."""
+    if entry is None:
+        return _CODEX_BLOCK.sub("", text).rstrip() + "\n"
+    args_toml = ", ".join(_toml_str(a) for a in entry["args"])
+    block = (
+        "[mcp_servers.airlock]\n"
+        f"command = {_toml_str(entry['command'])}\n"
+        f"args = [{args_toml}]\n"
+    )
+    if _CODEX_BLOCK.search(text):
+        return _CODEX_BLOCK.sub(lambda _: block, text, count=1)
+    return (text.rstrip() + "\n\n" + block) if text.strip() else block
+
+
+def write_client_config(
+    client: str, root: Path, args: argparse.Namespace, remove: bool = False
+) -> Registration:
+    """Register or unregister airlock in one client's config file.
+
+    Backs the file up before touching it. Writes through a temporary file in
+    the same directory and replaces atomically, so an interrupted write
+    cannot leave somebody's editor config truncated.
+    """
+    path = client_config_path(client)
+    if path is None:
+        return Registration(client, Path(), "absent")
+
+    before = path.read_text() if path.exists() else ""
+    entry = None if remove else airlock_launch_entry(root, args, client)
+    if MCP_CLIENTS[client]["schema"] == "codex":
+        after = _merge_toml_config(before, entry)
+    else:
+        after = _merge_json_config(before, client, entry)
+
+    if after == before:
+        return Registration(client, path, "unchanged")
+
+    backup = None
+    if path.exists():
+        backup = path.with_suffix(path.suffix + ".airlock-backup")
+        backup.write_text(before)
+    tmp = path.with_suffix(path.suffix + ".airlock-tmp")
+    tmp.write_text(after)
+    tmp.replace(path)
+    action = "removed" if remove else ("updated" if before.strip() else "added")
+    return Registration(client, path, action, backup)
+
+
 def render_mcp_help(args: argparse.Namespace) -> None:
     """Print ready-to-paste client configuration for this exact workspace.
 
@@ -3094,12 +3284,12 @@ def render_mcp_help(args: argparse.Namespace) -> None:
     discover that the same workspace can be served to a cloud assistant,
     and GUI clients need an absolute path, which is the detail people get
     wrong. See `_airlock_launch_forms` for why shell- and GUI-launched
-    clients need different forms, and `airlock mcp --client NAME --json`
+    clients need different forms, and `airlock connect --client NAME --print`
     for a non-interactive way to get any one client's exact config.
     """
     root = Path(args.root).expanduser().resolve()
     shell_form, gui_form, reason = _airlock_launch_forms(Path(__file__).resolve())
-    server_args = ["serve", "--root", str(root), "--model", args.model]
+    server_args = _server_args(root, args)
 
     gui_config = render_client_config("claude-desktop", gui_form, server_args)
     claude_code_cmd = (
@@ -3128,7 +3318,8 @@ def render_mcp_help(args: argparse.Namespace) -> None:
                 Text(claude_code_cmd, style="cyan"),
                 Text(""),
                 Text(
-                    "Run 'airlock mcp --client NAME --json' for any client's exact "
+                    "Run 'airlock connect FOLDER --client NAME --print' for any "
+                    "client's exact "
                     "schema, including codex's TOML and vscode/zed's own keys.",
                     style="dim",
                 ),
@@ -3144,52 +3335,6 @@ def render_mcp_help(args: argparse.Namespace) -> None:
             padding=(1, 2),
         )
     )
-
-
-def cmd_mcp(args: argparse.Namespace) -> int:
-    """Non-interactive `airlock mcp`: print or emit one client's config.
-
-    Exists because `/mcp` is a slash command reachable only inside an
-    interactive chat session, and a setup script has no session to run it
-    in. `--client` picks one client's exact schema (see MCP_CLIENTS);
-    `--json` strips the output down to parseable config only (TOML for
-    codex, JSON otherwise), so a script can pipe it straight into a
-    client's config file.
-    """
-    if args.json and not args.client:
-        err_console.print("[red]error:[/red] --json requires --client")
-        return 2
-
-    if not args.client:
-        render_mcp_help(args)
-        return 0
-
-    root = Path(args.root).expanduser().resolve()
-    shell_form, gui_form, reason = _airlock_launch_forms(Path(__file__).resolve())
-    server_args = ["serve", "--root", str(root), "--model", args.model]
-
-    launch = MCP_CLIENTS[args.client]["launch"]
-    form = gui_form if launch == "gui" else shell_form
-    text = render_client_config(args.client, form, server_args)
-
-    if args.json:
-        print(text)
-        return 0
-
-    console.print(
-        Panel(
-            Group(
-                Text(f"{args.client} ({launch}-launched)", style="bold"),
-                Text(reason, style="dim"),
-                Text(""),
-                Text(text, style="cyan"),
-            ),
-            title="connect over MCP",
-            border_style="magenta",
-            padding=(1, 2),
-        )
-    )
-    return 0
 
 
 def cmd_chat(args: argparse.Namespace) -> int:
@@ -3440,6 +3585,810 @@ def serve_reporter(session_id: str) -> StepCallback:
     return report
 
 
+# The page, verbatim from ui/index.html. It is embedded rather than read
+# from disk so `uv run --script airlock.py` keeps working from anywhere,
+# and kept honest by tests/test_console.py, which fails if the two copies
+# differ. Same arrangement as the PEP 723 header and pyproject.toml's
+# dependency lists: a test, not machinery. Edit ui/index.html, then rerun
+# `python3 tools/sync_console.py`.
+CONSOLE_HTML = r"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>airlock</title>
+<style>
+:root{
+  --paper:#FBFBF9; --card:#FFFFFF; --ink:#1B1B18; --muted:#75756D;
+  --faint:#A3A39A;          /* dots and hairlines only, never text */ --line:#ECECE6;
+  --held:#2E4A7D;            /* airlock stopped something */
+  --held-wash:#F0F3F9;
+  --wait:#9A7B18;            /* airlock is waiting on you */
+  --wait-wash:#FBF6E7;
+  --ok:#5E8C6A;
+  /* System faces only. A privacy console that fetches its own fonts from
+     Google announces to Google every time it is opened. */
+  --b:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --d:var(--b);
+  --m:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --r:10px;
+}
+*{box-sizing:border-box}
+html{-webkit-font-smoothing:antialiased}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--b);
+  font-size:15px;line-height:1.6}
+.wrap{max-width:1080px;margin:0 auto;padding:0 32px}
+button{font:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--held);outline-offset:2px;border-radius:4px}
+[hidden]{display:none !important}
+
+/* ---------- header: identity, where, what view ---------- */
+header{position:sticky;top:0;z-index:40;background:var(--paper);
+  border-bottom:1px solid var(--line)}
+.bar{display:flex;align-items:center;gap:12px;height:56px}
+.name{font-family:var(--d);font-size:18px;font-weight:600;letter-spacing:-.03em}
+.live{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--muted)}
+.live i{width:6px;height:6px;border-radius:50%;background:var(--ok);flex:none}
+
+/* the workspace is the most consequential setting, so it is a control in the
+   header rather than a line of text buried in a settings page */
+.ws{display:inline-flex;align-items:center;gap:8px;margin-left:6px;padding:5px 10px;
+  background:transparent;border:1px solid var(--line);border-radius:99px;
+  font-family:var(--m);font-size:12.5px;color:var(--muted)}
+.ws:hover{color:var(--ink);border-color:var(--muted)}
+.ws b{font-weight:400;color:var(--ink);white-space:nowrap}
+.ws span{white-space:nowrap}
+.ws svg{opacity:.5}
+.wsmenu{position:absolute;top:52px;left:0;z-index:50;min-width:300px;background:var(--card);
+  border-radius:var(--r);padding:6px;box-shadow:0 8px 28px rgba(20,20,16,.10),0 0 0 1px rgba(20,20,16,.07)}
+.wsmenu button{display:flex;width:100%;gap:10px;align-items:baseline;text-align:left;
+  background:none;border:0;padding:9px 11px;border-radius:7px;font-size:13.5px;color:var(--ink)}
+.wsmenu button:hover{background:var(--paper)}
+.wsmenu .p{font-family:var(--m);font-size:12px;color:var(--muted)}
+.wsmenu .n{font-size:12px;color:var(--muted);margin-left:auto}
+.wsmenu hr{border:0;border-top:1px solid var(--line);margin:6px 0}
+.wshost{position:relative}
+
+nav{margin-left:auto;display:flex;gap:2px}
+nav button{background:none;border:0;padding:7px 13px;border-radius:7px;
+  font-size:14px;color:var(--muted)}
+nav button:hover{color:var(--ink)}
+nav button[aria-current=page]{color:var(--ink);background:#F1F1EC;font-weight:500}
+
+/* ---------- the interrupt: airlock is holding a call ---------- */
+/* Placed above everything and sticky, because a gated call is blocking a real
+   process somewhere. It must not be something you scroll past. */
+.ask{position:sticky;top:56px;z-index:30;margin:0 -32px;padding:18px 32px;
+  background:var(--wait-wash);border-bottom:1px solid #EFE3BE}
+.ask .row{display:flex;align-items:center;gap:16px;max-width:1016px;margin:0 auto}
+.ask .k{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--wait);display:flex;align-items:center;gap:8px;flex:none}
+.ask .k i{width:7px;height:7px;border-radius:50%;background:var(--wait);flex:none;
+  animation:pulse 1.8s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.25}}
+@media(prefers-reduced-motion:reduce){.ask .k i{animation:none}}
+.ask .what{font-size:15.5px;line-height:1.45}
+.ask .what code{font-family:var(--m);font-size:13.5px;background:#fff;padding:2px 7px;
+  border-radius:5px;box-shadow:0 0 0 1px #EFE3BE}
+.ask .acts{margin-left:auto;display:flex;gap:8px;flex:none}
+.ask .acts button{padding:8px 16px;border-radius:8px;font-size:14px;font-weight:500;
+  border:1px solid var(--ink);background:var(--card);color:var(--ink)}
+.ask .acts button:hover{background:#F5F5F0}
+.ask .sub{max-width:1016px;margin:8px auto 0;font-size:13px;color:var(--wait)}
+.ask .sub button{background:none;border:0;padding:0;color:var(--wait);
+  text-decoration:underline;text-underline-offset:2px;font-size:13px}
+
+/* ---------- summary strip: replaces the fixed hero ---------- */
+/* The old page spent a third of the first screen on one sentence. It reads well
+   once and then never changes. This keeps the sentence and gives the space back. */
+.strip{display:flex;align-items:flex-end;gap:24px;padding:34px 0 20px}
+.strip p{font-family:var(--d);font-size:25px;line-height:1.3;font-weight:500;
+  letter-spacing:-.02em;margin:0;max-width:520px}
+.strip em{font-style:normal;color:var(--held)}
+.filters{margin-left:auto;display:flex;gap:6px;flex:none}
+.filters button{padding:5px 13px;border-radius:99px;font-size:13px;color:var(--muted);
+  background:var(--card);border:1px solid var(--line)}
+.filters button:hover{color:var(--ink)}
+.filters button[aria-pressed=true]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 264px;gap:56px;
+  padding-bottom:88px;align-items:start}
+.eyebrow{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--muted);margin:0 0 14px}
+.day{margin:26px 0 14px}
+.day:first-child{margin-top:0}
+
+/* ---------- activity ---------- */
+.item{background:var(--card);border-radius:var(--r);margin-bottom:10px;
+  box-shadow:0 1px 2px rgba(20,20,16,.05),0 0 0 1px rgba(20,20,16,.045)}
+.item.held{box-shadow:0 1px 2px rgba(46,74,125,.07),0 0 0 1px rgba(46,74,125,.14)}
+.head{display:block;width:100%;text-align:left;background:none;border:0;
+  padding:18px 22px;border-radius:var(--r)}
+.head:hover{background:#FDFDFB}
+.meta{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+/* the row header is a <button>, so its parts are spans and need to be told
+   to stack; a <div> here would not be keyboard-operable */
+.head .q,.head .why,.head .out{display:block}
+.tag{font-size:12px;font-weight:600;color:var(--muted)}
+.tag.held{color:var(--held);background:var(--held-wash);padding:2px 9px;border-radius:99px}
+.dot{width:3px;height:3px;border-radius:50%;background:var(--faint);flex:none}
+.time{font-family:var(--m);font-size:11.5px;color:var(--muted);margin-left:auto}
+.chev{width:9px;height:9px;border-left:1.5px solid var(--faint);border-bottom:1.5px solid var(--faint);
+  transform:rotate(-45deg);margin-left:10px;flex:none;transition:transform .15s}
+[aria-expanded=true] .chev{transform:rotate(135deg)}
+.q{font-size:16px;line-height:1.45;margin:0;letter-spacing:-.005em}
+.out{font-family:var(--m);font-size:13.5px;background:var(--paper);border-radius:7px;
+  padding:10px 13px;margin-top:12px}
+.why{font-size:14px;color:var(--muted);line-height:1.6;margin:12px 0 0}
+.why b{color:var(--held);font-weight:500}
+
+/* detail is collapsed by default: the feed answers "what happened", the drawer
+   answers "prove it", and only one of those is wanted on every row */
+.detail{padding:0 22px 20px;border-top:1px solid var(--line);margin-top:2px}
+.detail dl{display:grid;grid-template-columns:112px 1fr;gap:9px 18px;margin:16px 0 0;
+  font-size:13.5px}
+.detail dt{color:var(--muted)}
+.detail dd{margin:0}
+.trail{display:flex;flex-wrap:wrap;gap:5px}
+.trail span{font-family:var(--m);font-size:11.5px;color:var(--muted);background:var(--paper);
+  padding:2px 8px;border-radius:5px}
+.trail span.stop{color:var(--held);background:var(--held-wash)}
+.grounded{display:flex;align-items:center;gap:8px;margin-top:16px;font-size:12.5px;color:var(--muted)}
+.grounded i{width:5px;height:5px;border-radius:50%;background:var(--ok);flex:none}
+.grounded.none i{background:var(--wait)}
+
+.empty{padding:44px 0;color:var(--muted);font-size:14px}
+
+/* ---------- rail: live state only, no setup ---------- */
+.rail{position:sticky;top:80px}
+.rail section+section{margin-top:34px}
+.gate{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:14px;
+  border-bottom:1px solid var(--line)}
+.gate:last-of-type{border-bottom:0}
+.gate .s{margin-left:auto;font-size:12.5px;color:var(--muted);flex:none}
+.gate .t{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+  overflow:hidden;line-height:1.4}
+.gate.on{color:var(--held)} .gate.on .s{color:var(--held)}
+.gate i{width:5px;height:5px;border-radius:50%;background:var(--line);flex:none}
+.gate.on i{background:var(--held)}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:8px 0;font-size:13.5px;
+  border-bottom:1px solid var(--line)}
+.kv:last-of-type{border-bottom:0}
+.kv span:first-child{color:var(--muted)}
+.kv span:last-child{font-family:var(--m);font-size:12.5px;text-align:right}
+button.stop{margin-top:14px;width:100%;padding:8px;border-radius:8px;background:var(--card);
+  border:1px solid var(--line);color:var(--muted);font-size:13.5px}
+button.stop:hover{color:var(--ink);border-color:var(--muted)}
+
+/* ---------- setup ---------- */
+.setup{padding:34px 0 96px;max-width:660px}
+.setup h1{font-family:var(--d);font-size:27px;font-weight:600;letter-spacing:-.02em;margin:0 0 6px}
+.setup .intro{color:var(--muted);margin:0 0 34px}
+.block{padding:24px 0;border-top:1px solid var(--line)}
+.block h2{font-size:15px;font-weight:600;margin:0 0 3px}
+.block p.h{font-size:13.5px;color:var(--muted);margin:0 0 16px;line-height:1.55}
+.field{display:flex;align-items:center;gap:14px;padding:9px 0}
+.field label{font-size:14px;min-width:150px;color:var(--muted)}
+.field input[type=text],.field select{font:inherit;font-size:13.5px;padding:7px 11px;
+  border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);
+  flex:1;min-width:0;font-family:var(--m)}
+.field .hint{font-size:12.5px;color:var(--muted)}
+.range{display:flex;align-items:center;gap:12px;flex:1}
+.range input{flex:1;accent-color:var(--held)}
+.range output{font-family:var(--m);font-size:12.5px;color:var(--muted);min-width:34px}
+.pick{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px}
+.pick button{font-size:13px;padding:5px 12px;border-radius:99px;
+  background:var(--card);color:var(--muted);border:1px solid var(--line)}
+.pick button:hover{color:var(--ink)}
+.pick button[aria-pressed=true]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+pre{font-family:var(--m);font-size:11.5px;line-height:1.7;background:var(--card);
+  border-radius:9px;padding:14px;margin:0;color:var(--muted);
+  box-shadow:0 0 0 1px rgba(20,20,16,.045);white-space:pre-wrap;overflow-wrap:anywhere}
+pre b{color:var(--ink);font-weight:400}
+.copy{margin-top:10px;padding:6px 13px;border-radius:8px;background:var(--card);
+  border:1px solid var(--line);font-size:13px;color:var(--muted)}
+.copy:hover{color:var(--ink);border-color:var(--muted)}
+.note{font-size:12.5px;color:var(--muted);line-height:1.55;margin:12px 0 0}
+.check{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:14px}
+.check i{width:5px;height:5px;border-radius:50%;background:var(--ok);flex:none}
+.check.bad i{background:var(--wait)}
+.check .s{margin-left:auto;font-family:var(--m);font-size:12px;color:var(--muted)}
+
+.privacy{margin-top:8px;padding:14px 16px;background:var(--card);border-radius:9px;
+  box-shadow:0 0 0 1px rgba(20,20,16,.045);font-size:13px;color:var(--muted);line-height:1.6}
+.privacy b{color:var(--ink);font-weight:500}
+
+@media(max-width:860px){
+  .cols{grid-template-columns:1fr;gap:40px}
+  .rail{position:static}
+  .strip{flex-wrap:wrap;gap:16px}
+  .strip p{font-size:22px}
+  .filters{margin-left:0}
+  .wrap{padding:0 20px}
+  .ask{margin:0 -20px;padding:16px 20px}
+}
+@media(max-width:640px){
+  /* the interrupt must stay usable at this width, so the buttons drop to their
+     own row rather than shrinking to nothing next to the sentence */
+  .ask .row{flex-wrap:wrap}
+  .ask .acts{margin-left:0;flex-basis:100%}
+  .ask .acts button{flex:1}
+  /* shorthand padding here would wipe .wrap's horizontal padding, since .bar
+     and .wrap are the same element */
+  .bar{height:auto;flex-wrap:wrap;padding-top:10px;padding-bottom:10px;gap:10px}
+  nav{margin-left:auto}
+  /* the flex child is .wshost, not the button inside it */
+  .wshost{order:5;flex-basis:100%}
+  .ws{margin-left:0;width:100%;justify-content:space-between}
+  .ask{top:0;position:static}
+  header{position:static}
+  /* the reason already appears in full below the question, so the abbreviated
+     one in the meta row only costs a wrapped line here */
+  .meta .dot,.meta .tag+.tag{display:none}
+  .detail dl{grid-template-columns:1fr;gap:3px 0}
+  .detail dt{margin-top:10px}
+  .field{flex-wrap:wrap;gap:6px}
+  .field label{min-width:0;flex-basis:100%}
+}
+
+/* the workspace is fixed for a serving process, so it reports rather than
+   switches; one serve process is one folder */
+span.ws{cursor:default}
+.gate.warn{color:var(--wait)} .gate.warn i{background:var(--wait)}
+.gatebox{max-width:420px;margin:80px auto;padding:26px;background:var(--card);
+  border-radius:var(--r);box-shadow:0 1px 2px rgba(20,20,16,.05),0 0 0 1px rgba(20,20,16,.045)}
+.gatebox h2{font-family:var(--d);font-size:20px;font-weight:600;margin:0 0 8px;letter-spacing:-.02em}
+.gatebox p{color:var(--muted);font-size:14px;margin:0 0 16px}
+.gatebox input{width:100%;font-family:var(--m);font-size:13px;padding:9px 11px;
+  border:1px solid var(--line);border-radius:8px;background:var(--paper)}
+.gatebox button{margin-top:10px;padding:8px 16px;border-radius:8px;border:1px solid var(--ink);
+  background:var(--ink);color:var(--paper);font-size:14px}
+.running{color:var(--muted)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap bar">
+    <span class="name">airlock</span>
+    <span class="live"><i id="livedot"></i><span id="livetext">connecting</span></span>
+    <span class="wshost"><span class="ws" id="ws"><b id="wspath">&hellip;</b><span id="wsmeta"></span></span></span>
+    <nav>
+      <button id="nav-activity" aria-current="page">Activity</button>
+      <button id="nav-setup">Setup</button>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap" id="tokengate" hidden>
+  <div class="gatebox">
+    <h2>Token needed</h2>
+    <p>airlock printed a link when it started, with a token in it. Open that link,
+       or paste the token here. It is this run&rsquo;s only credential and is not stored on disk.</p>
+    <input id="tokenin" type="text" spellcheck="false" placeholder="token">
+    <button id="tokengo">Connect</button>
+  </div>
+</div>
+
+<!-- ============ ACTIVITY ============ -->
+<div id="view-activity">
+<div class="wrap">
+  <div class="ask" id="ask" hidden role="alertdialog" aria-live="assertive" aria-label="Waiting for your decision">
+    <div class="row">
+      <span class="k"><i></i>Waiting on you</span>
+      <span class="what" id="askwhat"></span>
+      <span class="acts">
+        <button id="deny">Deny</button>
+        <button id="allow">Allow once</button>
+      </span>
+    </div>
+    <p class="sub" id="asksub">Nothing happens until you answer.</p>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="strip">
+    <p id="summary">Waiting for the first question.</p>
+    <div class="filters" role="group" aria-label="Filter activity">
+      <button data-f="all" aria-pressed="true">All</button>
+      <button data-f="held" aria-pressed="false">Held</button>
+      <button data-f="sent" aria-pressed="false">Sent</button>
+    </div>
+  </div>
+
+  <div class="cols">
+    <main id="feed"></main>
+    <aside class="rail">
+      <section><p class="eyebrow">Sessions</p><div id="sess"></div></section>
+      <section><p class="eyebrow">Concerns raised</p><div id="concerns"></div></section>
+      <section>
+        <p class="privacy"><b>Only you see this page.</b> It runs on your machine, loads
+          nothing from the network, and is never sent anywhere. The assistant sees far
+          less than you do here.</p>
+      </section>
+    </aside>
+  </div>
+</div>
+</div>
+
+<!-- ============ SETUP ============ -->
+<div id="view-setup" hidden>
+<div class="wrap setup">
+  <h1>Setup</h1>
+  <p class="intro">What this run is configured to do. Changing any of it means restarting
+     airlock with different flags.</p>
+
+  <div class="block">
+    <h2>Folder</h2>
+    <p class="h">The only directory airlock can read. Nothing outside it is reachable,
+      by you or by the assistant.</p>
+    <div class="field"><label>Folder</label><input type="text" id="s-root" readonly><span class="hint" id="s-files"></span></div>
+    <div class="field"><label>Writes</label><span class="hint" id="s-writes"></span></div>
+    <div class="field"><label>Approval</label><span class="hint" id="s-approve"></span></div>
+    <div class="field"><label>Worker model</label><span class="hint" id="s-model"></span></div>
+  </div>
+
+  <div class="block">
+    <h2>Guard</h2>
+    <p class="h">Four checks run on every answer before it leaves. The first two are fixed
+      rules with no sensitivity and cannot be turned off. The last two are local models.</p>
+    <div class="check"><i></i>Secrets<span class="s">detect-secrets</span></div>
+    <div class="check"><i></i>Personal identifiers<span class="s">patterns</span></div>
+    <div class="check"><i></i>PII detector<span class="s">LFM2.5-350M</span></div>
+    <div class="check"><i></i>Policy linter<span class="s" id="s-thr"></span></div>
+  </div>
+
+  <div class="block">
+    <h2>Connect an assistant</h2>
+    <p class="h">Paste this into the client&rsquo;s config, then restart it.</p>
+    <div class="pick" id="clients" role="group" aria-label="Choose a client"></div>
+    <pre id="cfg">&hellip;</pre>
+    <button class="copy" id="copy">Copy</button>
+    <p class="note" id="cfgnote"></p>
+  </div>
+</div>
+</div>
+
+<script>
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const esc=t=>String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* ---- token: from the printed link, else from sessionStorage, else ask ---- */
+let TOKEN = new URLSearchParams(location.search).get('token') || sessionStorage.getItem('airlock-token') || '';
+if (new URLSearchParams(location.search).get('token')) {
+  sessionStorage.setItem('airlock-token', TOKEN);
+  // keep the credential out of the address bar, history and any screenshot
+  history.replaceState(null, '', location.pathname);
+}
+$('#tokengo').onclick = () => { TOKEN = $('#tokenin').value.trim();
+  sessionStorage.setItem('airlock-token', TOKEN); $('#tokengate').hidden = true; poll(); };
+
+const api = (path, opts={}) => fetch(path, {...opts, headers:{...(opts.headers||{}),
+  'X-Airlock-Token': TOKEN, ...(opts.body?{'Content-Type':'application/json'}:{})}});
+
+/* ---- views ---- */
+const views={activity:[$('#nav-activity'),$('#view-activity')],setup:[$('#nav-setup'),$('#view-setup')]};
+for (const [k,[btn]] of Object.entries(views)) btn.onclick=()=>{
+  for (const [k2,[b2,e2]] of Object.entries(views)) { e2.hidden=k2!==k;
+    k2===k?b2.setAttribute('aria-current','page'):b2.removeAttribute('aria-current'); }
+  scrollTo(0,0);
+};
+
+/* ---- an exchange is one question and everything that happened to it ---- */
+function exchanges(events){
+  const out=[]; let cur=null;
+  for (const e of events) {
+    if (e.kind==='asked') { cur={q:e.detail,ts:e.ts,session:e.session,steps:[],outcome:null,why:'',
+      key:e.session+'|'+e.ts}; out.push(cur); continue; }
+    if (!cur) continue;
+    if (['sent','kept','held','denied'].includes(e.kind)) { cur.outcome=e.kind; cur.why=e.detail; cur=null; continue; }
+    cur.steps.push(e.kind);
+  }
+  return out.reverse();
+}
+const clock = iso => { try { return new Date(iso).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
+                       catch { return ''; } };
+
+const LABEL={sent:['Sent','Released to the assistant'],
+             kept:['Kept local','The assistant got a receipt, not this text'],
+             held:['Held','Withheld by the guard'],
+             denied:['Denied','You declined this call'],
+             null:['Running','In progress']};
+
+const OPEN = new Set();
+
+function row(x,i){
+  const [tag,sub]=LABEL[x.outcome]||LABEL.null;
+  const stopped = x.outcome==='held'||x.outcome==='denied';
+  const local = x.outcome==='kept';
+  const trail = x.steps.map(s=>`<span>${esc(s)}</span>`).join('')
+    + (stopped?`<span class="stop">${esc(x.outcome)}</span>`:'');
+  return `<article class="item${stopped?' held':''}" data-k="${stopped?'held':(x.outcome?'sent':'run')}">
+    <button class="head" aria-expanded="${OPEN.has(x.key)}" aria-controls="d${i}" data-key="${esc(x.key)}">
+      <span class="meta"><span class="tag${stopped?' held':''}">${tag}</span><span class="dot"></span>
+        <span class="tag" style="color:var(--muted)">${esc(sub)}</span>
+        <span class="time">${clock(x.ts)}</span><span class="chev"></span></span>
+      <span class="q">${esc(x.q)}</span>
+      ${(x.outcome==='sent'||local)&&x.why?`<span class="out">${esc(x.why)}</span>`:''}
+      ${local?'<span class="why">Nothing left this machine. The assistant was told the work happened, and must ask explicitly to receive any of it.</span>':''}
+      ${stopped&&x.why?`<span class="why">${esc(x.why)}</span>`:''}
+      ${x.outcome===null?'<span class="why running">Still running.</span>':''}
+    </button>
+    <div class="detail" id="d${i}"${OPEN.has(x.key)?'':' hidden'}>
+      <dl>
+        <dt>Session</dt><dd>${esc(x.session)}</dd>
+        <dt>Steps</dt><dd class="trail">${trail||'<span>none</span>'}</dd>
+        <dt>Sent out</dt><dd>${stopped
+          ? 'Nothing. The assistant was told a check failed, not what it found.'
+          : local ? 'Nothing. A receipt describing the operation, with no content in it.'
+          : (x.outcome==='sent' ? 'The answer above, and nothing else.' : 'Not decided yet.')}</dd>
+      </dl>
+    </div></article>`;
+}
+
+let FILTER='all';
+$$('.filters button').forEach(b=>b.onclick=()=>{
+  $$('.filters button').forEach(o=>o.setAttribute('aria-pressed',o===b));
+  FILTER=b.dataset.f; applyFilter();
+});
+function applyFilter(){
+  let shown=0;
+  $$('#feed .item').forEach(it=>{ const on=FILTER==='all'||it.dataset.k===FILTER;
+    it.hidden=!on; if(on)shown++; });
+  const e=$('#empty'); if(e) e.hidden=shown>0;
+}
+
+let LAST_FEED='';
+function renderFeed(xs){
+  // Poll-and-replace wipes the DOM every 1.5s. Without this, a drawer the
+  // operator opened closed again before they could read it: the interval
+  // always won. Skip the rebuild when nothing changed, and carry the open
+  // set across the rebuilds that do happen.
+  const sig = JSON.stringify(xs.map(x=>[x.key,x.outcome,x.steps.length,x.why]));
+  if (sig===LAST_FEED) return;
+  LAST_FEED = sig;
+  $('#feed').innerHTML = xs.length
+    ? xs.map(row).join('') + '<p class="empty" id="empty" hidden>Nothing matches that filter.</p>'
+    : '<p class="empty">No questions yet. Ask the assistant something about this folder.</p>';
+  $$('.head').forEach(h=>h.onclick=()=>{
+    const open=h.getAttribute('aria-expanded')==='true';
+    h.setAttribute('aria-expanded',!open);
+    $('#'+h.getAttribute('aria-controls')).hidden=open;
+    open ? OPEN.delete(h.dataset.key) : OPEN.add(h.dataset.key);
+  });
+  applyFilter();
+}
+
+/* ---- setup, filled from the running process rather than hardcoded ---- */
+let CLIENTS={};
+function renderSetup(c){
+  $('#s-root').value=c.workspace||'';
+  $('#s-files').textContent=(c.files??'?')+' files';
+  $('#s-writes').textContent=c.allow_writes?'allowed':'read only';
+  $('#s-approve').textContent=c.approve||'';
+  $('#s-model').textContent=c.model||'';
+  $('#s-thr').textContent='threshold '+(c.linter_threshold??'');
+  if (JSON.stringify(c.mcp||{})===JSON.stringify(CLIENTS)) return;
+  CLIENTS=c.mcp||{};
+  const names=Object.keys(CLIENTS);
+  $('#clients').innerHTML=names.map((n,i)=>
+    `<button aria-pressed="${i===0}" data-c="${esc(n)}">${esc(n)}</button>`).join('');
+  $$('#clients button').forEach(b=>b.onclick=()=>{
+    $$('#clients button').forEach(o=>o.setAttribute('aria-pressed',o===b)); showCfg(b.dataset.c); });
+  if (names.length) showCfg(names[0]);
+}
+function showCfg(name){
+  $('#cfg').textContent=CLIENTS[name]||'';
+  $('#cfgnote').textContent=/desktop|cursor|vscode|zed/.test(name)
+    ? 'This client is launched by the window manager, not a terminal, so it needs the full path rather than just the name.'
+    : 'This client inherits your shell PATH, so the bare command name is enough.';
+}
+$('#copy').onclick=()=>navigator.clipboard.writeText($('#cfg').textContent)
+  .then(()=>{$('#copy').textContent='Copied';setTimeout(()=>$('#copy').textContent='Copy',1200);})
+  .catch(()=>{$('#copy').textContent='Select and copy';});
+
+/* ---- the interrupt ---- */
+let PENDING=null;
+function renderAsk(p){
+  PENDING=p;
+  $('#ask').hidden=!p;
+  document.title=(p?'\u25cf ':'')+'airlock';
+  if (!p) return;
+  $('#askwhat').innerHTML=(p.alters?'The assistant wants to run a call that can write to this folder: '
+    :'The assistant is asking: ')+`<code>${esc(p.question)}</code>`;
+}
+const answer=g=>{ if(!PENDING) return;
+  api('/api/approve',{method:'POST',body:JSON.stringify({id:PENDING.id,granted:g})})
+    .then(()=>{renderAsk(null);poll();}); };
+$('#allow').onclick=()=>answer(true);
+$('#deny').onclick=()=>answer(false);
+
+/* ---- poll ---- */
+function renderRail(st){
+  $('#sess').innerHTML = st.sessions.length
+    ? st.sessions.map(s=>`<div class="kv"><span>${esc(s.id)}</span><span>${s.exchanges} asked &middot; ${s.blocked} held</span></div>`).join('')
+    : '<div class="kv"><span>none open</span><span></span></div>';
+  const counts={};
+  for (const e of st.events) if (e.kind==='held'&&e.detail)
+    for (const c of e.detail.split('; ')) if(c) counts[c]=(counts[c]||0)+1;
+  const rows=Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  $('#concerns').innerHTML = rows.length
+    ? rows.map(([c,n])=>`<div class="gate on" title="${esc(c)}"><i></i>`+
+        `<span class="t">${esc(c)}</span><span class="s">${n}</span></div>`).join('')
+    : '<div class="gate"><i></i>Nothing withheld yet<span class="s">clear</span></div>';
+}
+function renderSummary(xs){
+  const done=xs.filter(x=>x.outcome);
+  const held=done.filter(x=>x.outcome==='held'||x.outcome==='denied').length;
+  const running=xs.length-done.length;
+  if (!xs.length) { $('#summary').textContent='Waiting for the first question.'; return; }
+  const tail = running ? `<em>${running} running.</em>`
+    : held ? `<em>${held} ${held===1?'was':'were'} held.</em>` : 'None were held.';
+  $('#summary').innerHTML = done.length
+    ? `${done.length} question${done.length===1?'':'s'} so far. ${tail}`
+    : `${running} question${running===1?'':'s'} running.`;
+}
+let FAILS=0;
+async function poll(){
+  if(!TOKEN){ $('#tokengate').hidden=false; return; }
+  try{
+    const r=await api('/api/state');
+    if(r.status===401){ $('#tokengate').hidden=false; return; }
+    if(!r.ok) throw new Error(r.status);
+    const st=await r.json();
+    FAILS=0; $('#tokengate').hidden=true;
+    $('#livedot').style.background='var(--ok)'; $('#livetext').textContent='serving';
+    const c=st.config||{};
+      // Truncated from the left, in JS rather than with CSS. direction:rtl
+    // does keep the tail visible, but it also reorders the leading slash to
+    // the end, so a path rendered as ".../scratchpad/tax-2025/".
+    const path=c.workspace||'';
+    $('#wspath').textContent = path.length>46 ? '\u2026'+path.slice(-45) : path;
+    $('#ws').title=c.workspace||'';
+    $('#wsmeta').textContent=(c.files!=null?` \u00b7 ${c.files} files`:'')+(c.allow_writes?' \u00b7 writable':' \u00b7 read only');
+    const xs=exchanges(st.events||[]);
+    renderSummary(xs); renderFeed(xs); renderRail({...st,sessions:st.sessions||[],events:st.events||[]});
+    renderSetup(c); renderAsk(st.pending);
+  }catch(e){
+    // a stopped server is the normal end of a session, not an error worth shouting about
+    if(++FAILS>1){ $('#livedot').style.background='var(--wait)'; $('#livetext').textContent='not connected'; }
+  }
+}
+poll(); setInterval(poll, 1500);
+</script>
+</body>
+</html>
+"""
+
+
+# The console exists because confirm_on_tty cannot cover the case that
+# matters most. A GUI client spawns this server with no controlling
+# terminal, so /dev/tty does not open and build_server refuses to start in
+# gate mode at all. The browser is the only approval channel available
+# there. Everything below is stdlib: a privacy tool should not need a web
+# framework to show the operator what it did.
+
+UI_EVENT_CAP = 200
+UI_APPROVAL_TIMEOUT = 300.0
+
+UI_LOCK = threading.Lock()
+UI_CONFIG: dict[str, Any] = {}
+UI_EVENTS: deque[dict[str, Any]] = deque(maxlen=UI_EVENT_CAP)
+UI_PENDING: dict[str, PendingApproval] = {}
+
+
+@dataclass
+class PendingApproval:
+    """One gated call, parked until the operator answers in the browser."""
+
+    id: str
+    session: str
+    question: str
+    alters: bool
+    created_at: str = field(default_factory=lambda: datetime.now().isoformat())
+    answered: threading.Event = field(default_factory=threading.Event)
+    granted: bool = False
+
+    def as_json(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "session": self.session[:8],
+            "question": self.question,
+            "alters": self.alters,
+            "created_at": self.created_at,
+        }
+
+
+def ui_note(kind: str, session: str, detail: str) -> None:
+    """Record one activity event for the console to render."""
+    with UI_LOCK:
+        UI_EVENTS.append(
+            {
+                "ts": datetime.now().isoformat(),
+                "kind": kind,
+                "session": session[:8],
+                "detail": detail[:200],
+            }
+        )
+
+
+def confirm_in_browser(
+    session: str, question: str, alters: bool, timeout: float = UI_APPROVAL_TIMEOUT
+) -> bool:
+    """Park a gated call until the operator answers in the console.
+
+    Returns False on timeout, matching confirm_on_tty: a gate nobody answered
+    has not granted anything.
+    """
+    pending = PendingApproval(
+        id=secrets.token_urlsafe(9), session=session, question=question, alters=alters
+    )
+    with UI_LOCK:
+        UI_PENDING[pending.id] = pending
+    try:
+        if not pending.answered.wait(timeout):
+            return False
+        return pending.granted
+    finally:
+        with UI_LOCK:
+            UI_PENDING.pop(pending.id, None)
+
+
+def resolve_approval(approval_id: str, granted: bool) -> bool:
+    """Answer a parked call. False if it is unknown or already answered."""
+    with UI_LOCK:
+        pending = UI_PENDING.get(approval_id)
+        if pending is None or pending.answered.is_set():
+            return False
+        pending.granted = granted
+        pending.answered.set()
+    return True
+
+
+def console_state() -> dict[str, Any]:
+    """Everything the page renders, as one snapshot."""
+    with UI_LOCK:
+        events = list(UI_EVENTS)
+        pending = [p.as_json() for p in UI_PENDING.values() if not p.answered.is_set()]
+    return {
+        "config": UI_CONFIG,
+        "events": events,
+        "pending": pending[0] if pending else None,
+        "sessions": [
+            {
+                "id": sid[:8],
+                "objective": sess.objective[:120],
+                "exchanges": sess.exchanges,
+                "blocked": sess.blocked,
+                "revisions": sess.revisions,
+                "created_at": sess.created_at,
+            }
+            for sid, sess in SESSIONS.items()
+        ],
+    }
+
+
+class ConsoleHandler(BaseHTTPRequestHandler):
+    """Serve the console page and its two endpoints, nothing else."""
+
+    server_version = "airlock"
+    sys_version = ""
+
+    def log_message(self, fmt: str, *args: Any) -> None:
+        """Silence the default access log; stderr is the activity log."""
+
+    def _authorised(self) -> bool:
+        """Token plus origin. Both, because either alone is not enough.
+
+        Binding to loopback does not keep other origins out: any page in the
+        operator's browser can POST to 127.0.0.1. The token is the real
+        check, and the Origin test refuses the cross-site preflight before a
+        token guess is even attempted.
+        """
+        origin = self.headers.get("Origin")
+        if origin is not None and origin not in self.server.origins:  # type: ignore[attr-defined]
+            return False
+        supplied = self.headers.get("X-Airlock-Token", "")
+        return hmac.compare_digest(supplied, self.server.token)  # type: ignore[attr-defined]
+
+    def _send(self, code: int, body: bytes, ctype: str) -> None:
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        # The page loads nothing remote by design, so the policy that says so
+        # costs nothing and stops a tampered page from sending anything out.
+        self.send_header(
+            "Content-Security-Policy",
+            "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; "
+            "connect-src 'self'; img-src data:; form-action 'none'; base-uri 'none'",
+        )
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(body)
+
+    def _json(self, code: int, payload: dict[str, Any]) -> None:
+        self._send(code, json.dumps(payload).encode(), "application/json")
+
+    def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler's spelling
+        path, _, query = self.path.partition("?")
+        if path == "/":
+            # The page is public; everything it can act on is not. Serving the
+            # shell without a token lets the operator open a bare URL and paste
+            # the token, rather than losing access to their own console.
+            self._send(200, CONSOLE_HTML.encode(), "text/html; charset=utf-8")
+            return
+        if path == "/api/state":
+            if not self._authorised():
+                self._json(401, {"error": "bad or missing token"})
+                return
+            self._json(200, console_state())
+            return
+        self._json(404, {"error": "no such path"})
+
+    def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler's spelling
+        if self.path != "/api/approve":
+            self._json(404, {"error": "no such path"})
+            return
+        if not self._authorised():
+            self._json(401, {"error": "bad or missing token"})
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if length > 4096:
+                raise ValueError("body too large")
+            body = json.loads(self.rfile.read(length) or b"{}")
+            approval_id = body["id"]
+            granted = body["granted"]
+            if not isinstance(approval_id, str) or not isinstance(granted, bool):
+                raise ValueError("id must be a string and granted a boolean")
+        except (ValueError, KeyError, TypeError) as exc:
+            self._json(400, {"error": str(exc)})
+            return
+        if not resolve_approval(approval_id, granted):
+            self._json(409, {"error": "that call is no longer waiting"})
+            return
+        self._json(200, {"ok": True})
+
+
+def console_client_configs(args: argparse.Namespace) -> dict[str, str]:
+    """Ready-to-paste config for every supported client, for the console.
+
+    Each client gets whichever launch form matches how it starts, which is
+    the distinction _airlock_launch_forms exists to make; getting it wrong
+    is a silent command-not-found in the GUI clients.
+    """
+    root = Path(args.root).expanduser().resolve()
+    shell_form, gui_form, _ = _airlock_launch_forms(Path(__file__).resolve())
+    server_args = _server_args(root, args)
+    out: dict[str, str] = {}
+    for client, spec in MCP_CLIENTS.items():
+        form = gui_form if spec["launch"] == "gui" else shell_form
+        try:
+            out[client] = render_client_config(client, form, server_args)
+        except Exception:  # noqa: BLE001 - one unrenderable client must not blank the page
+            continue
+    return out
+
+
+def start_console(config: dict[str, Any] | None = None, port: int = 0) -> tuple[str, str]:
+    """Start the console on loopback. Returns its URL and token.
+
+    Port 0 asks the OS for a free one, so two workspaces served at once do
+    not collide. The thread is a daemon: the console must never be the
+    reason the server outlives its client.
+    """
+    UI_CONFIG.update(config or {})
+    token = secrets.token_urlsafe(24)
+    httpd = ThreadingHTTPServer(("127.0.0.1", port), ConsoleHandler)
+    httpd.token = token  # type: ignore[attr-defined]
+    bound = httpd.server_address[1]
+    httpd.origins = {f"http://127.0.0.1:{bound}", f"http://localhost:{bound}"}  # type: ignore[attr-defined]
+    threading.Thread(target=httpd.serve_forever, daemon=True, name="airlock-console").start()
+    return f"http://127.0.0.1:{bound}/?token={token}", token
+
+
 def build_server(args: argparse.Namespace) -> Any:
     """Construct the MCP server object without running a transport.
 
@@ -3470,17 +4419,20 @@ def build_server(args: argparse.Namespace) -> Any:
     if args.approve == "hint-writes" and args.allow_writes:
         args.approve = "gate-writes"
 
-    tty = tty_handle() if args.approve.startswith("gate") else None
-    if args.approve.startswith("gate") and tty is None:
+    gating = args.approve.startswith("gate")
+    use_console = bool(getattr(args, "ui", False))
+    tty = tty_handle() if gating and not use_console else None
+    if gating and not use_console and tty is None:
         # Refusing is the point. Falling back to no approval would turn a
         # request for a gate into silence, which is the worst of the available
         # outcomes and the one that happens if nobody checks.
         raise RuntimeError(
-            f"--approve {args.approve} needs a terminal to ask on, and there is none.\n"
+            f"--ask {getattr(args, 'ask', 'writes')} needs somewhere to ask, and there "
+            "is nowhere.\n"
             "  stdin is the JSON-RPC stream here, so prompting uses /dev/tty, which does\n"
             "  not exist when a GUI client launches this server as a subprocess.\n"
-            "  Run airlock in a terminal, or choose --approve hint-writes to let the "
-            "client ask."
+            "  Drop --no-ui so you can answer in the web console, run airlock from a\n"
+            "  terminal, or use --ask never to let the client decide instead."
         )
 
     mcp = MCPServer("airlock", version=__version__)
@@ -3624,12 +4576,16 @@ def build_server(args: argparse.Namespace) -> Any:
             )
 
         if approval_required(args.approve, can_alter):
-            allowed = confirm_on_tty(
-                tty, f"Allow this call on {sandbox.root.name}? ({question.strip()[:60]})"
-            )
+            if use_console:
+                allowed = confirm_in_browser(session, question.strip(), can_alter)
+            else:
+                allowed = confirm_on_tty(
+                    tty, f"Allow this call on {sandbox.root.name}? ({question.strip()[:60]})"
+                )
             trace("approval", session=session, granted=allowed, mode=args.approve)
             if not allowed:
                 err_console.print(Text.assemble(("  └ denied  ", "bold red"), ("by operator", "")))
+                ui_note("denied", session, "declined by the operator")
                 return {"status": "denied", "message": "The operator declined this call."}
 
         actions: list[str] = []
@@ -3638,7 +4594,9 @@ def build_server(args: argparse.Namespace) -> Any:
         def watch(action: str, detail: str) -> None:
             actions.append(action)
             reporter(action, detail)
+            ui_note(action, session, detail)
 
+        ui_note("asked", session, question.strip())
         result = run_worker(found, question.strip(), on_step=watch)
 
         # The governing fact is what actually crossed the boundary, so print
@@ -3666,6 +4624,16 @@ def build_server(args: argparse.Namespace) -> Any:
                 )
             )
 
+        # Three outcomes, not two. An approved answer with no
+        # disclosure_request never leaves this machine: the caller gets a
+        # receipt. Calling that "sent" and showing the text beside it tells
+        # the operator their content went out when it did not.
+        if status != "approved":
+            ui_note("held", session, "; ".join(result.get("guard_concerns", []))[:160])
+        elif disclosure_request:
+            ui_note("sent", session, result.get("message", "")[:200])
+        else:
+            ui_note("kept", session, result.get("message", "")[:200])
         trace(
             "disclosure",
             session=session,
@@ -3799,6 +4767,34 @@ def cmd_serve(args: argparse.Namespace) -> int:
         return 1
     err_console.print("airlock: guard encoders ready")
 
+    if getattr(args, "ui", False):
+        url, _ = start_console(
+            {
+                "workspace": str(Path(args.root).resolve()),
+                # Bounded: a workspace pointed at a huge tree must not stall
+                # startup just to render a count in the header.
+                "files": sum(
+                    1 for _ in itertools.islice(
+                        (p for p in Path(args.root).resolve().rglob("*") if p.is_file()), 10000
+                    )
+                ),
+                "model": args.model,
+                "approve": args.approve,
+                "allow_writes": bool(args.allow_writes),
+                "linter_threshold": args.linter_threshold,
+                "version": __version__,
+                # Reuses render_mcp_help's own builders rather than
+                # reimplementing seven client schemas in JavaScript.
+                "mcp": console_client_configs(args),
+            }
+        )
+        # stdout is the JSON-RPC channel once mcp.run() starts (CLAUDE.md).
+        err_console.print(f"airlock console: {url}")
+        err_console.print(
+            "  Open that link. The token in it is this run's only credential; "
+            "it is not written to disk."
+        )
+
     print(f"airlock serving {Path(args.root).resolve()} over MCP", file=sys.stderr)
     mcp.run()
     return 0
@@ -3855,37 +4851,107 @@ def offer_repairs(args: argparse.Namespace) -> bool:
     return fixed
 
 
-def cmd_quickstart(args: argparse.Namespace) -> int:
-    """Bare `airlock`, with no arguments: orient, check, then start a session.
+def _ask_yes_no(question: str, default: bool) -> bool:
+    """Confirm, treating an unanswerable prompt as no.
 
-    The workspace defaults to the current directory, which is convenient and
-    also the one genuinely dangerous default in this tool, so it is printed
-    before anything else happens and confirmed below when it is too broad.
+    stdin is a pipe under a setup script or CI, where Confirm.ask raises
+    EOFError. Aborting is the safe reading: every call site here is about to
+    change somebody's configuration.
     """
-    console.print(Rule("airlock", style="cyan"))
-    console.print(
-        "A local model reads one directory and answers questions about it.\n"
-        "Nothing reaches an external service until a privacy guard approves it.\n"
-    )
+    try:
+        return bool(Confirm.ask(question, default=default))
+    except EOFError:
+        console.print("[dim]no answer available on stdin; stopping[/dim]")
+        return False
 
+
+def _confirm_scope(root: Path) -> bool:
+    """Refuse to treat a home directory or / as a workspace without a yes.
+
+    The workspace is the whole security boundary, and the two defaults that
+    quietly widen it to everything are the ones worth interrupting for.
+    """
+    if root != Path.home() and root != root.parent:
+        return True
+    where = "your home directory" if root == Path.home() else "the filesystem root"
+    console.print(f"[yellow]That is {where}.[/yellow] Every file beneath it is in scope.")
+    return _ask_yes_no("Use it anyway?", default=False)
+
+
+def _pick_client(preselected: str | None) -> str | None:
+    """Which assistant to connect. None if there is nothing to connect to."""
+    if preselected:
+        if preselected not in MCP_CLIENTS:
+            console.print(f"[red]Unknown client {preselected!r}.[/red] "
+                          f"Known: {', '.join(MCP_CLIENTS)}")
+            return None
+        return preselected
+    found = installed_clients()
+    if not found:
+        console.print("[yellow]No assistant found on this machine.[/yellow]")
+        console.print("[dim]airlock looks for an existing config file for each one. "
+                      "Pass --client NAME to write one anyway.[/dim]")
+        return None
+    if len(found) == 1:
+        console.print(f"Found [bold]{CLIENT_LABELS[found[0]]}[/bold].")
+        return found[0]
+    console.print("Found these assistants:\n")
+    for index, client in enumerate(found, 1):
+        console.print(f"  [cyan]{index}[/cyan]  {CLIENT_LABELS[client]}")
+    console.print()
+    try:
+        choice = Prompt.ask(
+            "Connect which one", choices=[str(i) for i in range(1, len(found) + 1)],
+            default="1",
+        )
+    except EOFError:
+        console.print("[dim]no answer available on stdin; pass --client NAME[/dim]")
+        return None
+    return found[int(choice) - 1]
+
+
+def cmd_connect(args: argparse.Namespace) -> int:
+    """`airlock [FOLDER]`: make one folder readable by one assistant.
+
+    The whole job in one command. Everything it does was previously five
+    steps, one of which was "find your client's config file yourself".
+    """
     root = Path(args.root).expanduser().resolve()
-    console.print(Text.assemble(("workspace   ", "dim"), (str(root), "bold yellow")))
-    console.print("[dim]readable by the local model, nothing above it[/dim]\n")
+    if not root.is_dir():
+        console.print(f"[red]No such folder:[/red] {root}")
+        return 1
 
-    # Running from a home directory or the filesystem root would expose far
-    # more than anyone means to. Neither is refused outright, because there are
-    # legitimate reasons, but neither is the default answer either.
-    if root == Path.home() or root == root.parent:
-        where = "your home directory" if root == Path.home() else "the filesystem root"
-        console.print(f"[yellow]That is {where}.[/yellow] Every file beneath it is in scope.")
-        console.print("[dim]Prefer: cd into a specific project, or pass --root[/dim]\n")
-        if not Confirm.ask("Continue anyway?", default=False):
-            return 0
+    # --print exists to be piped into a config file or a setup script, so it
+    # returns before anything decorative is written to stdout. A banner above
+    # the JSON would make `airlock connect --print | jq` fail.
+    if getattr(args, "print_only", False):
+        client = getattr(args, "client", None)
+        if client is None:
+            found = installed_clients()
+            if not found:
+                print("error: no assistant found; pass --client NAME", file=sys.stderr)
+                return 1
+            client = found[0]
+        elif client not in MCP_CLIENTS:
+            print(f"error: unknown client {client!r}", file=sys.stderr)
+            return 1
+        shell_form, gui_form, _ = _airlock_launch_forms(Path(__file__).resolve())
+        form = gui_form if MCP_CLIENTS[client]["launch"] == "gui" else shell_form
+        print(render_client_config(client, form, _server_args(root, args)))
+        return 0
 
-    # First run and a broken install look identical from here, so there is no
-    # need to detect which one this is: if doctor is unhappy, offer to fix what
-    # is fixable and check again. One retry only, because a second failure of
-    # the same repair means the problem is not the one being repaired.
+    console.print(Rule("airlock", style="cyan"))
+    console.print(Text.assemble(("folder  ", "dim"), (str(root), "bold yellow")))
+    console.print("[dim]the only directory the assistant can reach, and only through "
+                  "the guard[/dim]\n")
+    if not _confirm_scope(root):
+        return 0
+
+    client = _pick_client(getattr(args, "client", None))
+    if client is None:
+        return 1
+
+    entry = airlock_launch_entry(root, args, client)
     if cmd_doctor(args) != 0:
         if not offer_repairs(args):
             return 1
@@ -3893,12 +4959,111 @@ def cmd_quickstart(args: argparse.Namespace) -> int:
         if cmd_doctor(args) != 0:
             return 1
 
-    # Straight into the session. Typing `airlock` is the request; asking
-    # "start a session?" afterwards would be confirming something already
-    # said. The one prompt kept above is the home-directory guard, which
-    # asks about scope rather than intent.
+    path = client_config_path(client)
     console.print()
-    return cmd_chat(args)
+    console.print(Text.assemble(("writing ", "dim"), (str(path), "bold")))
+    console.print(f"[dim]{entry['command']} {' '.join(entry['args'])}[/dim]\n")
+    if not _ask_yes_no(f"Add airlock to {CLIENT_LABELS[client]}?", default=True):
+        return 0
+
+    try:
+        done = write_client_config(client, root, args)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        console.print(f"[red]Could not write {path}:[/red] {exc}")
+        console.print("[dim]Nothing was changed. Run with --print to get the config "
+                      "and paste it yourself.[/dim]")
+        return 1
+
+    console.print(f"\n[green]Connected.[/green] {CLIENT_LABELS[client]} can now ask about "
+                  f"{root.name}.")
+    if done.backup:
+        console.print(f"[dim]previous config saved as {done.backup.name}[/dim]")
+    console.print(f"[bold]Restart {CLIENT_LABELS[client]}[/bold] for it to take effect.")
+    if not getattr(args, "no_ui", False):
+        # Deliberately not "run airlock status to see it": the console lives
+        # inside the process the client spawns, and its token is never written
+        # to disk, so no other process can report the link.
+        console.print("[dim]The web console prints its address on stderr when your "
+                      "assistant starts airlock; look in that client's MCP log.[/dim]")
+    return 0
+
+
+def cmd_disconnect(args: argparse.Namespace) -> int:
+    """Remove airlock from a client's config, restoring what was there."""
+    client = _pick_client(getattr(args, "client", None))
+    if client is None:
+        return 1
+    path = client_config_path(client)
+    try:
+        done = write_client_config(client, Path("."), args, remove=True)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        console.print(f"[red]Could not write {path}:[/red] {exc}")
+        return 1
+    if done.action == "unchanged":
+        console.print(f"airlock was not in {CLIENT_LABELS[client]}'s config.")
+        return 0
+    console.print(f"[green]Removed[/green] airlock from {CLIENT_LABELS[client]}.")
+    if done.backup:
+        console.print(f"[dim]previous config saved as {done.backup.name}[/dim]")
+    console.print(f"[bold]Restart {CLIENT_LABELS[client]}[/bold] for it to take effect.")
+    return 0
+
+
+def _registered_root(client: str) -> str | None:
+    """Which folder a client is currently configured to serve, if any.
+
+    Read back out of the client's own file rather than remembered anywhere,
+    so this reports what is actually configured and not what airlock last
+    intended.
+    """
+    path = client_config_path(client)
+    if path is None or not path.exists():
+        return None
+    try:
+        text = path.read_text()
+        if MCP_CLIENTS[client]["schema"] == "codex":
+            match = _CODEX_BLOCK.search(text)
+            entry_args = re.findall(r'"([^"]*)"', match.group(0)) if match else []
+        else:
+            data = json.loads(text) if text.strip() else {}
+            key = {"vscode": "servers", "zed": "context_servers"}.get(
+                MCP_CLIENTS[client]["schema"], "mcpServers"
+            )
+            entry = (data.get(key) or {}).get("airlock")
+            entry_args = entry.get("args", []) if isinstance(entry, dict) else []
+    except (OSError, ValueError):
+        return None
+    if "serve" not in entry_args:
+        return None
+    after = entry_args[entry_args.index("serve") + 1 :]
+    return after[0] if after and not after[0].startswith("-") else "(unspecified)"
+
+
+def cmd_status(args: argparse.Namespace) -> int:
+    """What is connected, and whether the pieces it needs are working."""
+    console.print(Rule("airlock", style="cyan"))
+    table = Table(show_header=True, header_style="dim", box=None, padding=(0, 2))
+    table.add_column("assistant")
+    table.add_column("airlock")
+    table.add_column("folder")
+    any_connected = False
+    for client in MCP_CLIENTS:
+        path = client_config_path(client)
+        if path is None:
+            continue
+        where = _registered_root(client)
+        any_connected = any_connected or where is not None
+        table.add_row(
+            CLIENT_LABELS[client],
+            "[green]connected[/green]" if where else "[dim]not connected[/dim]",
+            where or "",
+        )
+    console.print(table)
+    if not any_connected:
+        console.print("\n[dim]Nothing connected yet. Run 'airlock <folder>' to "
+                      "connect one.[/dim]")
+    console.print()
+    return cmd_doctor(args)
 
 
 def _linter_threshold_type(raw: str) -> float:
@@ -3922,115 +5087,199 @@ def _linter_threshold_type(raw: str) -> float:
     return value
 
 
+ASK_MODES = ("always", "writes", "never")
+
+
 def build_parser() -> argparse.ArgumentParser:
-    """Construct the command line interface."""
-    # Every shared option carries argument_default=SUPPRESS, so an option
-    # the user did not type is absent from the namespace rather than present
-    # with a default value.
+    """Construct the command line interface.
+
+    Organised around what a person does (connect a folder, see what happened)
+    rather than around airlock's own parts. The knobs that exist for
+    measurement rather than for use are still accepted, and still documented
+    in README.md, but carry help=SUPPRESS so `--help` stays readable: a
+    0.0-to-1.0 float on a model's internals is not a decision anyone can make
+    from a help listing.
+    """
+    # The folder lives on a separate parent from the flags. A parser that has
+    # both an optional positional and subparsers gives the positional
+    # priority, so a top level carrying FOLDER would swallow the subcommand
+    # name itself; `airlock status` became FOLDER="status".
+    workspace = argparse.ArgumentParser(add_help=False, argument_default=argparse.SUPPRESS)
+    workspace.add_argument("root", nargs="?", type=Path, metavar="FOLDER",
+                           help="Folder to work over (default: the current one).")
+
     common = argparse.ArgumentParser(add_help=False, argument_default=argparse.SUPPRESS)
-    common.add_argument("--root", type=Path, help="Workspace directory (default: .).")
-    common.add_argument("--model", help=f"Local worker model (default: {DEFAULT_MODEL}).")
-    common.add_argument("--allow-writes", action="store_true", help="Let the model write files.")
-    common.add_argument(
-        "--linter-threshold",
-        type=_linter_threshold_type,
-        help=f"Score above which the policy linter's contextual rules revise a "
-        f"message (default: {POLICY_LINTER_THRESHOLD}). Must be between 0.0 and 1.0. "
-        "The PII detector's threshold and the per-rule overrides are constants, "
-        "not flags, until measured otherwise.",
-    )
-    common.add_argument(
-        "--trace",
-        type=Path,
-        help="Append guard decisions as JSON lines for later review or scoring. "
-        "Records rule names and verdicts only, never message content.",
-    )
-    common.add_argument(
-        "--approve",
-        choices=APPROVE_MODES,
-        help="Who approves tool calls, and which ones (default: hint-writes, which "
-        "becomes gate-writes automatically with --allow-writes). gate-* means airlock "
-        "holds the call until you answer on the terminal and is a real control. hint-* "
-        "means the tools are annotated so the client can prompt, which it is free to "
-        "ignore. none disables both.",
-    )
-    objective = argparse.ArgumentParser(add_help=False, argument_default=argparse.SUPPRESS)
-    objective.add_argument("--objective", help="Framing for the local model.")
+    common.add_argument("--write", action="store_true",
+                        help="Let the local model write files. Off by default.")
+    common.add_argument("--ask", choices=ASK_MODES,
+                        help="When airlock holds a call until you answer: always, "
+                        "writes (default), or never.")
+    common.add_argument("--model", help=argparse.SUPPRESS)
+    common.add_argument("--linter-threshold", type=_linter_threshold_type,
+                        help=argparse.SUPPRESS)
+    common.add_argument("--trace", type=Path, help=argparse.SUPPRESS)
+    common.add_argument("--objective", help=argparse.SUPPRESS)
 
     parser = argparse.ArgumentParser(
         prog="airlock",
-        description="A guarded local model that works over one directory.",
+        description="Let an assistant use one folder without seeing what is in it.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        parents=[common, objective],
+        parents=[common],
         epilog=(
             "examples:\n"
-            "  airlock                          check the setup, then start a session here\n"
-            "  airlock --root ~/notes           same, over a specific directory\n"
-            "  airlock doctor --root .          check the setup and stop\n"
-            '  airlock ask --root . "what topics do these files cover?"\n'
-            '  airlock guard "Jane Doe, 555-555-0100"\n'
-            "  airlock serve --root ~/project   run as an MCP server\n"
-            "  airlock mcp --client claude-desktop --json   print one client's config\n"
+            "  airlock ~/tax-2025               connect that folder to your assistant\n"
+            "  airlock                          same, for the folder you are in\n"
+            "  airlock status                   what is connected, and is it working\n"
+            "  airlock disconnect               remove airlock from an assistant\n"
+            '  airlock check "Jane Doe, 555-555-0100"    would that text pass?\n'
+            "  airlock chat ~/notes             ask the local model yourself\n"
         ),
     )
     parser.add_argument("--version", action="version", version=f"airlock {__version__}")
-    parser.set_defaults(func=cmd_quickstart)
+    parser.set_defaults(func=cmd_connect)
 
-    sub = parser.add_subparsers(dest="command")
-    sub.add_parser("doctor", parents=[common], help="Check the setup.").set_defaults(
-        func=cmd_doctor
-    )
-    p_ask = sub.add_parser("ask", parents=[common, objective], help="One-shot question.")
-    p_ask.add_argument("question", help="What to ask.")
-    p_ask.add_argument("--json", action="store_true", help="Emit the raw envelope.")
-    p_ask.add_argument("--quiet", action="store_true", help="Suppress banner and steps.")
-    p_ask.set_defaults(func=cmd_ask)
+    # metavar, because the auto-generated {a,b,c} list would name `serve`,
+    # which nobody types.
+    sub = parser.add_subparsers(dest="command", metavar="COMMAND")
+    assert set(COMMANDS) == {
+        "connect", "status", "disconnect", "check", "chat", "serve"
+    }, "COMMANDS and the subparsers below must name the same set"
 
-    p_guard = sub.add_parser("guard", parents=[common], help="Test text against the guard.")
-    p_guard.add_argument("text", help="Text to evaluate.")
-    p_guard.set_defaults(func=cmd_guard)
+    p_connect = sub.add_parser("connect", parents=[common, workspace],
+                               help="Connect a folder to an assistant. The default.")
+    p_connect.add_argument("--client", choices=sorted(MCP_CLIENTS),
+                           help="Skip the picker and use this client.")
+    p_connect.add_argument("--print", dest="print_only", action="store_true",
+                           help="Print the config instead of writing it. For scripts.")
+    p_connect.add_argument("--no-ui", action="store_true",
+                           help="Do not open the web console while serving.")
+    p_connect.set_defaults(func=cmd_connect)
 
-    sub.add_parser("serve", parents=[common], help="Run as an MCP server.").set_defaults(
-        func=cmd_serve
-    )
+    sub.add_parser("status", parents=[common],
+                   help="What is connected, and whether it works.").set_defaults(
+        func=cmd_status)
 
-    p_mcp = sub.add_parser(
-        "mcp", parents=[common], help="Print or emit MCP client configuration."
+    p_disconnect = sub.add_parser("disconnect", parents=[common],
+                                  help="Remove airlock from an assistant.")
+    p_disconnect.add_argument("--client", choices=sorted(MCP_CLIENTS),
+                              help="Skip the picker and use this client.")
+    p_disconnect.set_defaults(func=cmd_disconnect)
+
+    p_check = sub.add_parser("check", parents=[common],
+                             help="Test whether some text would pass the guard.")
+    p_check.add_argument("text", help="Text to evaluate.")
+    p_check.set_defaults(func=cmd_guard)
+
+    p_chat = sub.add_parser("chat", parents=[common, workspace],
+                            help="Talk to the local model yourself.")
+    p_chat.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    p_chat.add_argument("--quiet", action="store_true", help=argparse.SUPPRESS)
+    p_chat.add_argument("--ask-once", dest="question",
+                        help="Ask one question and stop, instead of a session.")
+    p_chat.set_defaults(func=cmd_chat_or_ask)
+
+    # Not in the help. Nobody types this: it is what a client spawns, and its
+    # arguments are written into the client's config by `connect`.
+    # No help= at all: argparse renders help=SUPPRESS on a subparser as the
+    # literal "==SUPPRESS==", while omitting it keeps the command working and
+    # out of the listing.
+    p_serve = sub.add_parser("serve", parents=[common, workspace])
+    p_serve.add_argument("--ui", action="store_true", help=argparse.SUPPRESS)
+    p_serve.add_argument("--port", type=int, default=0, help=argparse.SUPPRESS)
+    p_serve.set_defaults(func=cmd_serve)
+
+    # COMMANDS drives the argv shim above and is what stops `airlock status`
+    # being read as a folder named "status". A command added here and not
+    # there would silently become unreachable, so the two are compared rather
+    # than trusted to stay in step.
+    assert set(sub.choices) == set(COMMANDS), (
+        f"COMMANDS {sorted(COMMANDS)} does not match subparsers {sorted(sub.choices)}"
     )
-    p_mcp.add_argument(
-        "--client",
-        choices=sorted(MCP_CLIENTS),
-        help="Emit config for one client only, in that client's own schema.",
-    )
-    p_mcp.add_argument(
-        "--json",
-        action="store_true",
-        help="Machine-readable output only, nothing decorative. Requires --client.",
-    )
-    p_mcp.set_defaults(func=cmd_mcp)
     return parser
 
 
-# Applied after parsing rather than through argparse defaults. See the comment
-# in build_parser for why set_defaults cannot be used for these.
+def cmd_chat_or_ask(args: argparse.Namespace) -> int:
+    """`chat` with a question is one-shot; without one it is a session."""
+    return cmd_ask(args) if getattr(args, "question", None) else cmd_chat(args)
+
+
+# `airlock ~/notes` has to mean `airlock connect ~/notes` while `airlock
+# status` keeps meaning status. argparse cannot express "an optional
+# positional OR a subcommand", so the first token decides, once, here.
+#
+# Only the first token, deliberately. An earlier version scanned for the
+# first token not starting with "-", which put `connect` in the middle of
+# `--ask always ~/x`, since a flag's value is a bare word too. Knowing which
+# flags take values would mean keeping a second copy of the parser's own
+# knowledge in sync with it.
+COMMANDS = ("connect", "status", "disconnect", "check", "chat", "serve")
+
+
+def insert_default_command(argv: list[str]) -> list[str]:
+    """Prefix `connect` unless the first token already says what to do."""
+    if not argv or argv[0] in COMMANDS or argv[0] in ("-h", "--help", "--version"):
+        return argv
+    return ["connect"] + argv
+
+
+# `airlock ~/notes` has to mean `airlock connect ~/notes` while `airlock
+# status` keeps meaning status. argparse cannot express "an optional
+# positional OR a subcommand", so the first non-flag token decides, once,
+# here. Explicit and testable, unlike teaching argparse to backtrack.
+# Applied after parsing rather than through argparse defaults, because every
+# shared option carries argument_default=SUPPRESS so an option nobody typed is
+# absent rather than present-with-a-default.
 CLI_DEFAULTS: dict[str, Any] = {
     "root": Path("."),
     "model": DEFAULT_MODEL,
+    "write": False,
+    "ask": "writes",
+    # Derived from the two above by resolve_ask_mode, which main() always
+    # runs. They are listed here so that a Namespace built straight from this
+    # table -- which is how tests drive build_server and cmd_doctor without
+    # going through main -- is already complete rather than missing the two
+    # fields the rest of the module actually reads.
     "allow_writes": False,
+    "approve": "hint-writes",
     "linter_threshold": POLICY_LINTER_THRESHOLD,
     "trace": None,
-    "approve": "hint-writes",
     "objective": "Help the user understand and work with the files in this directory.",
 }
+
+
+def resolve_ask_mode(args: argparse.Namespace) -> None:
+    """Turn --ask/--write into the internal approval posture.
+
+    Named for the flag rather than the concept: `resolve_approval` is already
+    taken by the web console, where it answers a call the operator is holding.
+    Two functions with that name in one module is a shadowing bug, and the
+    one that loses is whichever is defined first.
+
+    `--ask writes` means different things depending on whether writes are on
+    at all: with them, hold the call; without them, there is nothing to hold,
+    so the tools are annotated and the client may prompt. Keeping that
+    derivation here means the five-value --approve matrix no longer has to be
+    something a person picks from.
+    """
+    args.allow_writes = bool(getattr(args, "write", False))
+    ask = getattr(args, "ask", "writes")
+    if ask == "always":
+        args.approve = "gate-all"
+    elif ask == "never":
+        args.approve = "none"
+    else:
+        args.approve = "gate-writes" if args.allow_writes else "hint-writes"
 
 
 def main(argv: list[str] | None = None) -> int:
     """Entry point. Returns a process exit code."""
     global TRACE_PATH
+    argv = insert_default_command(sys.argv[1:] if argv is None else argv)
     args = build_parser().parse_args(argv)
     for name, value in CLI_DEFAULTS.items():
         if not hasattr(args, name):
             setattr(args, name, value)
+    resolve_ask_mode(args)
     TRACE_PATH = getattr(args, "trace", None)
     try:
         return int(args.func(args))

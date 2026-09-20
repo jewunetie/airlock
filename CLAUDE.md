@@ -32,10 +32,9 @@ trust surface across files a reader has to reassemble themselves. `uv run
 --script airlock.py` still works, unchanged, for exactly that reading and
 hacking use case.
 
-`pyproject.toml`, `uv tool install .`, and the Homebrew formula in
-`Formula/airlock.rb` exist alongside the single file, not instead of it: all
-three build from the same `airlock.py` (see `[tool.hatch.build.targets.wheel]`
-in `pyproject.toml`), never a restructured package. They exist because
+`pyproject.toml` enables `uv tool install .` alongside the single file:
+it builds from the same `airlock.py` (see `[tool.hatch.build.targets.wheel]`
+in `pyproject.toml`), never a restructured package. This exists because
 registering airlock as an MCP server previously meant writing an absolute
 path to `airlock.py` into a client config; move the checkout and every
 registration breaks, silently, and several clients only surface that after a
@@ -485,6 +484,172 @@ and a three-document workspace yields five identifiers, so 17ms is
 realistic; the four-hundred-identifier figures above are pathological, not
 representative. `FILE_SLICE_CHARS` is a generous ceiling that leaves
 realistic traffic untouched while bounding unshaped free-text answers.
+
+**The web console exists because `confirm_on_tty` cannot cover the case
+that matters most.** `build_server` opens `/dev/tty` for `--approve gate-*`
+and raises when it is absent, deliberately, rather than downgrading a
+requested gate to nothing. But absent is the normal case: Claude Desktop,
+Cursor, VS Code and Zed are launched by the window manager, not a shell, so
+there is no controlling terminal and gate mode could not be used at all in
+exactly the clients airlock is for. `--ui` supplies the missing channel.
+`confirm_in_browser` is `confirm_on_tty`'s counterpart and fails the same
+way: an unanswered gate returns False on timeout, never True, because a
+gate nobody answered has granted nothing. Verified as a positive control
+rather than assumed, in `tests/test_console.py`: the timeout path is
+asserted to both return False and to have actually waited, since a function
+that returned False instantly would pass the first assertion while proving
+nothing about the gate.
+
+**Loopback is not an access control, and the token alone is not either.**
+Any page open in the operator's browser can POST to `127.0.0.1`, so binding
+there keeps nothing out. The console requires the run's token in an
+`X-Airlock-Token` header, which cross-origin JavaScript cannot set without
+a preflight, and refuses any request carrying a foreign `Origin`, which
+refuses that preflight too. Both, not either: the header requirement is
+what a same-origin-unaware attacker hits, and the Origin check is what
+stops a token that has leaked into a screenshot or a shell history from
+being replayed by a page. The token is generated per run, printed once on
+stderr, and never written to disk; the page strips it from the address bar
+with `history.replaceState` on load so it does not survive in browser
+history. The page shell itself is served without a token on purpose, since
+it is inert until one is supplied, and requiring a token to see an empty
+frame would only mean an operator who reloads loses their own console.
+
+**`CONSOLE_HTML` and `ui/index.html` are two copies of the same file, kept
+honest by a test rather than machinery.** The page ships embedded so that
+`uv run --script airlock.py` works from any directory, which reading it
+from disk would break; it is edited as a real file because editing HTML
+inside a Python string literal is how mistakes get made. `tools/sync_console.py`
+copies one into the other and `tests/test_console.py` fails when they
+differ. Same arrangement, and same reasoning, as the PEP 723 header and
+`pyproject.toml`'s dependency lists.
+
+**The console loads nothing from the network, and that cost a typeface.**
+The design used Bricolage Grotesque and Figtree from Google Fonts. A
+privacy console that fetches its own fonts announces to Google every time
+the operator opens it, which is precisely the class of thing this tool
+exists to prevent, so the page uses system faces and the CSP declares
+`default-src 'none'`. A test asserts no `googleapis`, `gstatic` or CDN
+reference survives, because this is the kind of line that gets added back
+by someone improving the design later.
+
+**Polling, not server-sent events.** The page asks `/api/state` every 1.5
+seconds and re-renders. SSE would be tidier and is not worth a second
+transport, a reconnect path and a second set of failure modes for a page
+one person has open on their own machine. The whole state is small enough
+to send every time, which also means there is no incremental-update bug
+class to get wrong.
+
+**The CLI is organised around what a person does, not around airlock's
+parts, and that was a rewrite rather than a tidy-up.** The previous surface
+was `doctor / ask / guard / serve / mcp` with seven global flags including a
+five-value `--approve` enum and a 0.0-to-1.0 float on a model's internals.
+Every one of those names described a piece of airlock. None described a
+thing anyone wanted to do, and getting to a working setup took five steps,
+one of which was "find your client's config file yourself". `serve` was in
+the help but is never typed: the client spawns it. The replacement is
+`connect / status / disconnect / check / chat` with two visible flags, and
+`airlock <folder>` is `connect`. Breaking existing invocations was chosen
+deliberately over carrying both surfaces.
+
+`--approve`'s five values collapsed to `--ask always|writes|never` with
+`--allow-writes` becoming `--write`. The old matrix still exists internally,
+derived by `resolve_ask_mode`, because gate-versus-hint is a real
+distinction the MCP spec forces; it is just not a choice a person should
+have to make from a help listing. `--model`, `--linter-threshold`,
+`--trace` and `--objective` still work and carry `help=SUPPRESS`: they exist
+for measurement, and README.md documents them.
+
+**`argparse` cannot express "an optional positional OR a subcommand", and
+the two ways of faking it both have a trap.** A top-level parser holding
+both `FOLDER` and subparsers gives the positional priority, so `airlock
+status` parsed as a folder named "status"; the folder lives on its own
+parent parser now, added only to the subcommands that take one. The argv
+shim that turns `airlock ~/x` into `airlock connect ~/x` originally scanned
+for the first token not starting with `-`, which put `connect` in the middle
+of `--ask always ~/x`, because a flag's value is a bare word too. Only the
+first token decides now. Knowing which flags take values would have meant
+keeping a second copy of the parser's knowledge in sync with the parser.
+Separately, `help=argparse.SUPPRESS` on a subparser renders as the literal
+`==SUPPRESS==` in the command list; omitting `help=` is what actually hides
+`serve`.
+
+**Detecting an installed client from a path is where this can do damage,
+so it only ever writes where something already exists.** `client_config_path`
+accepts a candidate when the file exists, or when its parent directory
+exists, and never creates a directory tree. A path the table gets wrong
+therefore cannot leave a stray config in the wrong place; it degrades to
+"airlock could not find your config", which is a message rather than
+damage. Every path in `CLIENT_CONFIG_PATHS` was checked against a real
+machine, not recalled.
+
+The parent-directory rule needed one exception, found by running the flow
+against an empty temporary `HOME`: `~/.claude.json` sits directly in the
+home directory, which always exists, so Claude Code was reported as
+installed everywhere, including in a `HOME` containing nothing at all. The
+rule now excludes the home directory itself, and a dotfile living there must
+exist to count.
+
+**Editing somebody else's config file is the risky part of `connect`, and
+the codex path broke in a way only a round trip could show.** Every write
+backs the file up to `<name>.airlock-backup`, goes through a temporary file
+in the same directory, and replaces atomically, so an interrupt cannot
+truncate a live Cursor config. Every other key in the file is preserved:
+airlock is one entry among many. A malformed config raises rather than being
+overwritten.
+
+codex is TOML, `tomllib` reads but cannot write, and a TOML writer is a
+dependency for one section of one file, so its block is merged textually.
+The regex first written for that matched the table header followed by
+`[^\[]*`, meaning "up to the next bracket" -- and the block's own body
+contains one, in `args = ["serve", ...]`. Adding airlock worked, because
+that path only appends; replacing or removing it cut the match mid-array and
+left a file that no longer parsed as TOML. It now matches to the next table
+header at the start of a line. Adding, replacing and removing are three
+different code paths through one function, and only the first was exercised
+until a test did all three.
+
+**Two functions were named `resolve_approval`, and the module-level one
+defined second silently won.** The web console's `resolve_approval(id,
+granted)` answers a call the operator is holding; a new CLI
+`resolve_approval(args)` derived the approval posture from flags. Python does
+not warn about this, no test failed, and `/api/approve` would have called the
+wrong one. Caught by diffing duplicate top-level definitions after a botched
+edit, not by anything looking for it. The CLI one is `resolve_ask_mode` now.
+The general lesson is that a name collision in a single-file module is a
+shadowing bug with no diagnostic, so new top-level names are worth grepping
+for before adding them.
+
+**Four console defects survived every unit test and died in the first
+end-to-end run.** The suites drove `evaluate`, the HTTP endpoints and the
+approval primitive directly, and all of them passed while the page was
+wrong in ways only real traffic shows.
+
+The one that mattered: an approved answer with no `disclosure_request`
+never leaves the machine (the caller gets a receipt), but the console
+labelled it "Sent" and printed the local model's draft next to that label.
+It told the operator their content had gone out when it had not. `ui_note`
+now distinguishes three outcomes, not two -- `sent`, `kept`, `held` --
+because "the guard approved this text" and "this text was released" are
+different facts, the same conflation `envelope`'s `grounded` field exists
+to prevent elsewhere.
+
+The other three: the summary line read "Waiting for the first question."
+while a question was visibly running, since it counted only finished ones;
+a real workspace path is long enough to wrap the header onto two lines, and
+the `direction: rtl` trick that keeps a path's tail visible also moves its
+leading slash to the end, rendering `/a/b/c` as `a/b/c/`, so truncation is
+done in JavaScript instead; and guard concerns are sentences the model
+wrote, not the short labels the rail was designed around.
+
+**Polling and expandable rows fight each other, and polling wins by
+default.** `renderFeed` replaced the feed's innerHTML every 1.5 seconds, so
+a drawer the operator opened closed again before it could be read: the
+interval always beat the reader. Fixed by keying each exchange on
+`session|timestamp`, holding open keys in a set that survives the rebuild,
+and skipping the rebuild entirely when the rendered signature has not
+changed. This is the cost of the polling decision recorded above, not an
+argument against it; the fix is smaller than a second transport would be.
 
 ## Things that look like bugs and are not
 

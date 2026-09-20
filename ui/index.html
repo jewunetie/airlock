@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>airlock</title>
+<style>
+:root{
+  --paper:#FBFBF9; --card:#FFFFFF; --ink:#1B1B18; --muted:#75756D;
+  --faint:#A3A39A;          /* dots and hairlines only, never text */ --line:#ECECE6;
+  --held:#2E4A7D;            /* airlock stopped something */
+  --held-wash:#F0F3F9;
+  --wait:#9A7B18;            /* airlock is waiting on you */
+  --wait-wash:#FBF6E7;
+  --ok:#5E8C6A;
+  /* System faces only. A privacy console that fetches its own fonts from
+     Google announces to Google every time it is opened. */
+  --b:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --d:var(--b);
+  --m:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --r:10px;
+}
+*{box-sizing:border-box}
+html{-webkit-font-smoothing:antialiased}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--b);
+  font-size:15px;line-height:1.6}
+.wrap{max-width:1080px;margin:0 auto;padding:0 32px}
+button{font:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--held);outline-offset:2px;border-radius:4px}
+[hidden]{display:none !important}
+
+/* ---------- header: identity, where, what view ---------- */
+header{position:sticky;top:0;z-index:40;background:var(--paper);
+  border-bottom:1px solid var(--line)}
+.bar{display:flex;align-items:center;gap:12px;height:56px}
+.name{font-family:var(--d);font-size:18px;font-weight:600;letter-spacing:-.03em}
+.live{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--muted)}
+.live i{width:6px;height:6px;border-radius:50%;background:var(--ok);flex:none}
+
+/* the workspace is the most consequential setting, so it is a control in the
+   header rather than a line of text buried in a settings page */
+.ws{display:inline-flex;align-items:center;gap:8px;margin-left:6px;padding:5px 10px;
+  background:transparent;border:1px solid var(--line);border-radius:99px;
+  font-family:var(--m);font-size:12.5px;color:var(--muted)}
+.ws:hover{color:var(--ink);border-color:var(--muted)}
+.ws b{font-weight:400;color:var(--ink);white-space:nowrap}
+.ws span{white-space:nowrap}
+.ws svg{opacity:.5}
+.wsmenu{position:absolute;top:52px;left:0;z-index:50;min-width:300px;background:var(--card);
+  border-radius:var(--r);padding:6px;box-shadow:0 8px 28px rgba(20,20,16,.10),0 0 0 1px rgba(20,20,16,.07)}
+.wsmenu button{display:flex;width:100%;gap:10px;align-items:baseline;text-align:left;
+  background:none;border:0;padding:9px 11px;border-radius:7px;font-size:13.5px;color:var(--ink)}
+.wsmenu button:hover{background:var(--paper)}
+.wsmenu .p{font-family:var(--m);font-size:12px;color:var(--muted)}
+.wsmenu .n{font-size:12px;color:var(--muted);margin-left:auto}
+.wsmenu hr{border:0;border-top:1px solid var(--line);margin:6px 0}
+.wshost{position:relative}
+
+nav{margin-left:auto;display:flex;gap:2px}
+nav button{background:none;border:0;padding:7px 13px;border-radius:7px;
+  font-size:14px;color:var(--muted)}
+nav button:hover{color:var(--ink)}
+nav button[aria-current=page]{color:var(--ink);background:#F1F1EC;font-weight:500}
+
+/* ---------- the interrupt: airlock is holding a call ---------- */
+/* Placed above everything and sticky, because a gated call is blocking a real
+   process somewhere. It must not be something you scroll past. */
+.ask{position:sticky;top:56px;z-index:30;margin:0 -32px;padding:18px 32px;
+  background:var(--wait-wash);border-bottom:1px solid #EFE3BE}
+.ask .row{display:flex;align-items:center;gap:16px;max-width:1016px;margin:0 auto}
+.ask .k{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--wait);display:flex;align-items:center;gap:8px;flex:none}
+.ask .k i{width:7px;height:7px;border-radius:50%;background:var(--wait);flex:none;
+  animation:pulse 1.8s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.25}}
+@media(prefers-reduced-motion:reduce){.ask .k i{animation:none}}
+.ask .what{font-size:15.5px;line-height:1.45}
+.ask .what code{font-family:var(--m);font-size:13.5px;background:#fff;padding:2px 7px;
+  border-radius:5px;box-shadow:0 0 0 1px #EFE3BE}
+.ask .acts{margin-left:auto;display:flex;gap:8px;flex:none}
+.ask .acts button{padding:8px 16px;border-radius:8px;font-size:14px;font-weight:500;
+  border:1px solid var(--ink);background:var(--card);color:var(--ink)}
+.ask .acts button:hover{background:#F5F5F0}
+.ask .sub{max-width:1016px;margin:8px auto 0;font-size:13px;color:var(--wait)}
+.ask .sub button{background:none;border:0;padding:0;color:var(--wait);
+  text-decoration:underline;text-underline-offset:2px;font-size:13px}
+
+/* ---------- summary strip: replaces the fixed hero ---------- */
+/* The old page spent a third of the first screen on one sentence. It reads well
+   once and then never changes. This keeps the sentence and gives the space back. */
+.strip{display:flex;align-items:flex-end;gap:24px;padding:34px 0 20px}
+.strip p{font-family:var(--d);font-size:25px;line-height:1.3;font-weight:500;
+  letter-spacing:-.02em;margin:0;max-width:520px}
+.strip em{font-style:normal;color:var(--held)}
+.filters{margin-left:auto;display:flex;gap:6px;flex:none}
+.filters button{padding:5px 13px;border-radius:99px;font-size:13px;color:var(--muted);
+  background:var(--card);border:1px solid var(--line)}
+.filters button:hover{color:var(--ink)}
+.filters button[aria-pressed=true]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 264px;gap:56px;
+  padding-bottom:88px;align-items:start}
+.eyebrow{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--muted);margin:0 0 14px}
+.day{margin:26px 0 14px}
+.day:first-child{margin-top:0}
+
+/* ---------- activity ---------- */
+.item{background:var(--card);border-radius:var(--r);margin-bottom:10px;
+  box-shadow:0 1px 2px rgba(20,20,16,.05),0 0 0 1px rgba(20,20,16,.045)}
+.item.held{box-shadow:0 1px 2px rgba(46,74,125,.07),0 0 0 1px rgba(46,74,125,.14)}
+.head{display:block;width:100%;text-align:left;background:none;border:0;
+  padding:18px 22px;border-radius:var(--r)}
+.head:hover{background:#FDFDFB}
+.meta{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+/* the row header is a <button>, so its parts are spans and need to be told
+   to stack; a <div> here would not be keyboard-operable */
+.head .q,.head .why,.head .out{display:block}
+.tag{font-size:12px;font-weight:600;color:var(--muted)}
+.tag.held{color:var(--held);background:var(--held-wash);padding:2px 9px;border-radius:99px}
+.dot{width:3px;height:3px;border-radius:50%;background:var(--faint);flex:none}
+.time{font-family:var(--m);font-size:11.5px;color:var(--muted);margin-left:auto}
+.chev{width:9px;height:9px;border-left:1.5px solid var(--faint);border-bottom:1.5px solid var(--faint);
+  transform:rotate(-45deg);margin-left:10px;flex:none;transition:transform .15s}
+[aria-expanded=true] .chev{transform:rotate(135deg)}
+.q{font-size:16px;line-height:1.45;margin:0;letter-spacing:-.005em}
+.out{font-family:var(--m);font-size:13.5px;background:var(--paper);border-radius:7px;
+  padding:10px 13px;margin-top:12px}
+.why{font-size:14px;color:var(--muted);line-height:1.6;margin:12px 0 0}
+.why b{color:var(--held);font-weight:500}
+
+/* detail is collapsed by default: the feed answers "what happened", the drawer
+   answers "prove it", and only one of those is wanted on every row */
+.detail{padding:0 22px 20px;border-top:1px solid var(--line);margin-top:2px}
+.detail dl{display:grid;grid-template-columns:112px 1fr;gap:9px 18px;margin:16px 0 0;
+  font-size:13.5px}
+.detail dt{color:var(--muted)}
+.detail dd{margin:0}
+.trail{display:flex;flex-wrap:wrap;gap:5px}
+.trail span{font-family:var(--m);font-size:11.5px;color:var(--muted);background:var(--paper);
+  padding:2px 8px;border-radius:5px}
+.trail span.stop{color:var(--held);background:var(--held-wash)}
+.grounded{display:flex;align-items:center;gap:8px;margin-top:16px;font-size:12.5px;color:var(--muted)}
+.grounded i{width:5px;height:5px;border-radius:50%;background:var(--ok);flex:none}
+.grounded.none i{background:var(--wait)}
+
+.empty{padding:44px 0;color:var(--muted);font-size:14px}
+
+/* ---------- rail: live state only, no setup ---------- */
+.rail{position:sticky;top:80px}
+.rail section+section{margin-top:34px}
+.gate{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:14px;
+  border-bottom:1px solid var(--line)}
+.gate:last-of-type{border-bottom:0}
+.gate .s{margin-left:auto;font-size:12.5px;color:var(--muted);flex:none}
+.gate .t{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+  overflow:hidden;line-height:1.4}
+.gate.on{color:var(--held)} .gate.on .s{color:var(--held)}
+.gate i{width:5px;height:5px;border-radius:50%;background:var(--line);flex:none}
+.gate.on i{background:var(--held)}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:8px 0;font-size:13.5px;
+  border-bottom:1px solid var(--line)}
+.kv:last-of-type{border-bottom:0}
+.kv span:first-child{color:var(--muted)}
+.kv span:last-child{font-family:var(--m);font-size:12.5px;text-align:right}
+button.stop{margin-top:14px;width:100%;padding:8px;border-radius:8px;background:var(--card);
+  border:1px solid var(--line);color:var(--muted);font-size:13.5px}
+button.stop:hover{color:var(--ink);border-color:var(--muted)}
+
+/* ---------- setup ---------- */
+.setup{padding:34px 0 96px;max-width:660px}
+.setup h1{font-family:var(--d);font-size:27px;font-weight:600;letter-spacing:-.02em;margin:0 0 6px}
+.setup .intro{color:var(--muted);margin:0 0 34px}
+.block{padding:24px 0;border-top:1px solid var(--line)}
+.block h2{font-size:15px;font-weight:600;margin:0 0 3px}
+.block p.h{font-size:13.5px;color:var(--muted);margin:0 0 16px;line-height:1.55}
+.field{display:flex;align-items:center;gap:14px;padding:9px 0}
+.field label{font-size:14px;min-width:150px;color:var(--muted)}
+.field input[type=text],.field select{font:inherit;font-size:13.5px;padding:7px 11px;
+  border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);
+  flex:1;min-width:0;font-family:var(--m)}
+.field .hint{font-size:12.5px;color:var(--muted)}
+.range{display:flex;align-items:center;gap:12px;flex:1}
+.range input{flex:1;accent-color:var(--held)}
+.range output{font-family:var(--m);font-size:12.5px;color:var(--muted);min-width:34px}
+.pick{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px}
+.pick button{font-size:13px;padding:5px 12px;border-radius:99px;
+  background:var(--card);color:var(--muted);border:1px solid var(--line)}
+.pick button:hover{color:var(--ink)}
+.pick button[aria-pressed=true]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+pre{font-family:var(--m);font-size:11.5px;line-height:1.7;background:var(--card);
+  border-radius:9px;padding:14px;margin:0;color:var(--muted);
+  box-shadow:0 0 0 1px rgba(20,20,16,.045);white-space:pre-wrap;overflow-wrap:anywhere}
+pre b{color:var(--ink);font-weight:400}
+.copy{margin-top:10px;padding:6px 13px;border-radius:8px;background:var(--card);
+  border:1px solid var(--line);font-size:13px;color:var(--muted)}
+.copy:hover{color:var(--ink);border-color:var(--muted)}
+.note{font-size:12.5px;color:var(--muted);line-height:1.55;margin:12px 0 0}
+.check{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:14px}
+.check i{width:5px;height:5px;border-radius:50%;background:var(--ok);flex:none}
+.check.bad i{background:var(--wait)}
+.check .s{margin-left:auto;font-family:var(--m);font-size:12px;color:var(--muted)}
+
+.privacy{margin-top:8px;padding:14px 16px;background:var(--card);border-radius:9px;
+  box-shadow:0 0 0 1px rgba(20,20,16,.045);font-size:13px;color:var(--muted);line-height:1.6}
+.privacy b{color:var(--ink);font-weight:500}
+
+@media(max-width:860px){
+  .cols{grid-template-columns:1fr;gap:40px}
+  .rail{position:static}
+  .strip{flex-wrap:wrap;gap:16px}
+  .strip p{font-size:22px}
+  .filters{margin-left:0}
+  .wrap{padding:0 20px}
+  .ask{margin:0 -20px;padding:16px 20px}
+}
+@media(max-width:640px){
+  /* the interrupt must stay usable at this width, so the buttons drop to their
+     own row rather than shrinking to nothing next to the sentence */
+  .ask .row{flex-wrap:wrap}
+  .ask .acts{margin-left:0;flex-basis:100%}
+  .ask .acts button{flex:1}
+  /* shorthand padding here would wipe .wrap's horizontal padding, since .bar
+     and .wrap are the same element */
+  .bar{height:auto;flex-wrap:wrap;padding-top:10px;padding-bottom:10px;gap:10px}
+  nav{margin-left:auto}
+  /* the flex child is .wshost, not the button inside it */
+  .wshost{order:5;flex-basis:100%}
+  .ws{margin-left:0;width:100%;justify-content:space-between}
+  .ask{top:0;position:static}
+  header{position:static}
+  /* the reason already appears in full below the question, so the abbreviated
+     one in the meta row only costs a wrapped line here */
+  .meta .dot,.meta .tag+.tag{display:none}
+  .detail dl{grid-template-columns:1fr;gap:3px 0}
+  .detail dt{margin-top:10px}
+  .field{flex-wrap:wrap;gap:6px}
+  .field label{min-width:0;flex-basis:100%}
+}
+
+/* the workspace is fixed for a serving process, so it reports rather than
+   switches; one serve process is one folder */
+span.ws{cursor:default}
+.gate.warn{color:var(--wait)} .gate.warn i{background:var(--wait)}
+.gatebox{max-width:420px;margin:80px auto;padding:26px;background:var(--card);
+  border-radius:var(--r);box-shadow:0 1px 2px rgba(20,20,16,.05),0 0 0 1px rgba(20,20,16,.045)}
+.gatebox h2{font-family:var(--d);font-size:20px;font-weight:600;margin:0 0 8px;letter-spacing:-.02em}
+.gatebox p{color:var(--muted);font-size:14px;margin:0 0 16px}
+.gatebox input{width:100%;font-family:var(--m);font-size:13px;padding:9px 11px;
+  border:1px solid var(--line);border-radius:8px;background:var(--paper)}
+.gatebox button{margin-top:10px;padding:8px 16px;border-radius:8px;border:1px solid var(--ink);
+  background:var(--ink);color:var(--paper);font-size:14px}
+.running{color:var(--muted)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap bar">
+    <span class="name">airlock</span>
+    <span class="live"><i id="livedot"></i><span id="livetext">connecting</span></span>
+    <span class="wshost"><span class="ws" id="ws"><b id="wspath">&hellip;</b><span id="wsmeta"></span></span></span>
+    <nav>
+      <button id="nav-activity" aria-current="page">Activity</button>
+      <button id="nav-setup">Setup</button>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap" id="tokengate" hidden>
+  <div class="gatebox">
+    <h2>Token needed</h2>
+    <p>airlock printed a link when it started, with a token in it. Open that link,
+       or paste the token here. It is this run&rsquo;s only credential and is not stored on disk.</p>
+    <input id="tokenin" type="text" spellcheck="false" placeholder="token">
+    <button id="tokengo">Connect</button>
+  </div>
+</div>
+
+<!-- ============ ACTIVITY ============ -->
+<div id="view-activity">
+<div class="wrap">
+  <div class="ask" id="ask" hidden role="alertdialog" aria-live="assertive" aria-label="Waiting for your decision">
+    <div class="row">
+      <span class="k"><i></i>Waiting on you</span>
+      <span class="what" id="askwhat"></span>
+      <span class="acts">
+        <button id="deny">Deny</button>
+        <button id="allow">Allow once</button>
+      </span>
+    </div>
+    <p class="sub" id="asksub">Nothing happens until you answer.</p>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="strip">
+    <p id="summary">Waiting for the first question.</p>
+    <div class="filters" role="group" aria-label="Filter activity">
+      <button data-f="all" aria-pressed="true">All</button>
+      <button data-f="held" aria-pressed="false">Held</button>
+      <button data-f="sent" aria-pressed="false">Sent</button>
+    </div>
+  </div>
+
+  <div class="cols">
+    <main id="feed"></main>
+    <aside class="rail">
+      <section><p class="eyebrow">Sessions</p><div id="sess"></div></section>
+      <section><p class="eyebrow">Concerns raised</p><div id="concerns"></div></section>
+      <section>
+        <p class="privacy"><b>Only you see this page.</b> It runs on your machine, loads
+          nothing from the network, and is never sent anywhere. The assistant sees far
+          less than you do here.</p>
+      </section>
+    </aside>
+  </div>
+</div>
+</div>
+
+<!-- ============ SETUP ============ -->
+<div id="view-setup" hidden>
+<div class="wrap setup">
+  <h1>Setup</h1>
+  <p class="intro">What this run is configured to do. Changing any of it means restarting
+     airlock with different flags.</p>
+
+  <div class="block">
+    <h2>Folder</h2>
+    <p class="h">The only directory airlock can read. Nothing outside it is reachable,
+      by you or by the assistant.</p>
+    <div class="field"><label>Folder</label><input type="text" id="s-root" readonly><span class="hint" id="s-files"></span></div>
+    <div class="field"><label>Writes</label><span class="hint" id="s-writes"></span></div>
+    <div class="field"><label>Approval</label><span class="hint" id="s-approve"></span></div>
+    <div class="field"><label>Worker model</label><span class="hint" id="s-model"></span></div>
+  </div>
+
+  <div class="block">
+    <h2>Guard</h2>
+    <p class="h">Four checks run on every answer before it leaves. The first two are fixed
+      rules with no sensitivity and cannot be turned off. The last two are local models.</p>
+    <div class="check"><i></i>Secrets<span class="s">detect-secrets</span></div>
+    <div class="check"><i></i>Personal identifiers<span class="s">patterns</span></div>
+    <div class="check"><i></i>PII detector<span class="s">LFM2.5-350M</span></div>
+    <div class="check"><i></i>Policy linter<span class="s" id="s-thr"></span></div>
+  </div>
+
+  <div class="block">
+    <h2>Connect an assistant</h2>
+    <p class="h">Paste this into the client&rsquo;s config, then restart it.</p>
+    <div class="pick" id="clients" role="group" aria-label="Choose a client"></div>
+    <pre id="cfg">&hellip;</pre>
+    <button class="copy" id="copy">Copy</button>
+    <p class="note" id="cfgnote"></p>
+  </div>
+</div>
+</div>
+
+<script>
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const esc=t=>String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* ---- token: from the printed link, else from sessionStorage, else ask ---- */
+let TOKEN = new URLSearchParams(location.search).get('token') || sessionStorage.getItem('airlock-token') || '';
+if (new URLSearchParams(location.search).get('token')) {
+  sessionStorage.setItem('airlock-token', TOKEN);
+  // keep the credential out of the address bar, history and any screenshot
+  history.replaceState(null, '', location.pathname);
+}
+$('#tokengo').onclick = () => { TOKEN = $('#tokenin').value.trim();
+  sessionStorage.setItem('airlock-token', TOKEN); $('#tokengate').hidden = true; poll(); };
+
+const api = (path, opts={}) => fetch(path, {...opts, headers:{...(opts.headers||{}),
+  'X-Airlock-Token': TOKEN, ...(opts.body?{'Content-Type':'application/json'}:{})}});
+
+/* ---- views ---- */
+const views={activity:[$('#nav-activity'),$('#view-activity')],setup:[$('#nav-setup'),$('#view-setup')]};
+for (const [k,[btn]] of Object.entries(views)) btn.onclick=()=>{
+  for (const [k2,[b2,e2]] of Object.entries(views)) { e2.hidden=k2!==k;
+    k2===k?b2.setAttribute('aria-current','page'):b2.removeAttribute('aria-current'); }
+  scrollTo(0,0);
+};
+
+/* ---- an exchange is one question and everything that happened to it ---- */
+function exchanges(events){
+  const out=[]; let cur=null;
+  for (const e of events) {
+    if (e.kind==='asked') { cur={q:e.detail,ts:e.ts,session:e.session,steps:[],outcome:null,why:'',
+      key:e.session+'|'+e.ts}; out.push(cur); continue; }
+    if (!cur) continue;
+    if (['sent','kept','held','denied'].includes(e.kind)) { cur.outcome=e.kind; cur.why=e.detail; cur=null; continue; }
+    cur.steps.push(e.kind);
+  }
+  return out.reverse();
+}
+const clock = iso => { try { return new Date(iso).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
+                       catch { return ''; } };
+
+const LABEL={sent:['Sent','Released to the assistant'],
+             kept:['Kept local','The assistant got a receipt, not this text'],
+             held:['Held','Withheld by the guard'],
+             denied:['Denied','You declined this call'],
+             null:['Running','In progress']};
+
+const OPEN = new Set();
+
+function row(x,i){
+  const [tag,sub]=LABEL[x.outcome]||LABEL.null;
+  const stopped = x.outcome==='held'||x.outcome==='denied';
+  const local = x.outcome==='kept';
+  const trail = x.steps.map(s=>`<span>${esc(s)}</span>`).join('')
+    + (stopped?`<span class="stop">${esc(x.outcome)}</span>`:'');
+  return `<article class="item${stopped?' held':''}" data-k="${stopped?'held':(x.outcome?'sent':'run')}">
+    <button class="head" aria-expanded="${OPEN.has(x.key)}" aria-controls="d${i}" data-key="${esc(x.key)}">
+      <span class="meta"><span class="tag${stopped?' held':''}">${tag}</span><span class="dot"></span>
+        <span class="tag" style="color:var(--muted)">${esc(sub)}</span>
+        <span class="time">${clock(x.ts)}</span><span class="chev"></span></span>
+      <span class="q">${esc(x.q)}</span>
+      ${(x.outcome==='sent'||local)&&x.why?`<span class="out">${esc(x.why)}</span>`:''}
+      ${local?'<span class="why">Nothing left this machine. The assistant was told the work happened, and must ask explicitly to receive any of it.</span>':''}
+      ${stopped&&x.why?`<span class="why">${esc(x.why)}</span>`:''}
+      ${x.outcome===null?'<span class="why running">Still running.</span>':''}
+    </button>
+    <div class="detail" id="d${i}"${OPEN.has(x.key)?'':' hidden'}>
+      <dl>
+        <dt>Session</dt><dd>${esc(x.session)}</dd>
+        <dt>Steps</dt><dd class="trail">${trail||'<span>none</span>'}</dd>
+        <dt>Sent out</dt><dd>${stopped
+          ? 'Nothing. The assistant was told a check failed, not what it found.'
+          : local ? 'Nothing. A receipt describing the operation, with no content in it.'
+          : (x.outcome==='sent' ? 'The answer above, and nothing else.' : 'Not decided yet.')}</dd>
+      </dl>
+    </div></article>`;
+}
+
+let FILTER='all';
+$$('.filters button').forEach(b=>b.onclick=()=>{
+  $$('.filters button').forEach(o=>o.setAttribute('aria-pressed',o===b));
+  FILTER=b.dataset.f; applyFilter();
+});
+function applyFilter(){
+  let shown=0;
+  $$('#feed .item').forEach(it=>{ const on=FILTER==='all'||it.dataset.k===FILTER;
+    it.hidden=!on; if(on)shown++; });
+  const e=$('#empty'); if(e) e.hidden=shown>0;
+}
+
+let LAST_FEED='';
+function renderFeed(xs){
+  // Poll-and-replace wipes the DOM every 1.5s. Without this, a drawer the
+  // operator opened closed again before they could read it: the interval
+  // always won. Skip the rebuild when nothing changed, and carry the open
+  // set across the rebuilds that do happen.
+  const sig = JSON.stringify(xs.map(x=>[x.key,x.outcome,x.steps.length,x.why]));
+  if (sig===LAST_FEED) return;
+  LAST_FEED = sig;
+  $('#feed').innerHTML = xs.length
+    ? xs.map(row).join('') + '<p class="empty" id="empty" hidden>Nothing matches that filter.</p>'
+    : '<p class="empty">No questions yet. Ask the assistant something about this folder.</p>';
+  $$('.head').forEach(h=>h.onclick=()=>{
+    const open=h.getAttribute('aria-expanded')==='true';
+    h.setAttribute('aria-expanded',!open);
+    $('#'+h.getAttribute('aria-controls')).hidden=open;
+    open ? OPEN.delete(h.dataset.key) : OPEN.add(h.dataset.key);
+  });
+  applyFilter();
+}
+
+/* ---- setup, filled from the running process rather than hardcoded ---- */
+let CLIENTS={};
+function renderSetup(c){
+  $('#s-root').value=c.workspace||'';
+  $('#s-files').textContent=(c.files??'?')+' files';
+  $('#s-writes').textContent=c.allow_writes?'allowed':'read only';
+  $('#s-approve').textContent=c.approve||'';
+  $('#s-model').textContent=c.model||'';
+  $('#s-thr').textContent='threshold '+(c.linter_threshold??'');
+  if (JSON.stringify(c.mcp||{})===JSON.stringify(CLIENTS)) return;
+  CLIENTS=c.mcp||{};
+  const names=Object.keys(CLIENTS);
+  $('#clients').innerHTML=names.map((n,i)=>
+    `<button aria-pressed="${i===0}" data-c="${esc(n)}">${esc(n)}</button>`).join('');
+  $$('#clients button').forEach(b=>b.onclick=()=>{
+    $$('#clients button').forEach(o=>o.setAttribute('aria-pressed',o===b)); showCfg(b.dataset.c); });
+  if (names.length) showCfg(names[0]);
+}
+function showCfg(name){
+  $('#cfg').textContent=CLIENTS[name]||'';
+  $('#cfgnote').textContent=/desktop|cursor|vscode|zed/.test(name)
+    ? 'This client is launched by the window manager, not a terminal, so it needs the full path rather than just the name.'
+    : 'This client inherits your shell PATH, so the bare command name is enough.';
+}
+$('#copy').onclick=()=>navigator.clipboard.writeText($('#cfg').textContent)
+  .then(()=>{$('#copy').textContent='Copied';setTimeout(()=>$('#copy').textContent='Copy',1200);})
+  .catch(()=>{$('#copy').textContent='Select and copy';});
+
+/* ---- the interrupt ---- */
+let PENDING=null;
+function renderAsk(p){
+  PENDING=p;
+  $('#ask').hidden=!p;
+  document.title=(p?'\u25cf ':'')+'airlock';
+  if (!p) return;
+  $('#askwhat').innerHTML=(p.alters?'The assistant wants to run a call that can write to this folder: '
+    :'The assistant is asking: ')+`<code>${esc(p.question)}</code>`;
+}
+const answer=g=>{ if(!PENDING) return;
+  api('/api/approve',{method:'POST',body:JSON.stringify({id:PENDING.id,granted:g})})
+    .then(()=>{renderAsk(null);poll();}); };
+$('#allow').onclick=()=>answer(true);
+$('#deny').onclick=()=>answer(false);
+
+/* ---- poll ---- */
+function renderRail(st){
+  $('#sess').innerHTML = st.sessions.length
+    ? st.sessions.map(s=>`<div class="kv"><span>${esc(s.id)}</span><span>${s.exchanges} asked &middot; ${s.blocked} held</span></div>`).join('')
+    : '<div class="kv"><span>none open</span><span></span></div>';
+  const counts={};
+  for (const e of st.events) if (e.kind==='held'&&e.detail)
+    for (const c of e.detail.split('; ')) if(c) counts[c]=(counts[c]||0)+1;
+  const rows=Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  $('#concerns').innerHTML = rows.length
+    ? rows.map(([c,n])=>`<div class="gate on" title="${esc(c)}"><i></i>`+
+        `<span class="t">${esc(c)}</span><span class="s">${n}</span></div>`).join('')
+    : '<div class="gate"><i></i>Nothing withheld yet<span class="s">clear</span></div>';
+}
+function renderSummary(xs){
+  const done=xs.filter(x=>x.outcome);
+  const held=done.filter(x=>x.outcome==='held'||x.outcome==='denied').length;
+  const running=xs.length-done.length;
+  if (!xs.length) { $('#summary').textContent='Waiting for the first question.'; return; }
+  const tail = running ? `<em>${running} running.</em>`
+    : held ? `<em>${held} ${held===1?'was':'were'} held.</em>` : 'None were held.';
+  $('#summary').innerHTML = done.length
+    ? `${done.length} question${done.length===1?'':'s'} so far. ${tail}`
+    : `${running} question${running===1?'':'s'} running.`;
+}
+let FAILS=0;
+async function poll(){
+  if(!TOKEN){ $('#tokengate').hidden=false; return; }
+  try{
+    const r=await api('/api/state');
+    if(r.status===401){ $('#tokengate').hidden=false; return; }
+    if(!r.ok) throw new Error(r.status);
+    const st=await r.json();
+    FAILS=0; $('#tokengate').hidden=true;
+    $('#livedot').style.background='var(--ok)'; $('#livetext').textContent='serving';
+    const c=st.config||{};
+      // Truncated from the left, in JS rather than with CSS. direction:rtl
+    // does keep the tail visible, but it also reorders the leading slash to
+    // the end, so a path rendered as ".../scratchpad/tax-2025/".
+    const path=c.workspace||'';
+    $('#wspath').textContent = path.length>46 ? '\u2026'+path.slice(-45) : path;
+    $('#ws').title=c.workspace||'';
+    $('#wsmeta').textContent=(c.files!=null?` \u00b7 ${c.files} files`:'')+(c.allow_writes?' \u00b7 writable':' \u00b7 read only');
+    const xs=exchanges(st.events||[]);
+    renderSummary(xs); renderFeed(xs); renderRail({...st,sessions:st.sessions||[],events:st.events||[]});
+    renderSetup(c); renderAsk(st.pending);
+  }catch(e){
+    // a stopped server is the normal end of a session, not an error worth shouting about
+    if(++FAILS>1){ $('#livedot').style.background='var(--wait)'; $('#livetext').textContent='not connected'; }
+  }
+}
+poll(); setInterval(poll, 1500);
+</script>
+</body>
+</html>

@@ -25,7 +25,7 @@ cloud assistant
   |  airlock (MCP server)                     |
   |                                           |
   |   local worker model                      |
-  |     reads files, only inside --root       |
+  |     reads files, only inside the folder   |
   |            |                              |
   |            v  draft reply                 |
   |   layered privacy guard                   |
@@ -118,25 +118,35 @@ point, not a guarantee.
 ### Approval policy
 
 ```
---approve gate-all       airlock holds every call until you answer
---approve gate-writes    airlock holds calls that can alter files
---approve hint-all       every tool annotated; the client decides whether to ask
---approve hint-writes    altering tools annotated; the client decides  (default)
---approve none           no prompts
+--ask always     airlock holds every call until you answer
+--ask writes     airlock holds calls that can alter files  (default)
+--ask never      airlock holds nothing
 ```
 
-`gate-*` and `hint-*` differ in kind, which is why the names say so. A gate
-blocks the call. A hint sets `destructiveHint` and trusts the client to prompt,
-and [the MCP specification is explicit](https://blog.modelcontextprotocol.io/posts/2026-03-16-tool-annotations/)
-that annotations are hints a client may ignore.
+`--ask writes` means different things depending on whether writes are on at
+all. With `--write`, a call that can alter files is held until you answer.
+Without it there is nothing to hold, so the tools are annotated with
+`destructiveHint` and the client may prompt if it chooses;
+[the MCP specification is explicit](https://blog.modelcontextprotocol.io/posts/2026-03-16-tool-annotations/)
+that annotations are hints a client may ignore. Holding is a real control;
+annotating is a request.
 
-Passing `--allow-writes` promotes `hint-writes` to `gate-writes` automatically,
-so writes cannot be switched on while approval is quietly left off.
+That is why writes cannot be switched on while approval is quietly left off:
+`--write` upgrades the default from annotate to hold, and only an explicit
+`--ask never` turns both off.
 
-**`gate-*` requires a terminal.** While serving, stdin is the JSON-RPC stream,
-so prompts go to `/dev/tty`, which does not exist when a GUI client launches
-the server as a subprocess. In that situation airlock refuses to start rather
-than downgrading to no approval, because silently turning a requested gate into
+**Holding a call needs somewhere to ask.** While serving, stdin is the
+JSON-RPC stream, so terminal prompts go to `/dev/tty`, which does not exist
+when a GUI client launches the server as a subprocess. Claude Desktop, Cursor,
+VS Code and Zed are all in that category, which is why the web console is on
+by default: it is the only channel those clients have.
+
+```sh
+airlock ~/tax-2025 --write --ask always    # you answer in the console
+```
+
+With `--no-ui` and no terminal, airlock refuses to start rather than
+downgrading to no approval, because silently turning a requested hold into
 nothing is the worst available outcome.
 
 **A gate approves a call, not its consequences.** One `airlock_ask` with writes
@@ -144,12 +154,12 @@ enabled may perform several writes internally, and approving the call approves
 all of them. Per-write approval would need the gate inside the worker loop,
 which is not what this does.
 
-Tool annotations are computed at startup from `--allow-writes`, so
+Tool annotations are computed at startup from `--write`, so
 `airlock_ask` reports `readOnlyHint: true` only when it is actually read-only.
 
 ## Install
 
-One way to get `airlock` on your `PATH` today, one way coming once a release is tagged, and one way to run it without installing anything.
+Install `airlock` on your `PATH` with `uv`, or run the script directly.
 
 **`uv tool install`** (primary path):
 
@@ -161,8 +171,6 @@ uv tool install .
 
 This registers an `airlock` command backed by its own isolated environment, the same way `uv tool install` works for any Python CLI. Update by pulling and re-running the same command; remove with `uv tool uninstall airlock`.
 
-**Homebrew** (not yet a working install path): a formula lives at [`Formula/airlock.rb`](Formula/airlock.rb), but no tagged release exists in this repository yet, and the formula's `url` and `sha256` are placeholders, not real values. `brew install --formula Formula/airlock.rb` fails today; do not run it. The formula activates once the first `vX.Y.Z` tag is cut and those two fields are filled in with the real release digest; see the banner at the top of `Formula/airlock.rb` for the exact steps.
-
 **Run the script directly** (alternative, for reading or hacking on the source): `airlock.py` keeps its PEP 723 header, so it stays runnable with nothing installed beforehand beyond `uv` itself:
 
 ```sh
@@ -173,7 +181,7 @@ cd airlock
 
 `uv` resolves the dependencies declared in that header on first run. This is the form every example below uses interchangeably with the installed `airlock` command; swap `./airlock.py` for `airlock` once it is on `PATH`.
 
-Either way, a single file is still what you are trusting: `uv tool install` and the Homebrew formula both build from the same `airlock.py`, not a restructured package, so reading that one file end to end still tells you everything the tool does. See the "Shape" section of CLAUDE.md for why that property, not the ability to run with zero setup, is what this project actually protects.
+Either way, a single file is still what you are trusting: `uv tool install` builds from the same `airlock.py` that you can run directly. See the "Shape" section of CLAUDE.md for why that property, not the ability to run with zero setup, is what this project actually protects.
 
 ## Requirements
 
@@ -181,7 +189,7 @@ Either way, a single file is still what you are trusting: `uv tool install` and 
 - [Ollama](https://ollama.com/) running locally, for the worker model
 - `torch` and `transformers`, for the two guard encoders
 
-`torch`, `transformers`, and the rest of `airlock`'s dependencies total roughly 2.6GB with the two guard encoders' model weights. Installed via `uv tool install` or Homebrew, they are resolved once into that isolated environment. Run directly with `uv run --script`, they are declared inline in `airlock.py` via PEP 723 and resolved into a cache on first run instead. Either way there is no separate `pip install` step.
+`torch`, `transformers`, and the rest of `airlock`'s dependencies total roughly 2.6GB with the two guard encoders' model weights. Installed via `uv tool install`, they are resolved once into that isolated environment. Run directly with `uv run --script`, they are declared inline in `airlock.py` via PEP 723 and resolved into a cache on first run instead. Either way there is no separate `pip install` step.
 
 ```sh
 ollama pull qwen3.5:0.8B               # worker
@@ -215,102 +223,89 @@ on this in an environment where executing third-party model code is a concern.
 ## Quickstart
 
 ```sh
-cd ~/some-project
-./airlock.py
+airlock ~/some-project
 ```
 
-With no arguments, airlock prints the directory it is about to expose, runs the
-full setup check, and then offers to start a session.
+airlock prints the folder it is about to expose, finds your assistant, runs the
+full setup check, shows the exact line it will write, and writes it once you
+say yes. Restart the client and it can ask about that folder, through the
+guard, without seeing the files.
 
 If anything is missing it walks you through fixing it: a model tag that is not
 pulled yet can be pulled from the prompt, and everything else prints the exact
 command. First run and a broken install are handled the same way, since they
 look identical from here.
 
-The workspace defaults to the current directory. Running from your home
-directory or the filesystem root puts everything beneath them in scope, so
-those two cases ask for confirmation before continuing rather than proceeding
-quietly.
-
-Point it somewhere else with `--root`, which works before or after a
-subcommand:
-
-```sh
-./airlock.py --root ~/notes
-```
+The folder defaults to the one you are in. Your home directory or the
+filesystem root puts everything beneath them in scope, so those two cases ask
+for confirmation rather than proceeding quietly.
 
 ## Check the setup
 
 ```sh
-./airlock.py doctor --root ~/some-directory
+airlock status
 ```
 
-`doctor` verifies the workspace resolves, reports the Ollama version and installed models, confirms both model tags exist, and then runs three live guard cases: a credential, a person, and innocuous text. It prints which layers fired on each. If a case fails it says whether the deterministic layers passed and the model call failed, which are different problems.
+Lists which assistants are connected and to which folder, read back out of
+each client's own config, then runs the full check: the workspace resolves,
+both guard encoders load, Ollama and the worker model are reachable, the
+worker honours JSON schema constraints, and three live guard cases (a
+credential, a person, innocuous text) return the right verdict with the right
+layers firing.
 
-Run this first. It catches nearly every misconfiguration.
+Run this first when something is wrong. It catches nearly every
+misconfiguration, and it distinguishes "the deterministic layers passed and
+the model call failed" from "the guard is broken", which are different
+problems.
 
-## Use as an MCP server
-
-Two families of client need two different launch forms for the same
-command. **Shell-launched** clients (Claude Code, Codex, Gemini CLI) start
-as a child of your interactive shell and inherit its `PATH`, so the bare
-`airlock` command name resolves for them. **GUI-launched** clients (Claude
-Desktop, Cursor, VS Code, Zed) are started by the window manager or
-`launchd`, not a shell, and typically get a minimal default `PATH` that does
-not include where `uv tool install` (`~/.local/bin`) or Homebrew
-(`/opt/homebrew/bin`, `/usr/local/bin`) put the command; they need the
-resolved absolute path instead.
-
-Claude Desktop, in `claude_desktop_config.json` (GUI-launched, absolute path):
-
-```json
-{
-  "mcpServers": {
-    "airlock": {
-      "command": "/absolute/path/to/airlock",
-      "args": ["serve", "--root", "/absolute/path/to/private-directory"]
-    }
-  }
-}
-```
-
-Claude Code (shell-launched, bare name):
+## Connect an assistant
 
 ```sh
-claude mcp add airlock -- airlock serve --root /absolute/path/to/private-directory
+airlock ~/tax-2025
 ```
 
-If `airlock` is not installed, both forms fall back to running the script directly, with an absolute path since MCP clients do not resolve relative ones:
+That is the whole thing. airlock finds which assistants are installed, asks
+which one, checks that everything it needs is working, shows you exactly what
+it is about to write, and writes it after you say yes. Restart the client and
+it can ask about that folder.
 
-```json
-{
-  "mcpServers": {
-    "airlock": {
-      "command": "uv",
-      "args": [
-        "run", "--script", "/absolute/path/to/airlock.py",
-        "serve", "--root", "/absolute/path/to/private-directory"
-      ]
-    }
-  }
-}
-```
+It backs the file up first (`<name>.airlock-backup`), preserves every other key
+in it, and writes atomically, because that file is your configuration and
+airlock is one entry in it.
+
+Undo it with `airlock disconnect`.
+
+**Which clients.** Claude Code, Claude Desktop, Cursor, VS Code, Zed, Codex,
+Gemini CLI. airlock only offers a client whose config file, or config
+directory, already exists: it never creates a directory tree on the guess that
+something is installed. If yours is not offered, `--client NAME` names it
+explicitly.
+
+**Why the written command differs per client.** Shell-launched clients (Claude
+Code, Codex, Gemini CLI) start as a child of your shell and inherit its `PATH`,
+so the bare `airlock` name resolves. GUI-launched clients (Claude Desktop,
+Cursor, VS Code, Zed) are started by the window manager or `launchd` and get a
+minimal `PATH` that excludes both `~/.local/bin` and `/opt/homebrew/bin`, so
+they need the resolved absolute path. airlock picks the right one; a bare name
+in a GUI client is a silent command-not-found.
+
+**For setup scripts**, `--print` emits the config and writes nothing:
 
 ```sh
-claude mcp add airlock -- uv run --script /absolute/path/to/airlock.py \
-  serve --root /absolute/path/to/private-directory
+airlock connect ~/tax-2025 --client claude-desktop --print > config.json
 ```
 
-`--root` is the only directory the worker can reach in any form.
+Nothing decorative goes to stdout in that mode, so it is safe to pipe.
 
-Rather than work out which form and which client schema applies by hand, ask airlock directly. Interactively, run `/mcp` inside a session (or `airlock` with no arguments, then `/mcp`); it detects whether `airlock` resolves on `PATH`, whether that resolution looks stable or ephemeral, and prints the correct config along with which form it chose and why. Non-interactively, for setup scripts that have no session to run `/mcp` in:
+**What is connected right now:**
 
 ```sh
-airlock mcp --client claude-desktop            # human-readable panel for one client
-airlock mcp --client claude-desktop --json      # machine-readable only, safe to pipe
+airlock status
 ```
 
-`--client` accepts `claude-code`, `claude-desktop`, `cursor`, `gemini-cli`, `codex`, `vscode`, and `zed`, each emitted in that client's own schema: `codex` emits TOML under `mcp_servers` (snake_case) instead of JSON; `vscode` emits JSON under `servers` with a required `"type": "stdio"` field; `zed` emits JSON under `context_servers` with a required `"source": "custom"` field; the rest share the `mcpServers` key shown above. `--json` requires `--client` and prints nothing but the parseable config, no panel or commentary, so a script can write it straight into a client's config file.
+Read back out of each client's own config file, so it reports what is actually
+configured rather than what airlock last intended, followed by a full health
+check of the pieces it needs.
 
 ### Watching what happens
 
@@ -339,26 +334,61 @@ you want a session log: `2> airlock.log`. For a machine-readable record of
 decisions instead, use `--trace decisions.jsonl`, which records rule names and
 verdicts without message content.
 
-## Use from the terminal
+### The web console
 
 ```sh
-./airlock.py --root ~/notes               # interactive session (default)
-./airlock.py ask "what is in here?" --root ~/notes
-./airlock.py guard "Jane Doe, 555-555-0100"
-./airlock.py doctor --root ~/notes
+airlock ~/tax-2025          # the console is on by default; --no-ui turns it off
 ```
 
-If `airlock` is installed, swap `./airlock.py` for `airlock` in any of these; both run the same code.
+Prints a `http://127.0.0.1:PORT/?token=...` link on stderr. Opening it gives
+the same activity as the terminal view, plus the two things a terminal cannot
+do: every question expands into what was read, which check stopped it and what
+actually left; and with `--ask always` or `--ask writes`, held calls are answered there,
+which is the only approval channel a GUI client has.
 
-`guard` is the fastest way to understand the guard's behaviour. Feed it text and it reports the decision, the layers that ran, and what it found.
+The console binds to loopback and loads nothing from the network, fonts
+included. The token in the link is that run's only credential, is not written
+to disk, and dies with the process. Every endpoint requires it in a header and
+rejects cross-origin requests, because binding to `127.0.0.1` does not by
+itself stop another page in your browser from posting to it.
 
-Add `--trace decisions.jsonl` to any command to append every guard decision as JSON lines, for later review or scoring.
+One serving process covers one folder, so the console covers one folder. Two
+workspaces served at once get two consoles on two ports.
+
+## Use it yourself
+
+```sh
+airlock chat ~/notes                        # a session with the local model
+airlock chat ~/notes --ask-once "what is in here?"
+airlock check "Jane Doe, 555-555-0100"      # would that text pass the guard?
+```
+
+`check` is the fastest way to understand the guard: feed it text and it reports
+the decision, which layers ran, and what they found.
+
+Everything also runs straight from the script without installing, since
+`airlock.py` keeps its PEP 723 header: `./airlock.py status`.
+
+### The flags
+
+Two matter:
+
+```
+--write               let the local model write files (off by default)
+--ask always|writes   hold a call until you answer (default: writes)
+--ask never           hold nothing
+```
+
+Four more exist for measurement rather than for use, and are left out of
+`--help` on purpose: `--model`, `--linter-threshold`, `--trace`, `--objective`.
+`--trace decisions.jsonl` appends every guard decision as JSON lines, recording
+rule names and verdicts without message content.
 
 ## The sandbox
 
-The worker can only reach files under `--root`. Paths are resolved with `Path.resolve()` and then checked with `Path.is_relative_to()`, which rejects traversal (`../`), absolute paths, and symlinks that point outside the root. Resolution happens before any read, so a symlink cannot be followed out of the workspace.
+The worker can only reach files under the folder you connected. Paths are resolved with `Path.resolve()` and then checked with `Path.is_relative_to()`, which rejects traversal (`../`), absolute paths, and symlinks that point outside the root. Resolution happens before any read, so a symlink cannot be followed out of the workspace.
 
-Writes are off by default and require `--allow-writes`.
+Writes are off by default and require `--write`.
 
 ## Limitations
 
@@ -380,19 +410,28 @@ Read this section before relying on airlock for anything that matters.
 ## Running the tests
 
 ```sh
-uv run --script tests/test_server.py
+uv run --script tests/test_server.py        # MCP surface, sandbox, whole loop
+uv run --script tests/test_cli.py           # command surface and config writer
+uv run --script tests/test_console.py       # web console: auth, gate, page sync
+uv run --script tests/test_round_guard.py   # within-round reassembly
+uv run --script tests/test_cross_round.py   # across-round reassembly
+uv run --script tests/test_liquid_guard.py  # the two encoder layers
+uv run --script tests/test_packaging.py     # PEP 723 header vs pyproject
 ```
 
-Three groups. **A** drives the real MCP SDK with its in-memory client and
-checks the tool surface: registration, annotations, and the optional
-`disclosure_request`. **B** covers the sandbox and the deterministic guard
-layers, which are pure Python. **C** exercises the whole loop and needs Ollama.
+`test_server.py` has three groups. **A** drives the real MCP SDK with its
+in-memory client and checks the tool surface. **B** covers the sandbox and the
+deterministic guard layers, which are pure Python. **C** exercises the whole
+loop and needs Ollama.
 
-Expect around 50 checks. The suite exits non-zero if the total comes in low,
-because a run that silently collects fewer tests reads exactly like one that
-passed. Group C reports INCONCLUSIVE rather than pass when the worker model
-fails, since a containment assertion proves nothing when there was no content
-to contain.
+Every suite exits non-zero if its check count comes in low, because a run that
+silently collects fewer tests reads exactly like one that passed. Group C
+reports INCONCLUSIVE rather than pass when the worker model fails, since a
+containment assertion proves nothing when there was no content to contain.
+
+`test_cli.py` and `test_console.py` need neither models nor Ollama.
+`test_cli.py` runs against a temporary `HOME`, so it never touches the real
+client configs on the machine running it.
 
 ## Prior work
 

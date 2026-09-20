@@ -369,8 +369,7 @@ def scan_secrets(text: str) -> list[dict[str, str]]:
 # Layer 2: bidirectional encoder guards  Two 350M LiquidAI encoders, replacing
 # Presidio and the general-purpose guard model: a PII token classifier and a
 # zero-shot policy linter for contextual sensitivity that has no span to
-# detect at all. Wired into evaluate() below. Scoring logic ported from
-# eval/bakeoff.py's PIIDetectorGuard and PolicyLinterGuard, not reinvented.
+# detect at all. Wired into evaluate() below.
 # See README.md for the evidence behind this replacement and CLAUDE.md for
 # the trust_remote_code=True tradeoff it takes on.
 # --------------------------------------------------------------------------
@@ -440,7 +439,7 @@ PII_DETECTOR_ENTITY_THRESHOLDS: dict[str, float] = {
 # tokens even at that measured worst case.
 PII_CHUNK_CHARS = 500
 # Longer than the longest credential shape this project's own tests exercise
-# (tests/test_server.py's CREDENTIAL_SHAPES: "dop_v1_" + 64 hex chars = 71
+# (test.py's CREDENTIAL_SHAPES: "dop_v1_" + 64 hex chars = 71
 # chars), with margin, so a credential split by a chunk boundary still lands
 # whole inside at least one chunk. An unbounded-length secret (SECRET_PATTERNS'
 # generic_secret_assignment has no upper bound) can still exceed this; that
@@ -451,7 +450,7 @@ PII_CHUNK_OVERLAP_CHARS = 200
 def resolve_device(choice: str = "auto") -> str:
     """Pick a torch device: MPS on Apple Silicon, then CUDA, then CPU.
 
-    Ported from eval/bakeoff.py's resolve_device. Both encoders are
+    Both encoders are
     single-forward-pass models with no MLX build, so MPS is the free win on a
     Mac and CPU is the only universal fallback.
     """
@@ -614,7 +613,7 @@ POLICY_LINTER_THRESHOLD = 0.70
 POLICY_LINTER_RULE_THRESHOLDS: dict[int, float] = {1: 0.98, 4: 0.98}
 
 # Free-text rules, scored per token, zero-shot. Order is the rule index used
-# in findings ("rule0" .. "rule5") and ported verbatim from eval/bakeoff.py.
+# in findings ("rule0" .. "rule5").
 # Identifier rules are deliberately absent: the linter measures poorly on
 # exact identifiers, that coverage belongs to scan_pii_model.
 #
@@ -777,12 +776,10 @@ def scan_policy(text: str, threshold: float | None = None) -> list[dict[str, str
     read POLICY_LINTER_THRESHOLD (and POLICY_LINTER_RULE_THRESHOLDS, which a
     per-call threshold never overrides) as module globals at call time, so a
     caller overriding either constant directly, as the eval harness and
-    tests do, still takes effect immediately. Rule-pool construction is
-    ported unchanged from eval/bakeoff.py's PolicyLinterGuard.decide: each
-    rule's pooled span has to land on that rule's own tokens inside the
-    prompt prefix, not on the input text, which is fiddly and already
-    measured there. Raises GuardModelUnavailable rather than returning empty
-    on any failure, matching scan_pii_model.
+    tests do, still takes effect immediately. Each rule's pooled span must
+    land on that rule's own tokens inside the prompt prefix, not on the input
+    text. Raises GuardModelUnavailable rather than returning empty on any
+    failure, matching scan_pii_model.
     """
     found: set[int] = set()
     for chunk in _chunk_text(text, POLICY_CHUNK_CHARS, POLICY_CHUNK_OVERLAP_CHARS):
@@ -2019,8 +2016,7 @@ def run_jobs(
     # nothing, so its fragments must not be recorded as released either.
     # See CLAUDE.md's "Known weaknesses" ("A blocked round used to poison
     # the rest of the session") for the incident this fixed, and
-    # tests/test_cross_round.py's
-    # wiring_blocked_round_does_not_poison_state_case.
+    # test.py's _cross_wiring_blocked_round_does_not_poison_state check.
     snapshot = {k: set(v) for k, v in session.reassembly_state.items()}
     try:
         session_reassembled = advance_reassembly_state(
@@ -2519,7 +2515,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             # those exercise the whole evaluate() stack, these confirm each
             # encoder on its own returns a real, expected verdict rather than
             # merely having loaded. Same literals as SSN_TEXT/MEDICAL_TEXT in
-            # tests/test_liquid_guard.py, already measured there to trigger
+            # test.py, already measured there to trigger
             # an identity finding and rule0 respectively.
             try:
                 rules = {f["rule"] for f in scan_pii_model("My social security number is 912-84-7731.")}
@@ -3587,7 +3583,7 @@ def serve_reporter(session_id: str) -> StepCallback:
 
 # The page, verbatim from ui/index.html. It is embedded rather than read
 # from disk so `uv run --script airlock.py` keeps working from anywhere,
-# and kept honest by tests/test_console.py, which fails if the two copies
+# and kept honest by test.test_console(), which fails if the two copies
 # differ. Same arrangement as the PEP 723 header and pyproject.toml's
 # dependency lists: a test, not machinery. Edit ui/index.html, then rerun
 # `python3 tools/sync_console.py`.

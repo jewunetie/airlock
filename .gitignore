@@ -6,9 +6,9 @@ __pycache__/
 
 # uv
 .uv/
-# Not committed: consumers install via `uv tool install .` or Homebrew, both
-# of which resolve fresh, and both dependency lists already carry upper
-# bounds (see tests/test_packaging.py); a lockfile here would only pin this
+# Not committed: consumers install via `uv tool install .`, which
+# resolves fresh; runtime dependency lists already carry upper
+# bounds (see test.test_packaging()); a lockfile here would only pin this
 # maintainer's dev-time resolution and go stale immediately.
 uv.lock
 
@@ -19,10 +19,6 @@ decisions*.json
 
 # macOS
 .DS_Store
-
-# Eval measurement outputs. Machine-specific timings that churn on every
-# run, and the figures that matter are written up in eval/README.md.
-eval/results/
 
 # SDD process artifacts: implementer reports and ledgers. Scratch for how the
 # work was done, not part of the tool. Kept on disk, never committed.

@@ -47,9 +47,9 @@ installed, rather than assuming one or the other.
 **A bare `"airlock"` on PATH is not enough; GUI-launched clients need the
 resolved absolute path instead, and that is not the same fix as "found on
 PATH".** An earlier version of this fix emitted `"command": "airlock"`
-whenever `shutil.which` found it, which works for Claude Code, Codex, and
+whenever `shutil.which` found it, which works for Codex, Codex, and
 Gemini CLI, since each starts as a child of the user's interactive shell
-and inherits its `PATH`. It does not work for Claude Desktop, Cursor,
+and inherits its `PATH`. It does not work for Codex Desktop, Cursor,
 VS Code, or Zed: those are started by the window manager or `launchd`, not
 a shell, and on this machine `launchctl getenv PATH` is empty, so a
 Dock-launched app gets the system default `/usr/bin:/bin:/usr/sbin:/sbin`,
@@ -82,7 +82,7 @@ both forms happen to work.
 session; a setup script has no session to run it in.** `airlock mcp
 [--client NAME] [--json]` is the non-interactive equivalent:
 `--client` picks one of `MCP_CLIENTS`' seven supported clients and emits
-its own schema (`mcpServers` for claude-code/claude-desktop/cursor/
+its own schema (`mcpServers` for Codex/Codex-desktop/cursor/
 gemini-cli, TOML `mcp_servers` for codex, `servers` with `"type": "stdio"`
 for vscode, `context_servers` with `"source": "custom"` for zed);
 `--json` strips it to parseable output only, so a script can pipe it
@@ -490,7 +490,7 @@ realistic traffic untouched while bounding unshaped free-text answers.
 **The web console exists because `confirm_on_tty` cannot cover the case
 that matters most.** `build_server` opens `/dev/tty` for `--approve gate-*`
 and raises when it is absent, deliberately, rather than downgrading a
-requested gate to nothing. But absent is the normal case: Claude Desktop,
+requested gate to nothing. But absent is the normal case: Codex Desktop,
 Cursor, VS Code and Zed are launched by the window manager, not a shell, so
 there is no controlling terminal and gate mode could not be used at all in
 exactly the clients airlock is for. `--ui` supplies the missing channel.
@@ -586,8 +586,8 @@ damage. Every path in `CLIENT_CONFIG_PATHS` was checked against a real
 machine, not recalled.
 
 The parent-directory rule needed one exception, found by running the flow
-against an empty temporary `HOME`: `~/.claude.json` sits directly in the
-home directory, which always exists, so Claude Code was reported as
+against an empty temporary `HOME`: `~/.Codex.json` sits directly in the
+home directory, which always exists, so Codex was reported as
 installed everywhere, including in a `HOME` containing nothing at all. The
 rule now excludes the home directory itself, and a dotfile living there must
 exist to count.

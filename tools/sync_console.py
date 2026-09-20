@@ -2,7 +2,7 @@
 """Copy ui/index.html into airlock.py's CONSOLE_HTML literal.
 
 ui/index.html is the editing copy; the literal is what ships, so that
-`uv run --script airlock.py` works from any directory. tests/test_console.py
+`uv run --script airlock.py` works from any directory. test.test_console()
 fails when they differ, and this is the one-line way to make them agree.
 """
 

@@ -8,77 +8,48 @@ on:
 jobs:
   suites:
     runs-on: ubuntu-latest
-    # No suite here waits on Ollama or the network beyond the one-time model
-    # download above, so a run should finish in a few minutes; 30 is a
-    # reasoned ceiling, not a measured one (same caveat as SESSION_CAP /
-    # SESSION_IDLE_SECONDS in airlock.py), generous enough for a cold cache
-    # yet well under GitHub's 360-minute default, which would otherwise let
-    # a hung step burn CI minutes indefinitely instead of failing loudly.
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
-          # Pinned to the floor every PEP 723 block declares
-          # (requires-python = ">=3.11"), not left to float to whatever the
-          # runner or uv happens to default to.
           python-version: "3.11"
           enable-cache: true
-
-      # Both guard encoders download from Hugging Face on first load
-      # (~350MB each, ~700MB total; see _load_pii_detector/_load_policy_linter
-      # in airlock.py). Cached by revision, so this downloads once per
-      # PII_DETECTOR_REVISION/POLICY_LINTER_REVISION pin, not once per run.
-      # restore-keys falls back to the newest prior cache on any miss (an
-      # unrelated code change should still restore already-downloaded
-      # model blobs), so only an actual revision bump re-downloads.
-      - name: Cache Hugging Face models
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/huggingface
           key: hf-models-${{ hashFiles('airlock.py') }}
           restore-keys: |
             hf-models-
 
-      # Six suites, one step each for clear per-suite pass/fail in the
-      # Actions UI. Each script's own main() already enforces a low-total
-      # floor (CLAUDE.md: a suite that silently collects fewer checks than
-      # expected reads exactly like one that passed) and exits non-zero on
-      # either a real failure or an implausibly small collected count, so
-      # a green step here really does mean both.
-      #
-      # None of the six need Ollama to pass: every Ollama-dependent check
-      # in all of them is written to report itself as an INCONCLUSIVE skip
-      # rather than a failure when Ollama is unreachable, which a hosted
-      # runner always is (no Ollama here on purpose). test_tax_e2e.py got
-      # this same treatment as an item-4 fix (it originally had none, and
-      # ran under continue-on-error here as a stopgap; that hid a real
-      # extraction regression exactly as easily as it hid "no worker", so
-      # it is gone). That skip mechanism is what makes this workflow
-      # meaningful rather than vacuous; do not add Ollama just to turn
-      # those skips into passes, and do not paper over a suite that stops
-      # reporting them as skips or reintroduce continue-on-error instead.
-      #
-      # test_packaging.py needs neither Ollama nor the guard encoders (it
-      # only parses airlock.py's PEP 723 header and pyproject.toml), so it
-      # runs first as the fastest possible signal that the two dependency
-      # declarations have drifted apart.
-      - name: test_packaging.py
-        run: uv run --script tests/test_packaging.py
+      - name: Packaging, CLI, console and measurement checks
+        run: |
+          uv run python - <<'PYTHON'
+          import test
+          for fn in (test.test_packaging, test.test_cli, test.test_console, test.test_measurements):
+              result = fn()
+              assert not result.unavailable, result.unavailable
+              print(f"{fn.__name__}: {len(result.passed)} passed")
+          PYTHON
 
-      - name: test_liquid_guard.py
-        run: uv run --script tests/test_liquid_guard.py
+      - name: Guard, reassembly and MCP checks
+        run: |
+          uv run python - <<'PYTHON'
+          import test
+          for fn in (test.test_guard, test.test_round_guard, test.test_cross_round, test.test_server):
+              result = fn()
+              assert not result.unavailable, result.unavailable
+              print(f"{fn.__name__}: {len(result.passed)} passed")
+          PYTHON
 
-      - name: test_round_guard.py
-        run: uv run --script tests/test_round_guard.py
-
-      - name: test_cross_round.py
-        run: uv run --script tests/test_cross_round.py
-
-      - name: test_server.py
-        run: uv run --script tests/test_server.py
-
-      - name: test_tax_e2e.py
-        run: uv run --script tests/test_tax_e2e.py
+      # Hosted runners lack Ollama. Report that gap; never hide a real failure.
+      - name: Worker checks (inconclusive without Ollama)
+        run: |
+          uv run python - <<'PYTHON'
+          import test
+          for fn in (test.test_doctor, test.test_worker, test.test_tax):
+              result = fn()
+              print(f"{fn.__name__}: {len(result.passed)} passed, {len(result.unavailable)} unavailable")
+              for name, reason in result.unavailable:
+                  print(f"INCONCLUSIVE: {name}: {reason}")
+          PYTHON

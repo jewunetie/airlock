@@ -6,7 +6,33 @@ stay readable; the file states what the code does, this states why.
 
 User-facing behaviour belongs in README.md. Do not repeat it here.
 
-## Shape
+## Active redesign
+
+The root redesign is authoritative: read `ARCHITECTURE.md` and the four-part
+`HOW.md` before changing behavior. Production logic remains in `airlock.py`,
+with PEP 723 dependencies; tests remain in `test.py`. `new_design` is a
+historical reference, not a second shipped implementation. Both earlier
+implementations and their tests are preserved in Git checkpoints.
+
+Use `uv sync --locked` and `uv run --locked python -B -m pytest -q test.py`.
+Keep the inline/project dependencies equal and change dependencies through
+`uv`; commit the generated `uv.lock` for reproducible CI. `__version__` in
+the source drives package metadata. Build with `uv build` and inspect archive
+contents: explicit paths must ship only the root module, not similarly named
+historical files. Optional runtime imports must resolve with locked packages.
+
+Core tests use synthetic data and scripted model replies, with actual SQLite,
+Coder, and MCP. They do not establish real scanner accuracy, calibration,
+Ollama behavior, OS confinement, or interactive UI acceptance. Record current
+executed evidence and remaining integration requirements in `VALIDATION.md`.
+
+The sections below record failures and measurements from the implementation
+saved at `26d93ec`. Their retired API names, dependency lists, installation
+flows, and numerical results do not describe the active redesign. Preserve
+the lessons about trust boundaries, positive controls, and honest evidence;
+use the root architecture for current contracts.
+
+## Historical shape
 
 One file, `airlock.py`, with PEP 723 inline dependencies. Tests live in
 `test.py`, never in the shipped file. Keep it that way: new helpers go in the

@@ -1,22 +1,32 @@
 [project]
 name = "airlock"
 dynamic = ["version"]
-description = "A guarded local model that works over one directory, exposed as an MCP server."
+description = "A local workspace agent with a separate fail-closed disclosure boundary."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.11"
 # Kept in exact sync with the PEP 723 header at the top of airlock.py.
-# test.test_packaging() asserts the two lists agree; see AGENTS.md for why
+# test.py asserts the two lists agree; see AGENTS.md for why
 # this is a checked invariant rather than a single source of truth.
 dependencies = [
-    "mcp[cli]>=2.0.0,<2.1.0",
     "torch>=2.13.0,<2.14.0",
     "transformers>=5.15.0,<5.16.0",
-    "rich>=13.7",
-    "detect-secrets>=1.5",
-    "pypdf>=5.0",
+    "pypdf>=6.16.1,<7",
     "pydantic-ai-slim[openai]>=2.46.0,<2.47.0",
-    "jsonschema>=4.26,<5",
+    "pydantic>=2.13.4,<2.14",
+    "pydantic-settings>=2.15,<2.16",
+    "filelock>=3.32.3,<4",
+    "httpx>=0.28.1,<0.29",
+    "platformdirs>=4.12.1,<5",
+    "psutil>=7.2.2,<8",
+    "opentelemetry-sdk>=1.45,<1.46",
+    "pydantic-ai-harness>=0.36,<0.37",
+    "fastmcp>=4.0.10,<4.1",
+    "fastmcp-tasks>=4.0.10,<4.1",
+    "uvicorn>=0.52.4,<0.55",
+    "presidio-analyzer>=2.2.364,<2.3",
+    "pillow>=12.3,<13",
+    "textual>=8.2.8,<8.3",
 ]
 
 [project.urls]
@@ -33,7 +43,10 @@ build-backend = "hatchling.build"
 # airlock is one module, not a package: this tells hatchling to build a
 # wheel around airlock.py directly instead of expecting a directory.
 [tool.hatch.build.targets.wheel]
-py-modules = ["airlock"]
+only-include = ["airlock.py"]
+
+[tool.hatch.build.targets.sdist]
+only-include = ["airlock.py", "pyproject.toml", "README.md", "LICENSE"]
 
 # Reads __version__ out of airlock.py instead of duplicating it here, so
 # there is exactly one version number in the repository, not two that can
@@ -41,8 +54,12 @@ py-modules = ["airlock"]
 [tool.hatch.version]
 path = "airlock.py"
 
+[tool.pytest.ini_options]
+python_files = ["test.py"]
+asyncio_mode = "strict"
+
 [dependency-groups]
 dev = [
-    "datasets>=3.0",
-    "reportlab>=4.0",
+    "pytest>=9.1.1,<9.2",
+    "pytest-asyncio>=1.4,<1.5",
 ]

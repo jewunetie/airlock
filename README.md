@@ -2,7 +2,7 @@
 
 A private local workspace agent with a separate disclosure boundary. Cloud assistants submit work through `ask`, inspect it through `status`, and cancel it through `stop`. Production behavior lives in one file, `airlock.py`.
 
-**Development work in progress.** The redesign has been promoted to the root. Storage-cap defaults, history-deletion retry semantics, and migration of the old test/build configuration await the user's decisions. The existing `test.py`, dependency metadata, and CI still target the previous implementation. Do not treat the old installation instructions or the supplied redesign test report as validation of this checkout. Current executed evidence is recorded in [VALIDATION.md](VALIDATION.md).
+**Development release.** The root redesign has durable retry identity, contextual release approvals, a configurable storage cap, and its own tests, packaging, and CI. Current executed evidence is recorded in [VALIDATION.md](VALIDATION.md). Real scanner accuracy and OS confinement still require acceptance with reviewed local assets and calibration.
 
 [ARCHITECTURE.md](ARCHITECTURE.md) defines the design. [HOW.md](HOW.md) defines the authorized hardening contracts. The original implementation and tests are saved in commit `26d93ec`; the original redesign and review are saved in `1bd2999`. `new_design` is a historical reference, not a second active implementation.
 
@@ -18,6 +18,8 @@ Use a stable `request_id` when retrying a submission. It must be nonblank UTF-8 
 
 A supervisor restart marks unfinished work interrupted and preserves completed results. Retrying an interrupted task does not rerun it. A deliberately new attempt needs a new ID. Task idempotency prevents duplicate execution; it does not make arbitrary filesystem changes transactional.
 
+After explicit history deletion, opaque ID/payload fingerprints remain. Replaying that ID returns `task_history_deleted`. For example, deleting an old append task's history must not let a delayed retry append the same entry again. Those records contain no raw request or answer.
+
 ## Local controls
 
 The worker uses the native Coder tools `read_file`, `write_file`, `edit_file`, `list_files`, `grep`, and `shell`, inside the Sandbox Runtime. OS capabilities and local governance control access; a caller's request cannot grant permissions. Privacy scanning runs on candidate disclosures, with enforce, warn, and off modes. In enforce mode, scanner failure or a privacy finding withholds the answer.
@@ -30,11 +32,30 @@ Release checks serialize across workspaces. SQLite commits the disclosure eviden
 
 The complete runtime needs compatible Pydantic AI/Harness, FastMCP/Tasks, Textual, scanner/media dependencies, a pinned Sandbox Runtime, a pinned Betterleaks executable/rules, reviewed local encoder assets/helpers, and a local Ollama model with tools. Enforce/warn startup also requires an explicitly reviewed calibration profile bound to the actual source and assets. The supplied design references provisioning tools and a test corpus that are absent from this repository. No accepted live profile is supplied.
 
-Once those prerequisites and dependency metadata are prepared, the source CLI accepts a workspace, `--headless`, `ps`, `status WORKSPACE`, and `stop WORKSPACE` or `stop --all`. The local bridge attaches to an already running workspace; it does not silently start one. A stdio MCP client uses the prepared environment's absolute Python executable with `-I -B /absolute/airlock.py _bridge /absolute/workspace`.
+Install the locked development dependencies and run the synthetic contract suite:
+
+```sh
+uv sync --locked
+uv run --locked python -B -m pytest -q test.py
+uv build
+uv run --locked airlock --help
+```
+
+Python 3.11 or newer on macOS/Linux is required. Package installation and `uv run --script airlock.py --help` use the same bounded direct dependencies as the project. The lockfile fixes the complete development/CI resolution; installing the wheel or script can resolve newer versions within those bounds. Package installation does not provision reviewed executables, model assets, or calibration.
+
+After local preparation, the CLI accepts a workspace, `--headless`, `--config PATH`, `ps`, `status WORKSPACE`, and `stop WORKSPACE` or `stop --all`. The local bridge attaches to an already running workspace; it does not silently start one. A stdio MCP client uses the prepared environment's absolute Python executable with `-I -B /absolute/airlock.py _bridge /absolute/workspace`.
 
 Protected sources are fallible model-supplied hints. An omitted or late declaration can miss a cumulative disclosure. Raw sources live in memory; after restart, old fragment evidence reconnects only when the source is declared again. Semantic answers, timing, refusal patterns, and arbitrary covert encodings are not comprehensively detected. Scanner accuracy and actual platform confinement require live evidence.
 
-SQLite deliberately stores exact requests, disclosure purposes, and committed final responses in owner-only local history. Rejected candidates, raw source hints, tool output, and model reasoning are excluded. History is kept until explicit local deletion; automatic pruning is not authorized. Disclosure evidence must survive transcript deletion. A storage cap is authorized, with its default still pending.
+SQLite deliberately stores exact requests, disclosure purposes, and committed final responses in owner-only local history. Rejected candidates, raw source hints, tool output, and model reasoning are excluded. History is kept until explicit local deletion, which removes completed transcripts for the selected workspace. Active tasks, audit/configuration records, opaque retry records, and disclosure evidence remain.
+
+The shared state database defaults to a **1 GiB cap**. Set `max_state_bytes` in the local TOML configuration, for example:
+
+```toml
+max_state_bytes = 1073741824
+```
+
+The cap covers the main SQLite database, rounded down to database pages. Journals, model assets, and worker scratch are separate. At capacity, new work stops and uncommitted answers stay withheld; no records are automatically purged. Delete completed history through the local UI, or raise the limit, then restart an affected runtime. Stop all runtimes before changing the shared limit. Deletion frees pages for reuse without necessarily shrinking the file. A limit below its allocated size is refused. Local writes made before a storage failure remain in place.
 
 Encoder custom code is a supply-chain trust decision even when pinned, reviewed, loaded offline, and sandboxed. A passing synthetic suite is not measured field privacy performance or an independent security audit.
 

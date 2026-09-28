@@ -1,4 +1,27 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "fastmcp>=4.0.10,<4.1",
+#     "fastmcp-tasks>=4.0.10,<4.1",
+#     "filelock>=3.32.3,<4",
+#     "httpx>=0.28.1,<0.29",
+#     "opentelemetry-sdk>=1.45,<1.46",
+#     "pillow>=12.3,<13",
+#     "platformdirs>=4.12.1,<5",
+#     "presidio-analyzer>=2.2.364,<2.3",
+#     "psutil>=7.2.2,<8",
+#     "pydantic>=2.13.4,<2.14",
+#     "pydantic-ai-harness>=0.36,<0.37",
+#     "pydantic-ai-slim[openai]>=2.46.0,<2.47.0",
+#     "pydantic-settings>=2.15,<2.16",
+#     "pypdf>=6.16.1,<7",
+#     "textual>=8.2.8,<8.3",
+#     "torch>=2.13.0,<2.14.0",
+#     "transformers>=5.15.0,<5.16.0",
+#     "uvicorn>=0.52.4,<0.55",
+# ]
+# ///
 """Airlock: local-only, fail-closed privacy/governance gateway.
 
 Production application logic is intentionally in this file. See ARCHITECTURE.md for the design and VALIDATION.md for validation status. Optional integrations
@@ -53,11 +76,13 @@ from platformdirs import user_config_path, user_state_path
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator, model_validator
 from pydantic_settings import BaseSettings, CliImplicitFlag, CliPositionalArg, SettingsConfigDict
 
-VERSION = "0.4.0-dev"
+__version__ = "0.4.0.dev0"
+VERSION = __version__
 SOURCE_DIGEST = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 MAX_FRAME = 16 * 1024 * 1024
 PDF_CHUNK_BYTES = 65536
 CONTROL_IO_TIMEOUT = 5.0
+DEFAULT_STATE_BYTES = 1_073_741_824
 SCHEMA_VERSION = 3
 ALGORITHM_VERSION = "fragment-graph-v2"
 TOOL_NAMES = frozenset({"read_file", "write_file", "edit_file", "list_files", "grep", "shell"})
@@ -316,6 +341,7 @@ class Settings(BaseSettings):
     max_request_chars: int = Field(default=16000, ge=64, le=64000)
     max_sources: int = Field(default=20000, ge=1, le=100000)
     max_tasks: int = Field(default=128, ge=1, le=1000)
+    max_state_bytes: int = Field(default=DEFAULT_STATE_BYTES, ge=1, le=2**63-1, strict=True)
     max_model_calls: int = Field(default=32, ge=1, le=128)
     max_tool_calls: int = Field(default=64, ge=1, le=256)
     scanner_chunk_chars: int = Field(default=4000, ge=2048, le=8000)
@@ -663,7 +689,7 @@ class StateStore:
     candidates, judge messages, and protected_sources are never passed to it.
     All methods run in the supervisor event loop, with no await in transactions.
     """
-    def __init__(self, directory: Path):
+    def __init__(self, directory: Path, max_bytes: int = DEFAULT_STATE_BYTES):
         self.directory = private_directory(directory)
         self.release_lock = asyncio.Lock()
         keypath, dbpath = self.directory/'ledger.key', self.directory/'airlock.sqlite'
@@ -681,6 +707,11 @@ class StateStore:
             fd = os.open(dbpath, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
             os.close(fd)
         self.db = sqlite3.connect(dbpath, isolation_level=None, timeout=5)
+        try:
+            self.set_storage_limit(max_bytes)
+        except BaseException:
+            self.db.close()
+            raise
         self.db.execute('PRAGMA journal_mode=DELETE')
         self.db.execute('PRAGMA synchronous=FULL')
         self.db.execute('PRAGMA foreign_keys=ON')
@@ -733,6 +764,19 @@ class StateStore:
                          self.payload_ref(request, disclosure), task))
                 self.db.execute('DROP TABLE native_tasks')
             self.db.execute(f'PRAGMA user_version={SCHEMA_VERSION}')
+
+    def set_storage_limit(self, max_bytes: int) -> None:
+        """Bound the shared main database; retain existing pages and reuse freed pages."""
+        if type(max_bytes) is not int or not 1 <= max_bytes <= 2**63-1:
+            raise AirlockError('storage_limit_invalid')
+        pages = max_bytes // self.db.execute('PRAGMA page_size').fetchone()[0]
+        if pages < 1:
+            raise AirlockError('storage_limit_invalid')
+        if pages < self.db.execute('PRAGMA page_count').fetchone()[0]:
+            raise AirlockError('storage_limit_below_usage')
+        actual = self.db.execute(f'PRAGMA max_page_count={pages}').fetchone()[0]
+        if actual > pages:
+            raise AirlockError('storage_limit_below_usage')
 
     @contextlib.contextmanager
     def transaction(self):
@@ -3333,6 +3377,7 @@ def build_mcp(runtime: WorkspaceRuntime):
 
         request_id is an optional nonblank ID of at most 256 characters, scoped to this workspace.
         Reusing it with identical text returns the original task; changed text returns task_identity_conflict.
+        A deleted transcript returns task_history_deleted; use a new ID only for a deliberate new attempt.
         Returns a task receipt on legacy clients; use status to poll it.
         On task-capable clients the protocol returns a task ID and delivers the final result.
         Local approvals cannot be answered by the cloud. This can modify files only if local policy permits.
@@ -3447,9 +3492,9 @@ def missing_dependencies() -> list[str]:
 
 
 class Supervisor:
-    def __init__(self, state: Path):
+    def __init__(self, state: Path, max_bytes: int = DEFAULT_STATE_BYTES):
         self.state = private_directory(state)
-        self.store = StateStore(self.state)
+        self.store = StateStore(self.state, max_bytes)
         self.runtimes: dict[str, WorkspaceRuntime] = {}
         self.registration = asyncio.Lock()
         self.shared_settings = self.model = self.scanner = self.launcher = self.reassembly = None
@@ -3511,6 +3556,7 @@ class Supervisor:
                     raise AirlockError('shared_settings_conflict')
             else:
                 try:
+                    self.store.set_storage_limit(settings.max_state_bytes)
                     self.launcher = SRTLauncher(settings, self.state)
                     self.model = ModelService(settings)
                     self.scanner = ScannerService(settings, self.launcher)
@@ -3600,11 +3646,9 @@ class Supervisor:
             if request.get('confirmation') != 'DELETE HISTORY':
                 raise AirlockError('confirmation_required')
             with self.store.transaction():
-                self.store.db.execute('DELETE FROM native_tasks WHERE task IN (SELECT task FROM interactions '
-                    'WHERE workspace=? AND final_json IS NOT NULL)', (runtime.id,))
                 deleted = self.store.db.execute('DELETE FROM interactions WHERE workspace=? AND final_json IS NOT NULL',
                                                 (runtime.id,)).rowcount
-            # This deletes boundary transcripts, not the global disclosure ledger/key.
+            # Opaque task keys retain retry tombstones; disclosure evidence also survives.
             return {'deleted':deleted, 'ledger_preserved':True}
         raise AirlockError('unknown_control_operation')
 
@@ -3710,7 +3754,7 @@ async def control_request(state: Path, request: dict) -> dict:
             await asyncio.wait_for(writer.wait_closed(), CONTROL_IO_TIMEOUT)
 
 
-async def ensure_supervisor(state: Path):
+async def ensure_supervisor(state: Path, max_bytes: int = DEFAULT_STATE_BYTES):
     private_directory(state)
     try:
         result = await control_request(state, {'op':'ping'})
@@ -3720,7 +3764,7 @@ async def ensure_supervisor(state: Path):
     except AirlockError as error:
         if error.code != 'supervisor_not_running':
             raise
-    subprocess.Popen([sys.executable,'-I','-B',str(Path(__file__).resolve()),'_supervisor'],
+    subprocess.Popen([sys.executable,'-I','-B',str(Path(__file__).resolve()),'_supervisor',str(max_bytes)],
         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         start_new_session=True, close_fds=True)
     for _ in range(100):
@@ -3888,7 +3932,7 @@ async def public_cli(args: CLI):
             raise AirlockError('dependencies_missing')
         if not args.headless and importlib.util.find_spec('textual') is None:
             raise AirlockError('textual_missing')
-        await ensure_supervisor(state)
+        await ensure_supervisor(state, settings.max_state_bytes)
         view = await control_request(state, {'op':'start','target':target,'settings':settings.model_dump(mode='json')})
         if args.headless:
             print(json.dumps(view,indent=2,ensure_ascii=True))
@@ -3915,9 +3959,12 @@ def main() -> int:
                     raise AirlockError('internal_command')
                 asyncio.run({'_worker':worker_child,'_scanner':scanner_child,'_pdf':pdf_child}[role]())
             elif role == '_supervisor':
+                if len(sys.argv) not in (2, 3):
+                    raise AirlockError('internal_command')
+                max_bytes = int(sys.argv[2]) if len(sys.argv) == 3 else DEFAULT_STATE_BYTES
                 state = private_directory(user_state_path('airlock'))
                 with FileLock(str(state/'supervisor.lock'), timeout=0):
-                    asyncio.run(Supervisor(state).run())
+                    asyncio.run(Supervisor(state, max_bytes).run())
             elif role == '_bridge' and len(sys.argv) == 3:
                 asyncio.run(bridge(sys.argv[2], user_state_path('airlock')))
             else:

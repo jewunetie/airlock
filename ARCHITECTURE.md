@@ -236,7 +236,11 @@ The interaction log retains the exact accepted `request`, `disclosure_request`, 
 
 Boundary history is potentially sensitive even though the disclosure ledger is opaque. It has owner-only permissions and no extra application-level encryption. Host disk encryption protects it only when actually enabled. HMAC does not protect against an attacker who obtains both the key and the database.
 
-Deleting interaction history requires an explicit local confirmation and does not silently reset the disclosure ledger. Secure physical erasure from SSDs, swap, snapshots, or backups is not promised.
+Deleting interaction history requires an explicit local confirmation. It removes committed interactions for the selected workspace and preserves unfinished interactions, other workspaces, audit/configuration records, the disclosure ledger/key, and opaque retry identity/payload fingerprints. An old ID whose transcript was deleted returns `task_history_deleted`; changed content still conflicts. A deliberately new attempt needs a new ID. Secure physical erasure from SSDs, swap, snapshots, or backups is not promised.
+
+`max_state_bytes` defaults to 1 GiB (1,073,741,824 bytes), configurable in local TOML. SQLite enforces a shared main-database page limit across all workspaces, rounded down to whole pages. This includes history, audit, configuration, retry records, and disclosure evidence; rollback journals, model assets, and job scratch are outside that database cap. There is no automatic pruning. A limit below the allocated database size is refused without deleting data.
+
+Capacity or other persistence failure stops admission/publication rather than bypassing logging. Explicit history deletion makes freed pages reusable, though the database file need not shrink. Stop and restart an unavailable runtime after freeing space or raising the limit; stop all runtimes before changing the shared limit. If retained evidence/metadata fills the cap, raising it is required to continue without discarding protection. A final persistence failure can follow already completed local writes; those writes are not rolled back.
 
 ## 13. Recovery
 

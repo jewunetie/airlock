@@ -13,43 +13,32 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
-          python-version: "3.11"
+          python-version: "3.13"
           enable-cache: true
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/huggingface
-          key: hf-models-${{ hashFiles('airlock.py') }}
-          restore-keys: |
-            hf-models-
+      - name: Install locked dependencies
+        run: uv sync --locked
 
-      - name: Packaging, CLI, console and measurement checks
+      # Synthetic data and scripted model responses; no claim of live scanner,
+      # Ollama, calibration, or OS confinement acceptance.
+      - name: Retry, release, storage, Coder, CLI and MCP contracts
+        run: uv run --locked python -B -m pytest -q test.py
+
+      - name: Build the single-module distribution
         run: |
-          uv run python - <<'PYTHON'
-          import test
-          for fn in (test.test_packaging, test.test_cli, test.test_console, test.test_approvals, test.test_measurements):
-              result = fn()
-              assert not result.unavailable, result.unavailable
-              print(f"{fn.__name__}: {len(result.passed)} passed")
+          uv build --out-dir dist
+          uv run --locked python - <<'PYTHON'
+          from pathlib import Path
+          from zipfile import ZipFile
+          from tarfile import open as open_tar
+          wheel, = Path('dist').glob('airlock-*.whl')
+          with ZipFile(wheel) as archive:
+              assert [name for name in archive.namelist() if name.endswith('.py')] == ['airlock.py']
+          sdist, = Path('dist').glob('airlock-*.tar.gz')
+          with open_tar(sdist) as archive:
+              assert not any('new_design/' in name for name in archive.getnames())
           PYTHON
 
-      - name: Guard, reassembly and MCP checks
+      - name: Verify installed wheel entry point
         run: |
-          uv run python - <<'PYTHON'
-          import test
-          for fn in (test.test_guard, test.test_round_guard, test.test_cross_round, test.test_server):
-              result = fn()
-              assert not result.unavailable, result.unavailable
-              print(f"{fn.__name__}: {len(result.passed)} passed")
-          PYTHON
-
-      # Hosted runners lack Ollama. Report that gap; never hide a real failure.
-      - name: Worker checks (inconclusive without Ollama)
-        run: |
-          uv run python - <<'PYTHON'
-          import test
-          for fn in (test.test_doctor, test.test_worker, test.test_approval_worker, test.test_tax):
-              result = fn()
-              print(f"{fn.__name__}: {len(result.passed)} passed, {len(result.unavailable)} unavailable")
-              for name, reason in result.unavailable:
-                  print(f"INCONCLUSIVE: {name}: {reason}")
-          PYTHON
+          uv pip install --python .venv/bin/python --no-deps --reinstall dist/airlock-*.whl
+          .venv/bin/airlock --help

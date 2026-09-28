@@ -1,5 +1,7 @@
 # Airlock
 
+Historical candidate saved at commit `1bd2999`. The active implementation and current validation are now at the repository root. This original document references provisioning tools and test artifacts that were not supplied in this directory; consult root `README.md`, `ARCHITECTURE.md`, and `VALIDATION.md` for the current state.
+
 A local workspace agent with an explicit disclosure boundary. Cloud assistants use `ask`, `status`, and `stop`; a private Pydantic Coder worker operates inside SRT. Privacy checks run only on candidate disclosures, never on ordinary local reads.
 
 **Status: development candidate.** Core regression tests execute, but the complete Pydantic Coder/SRT/Ollama/scanner/FastMCP stack has not been run in the implementation environment. Do not use a passing core suite as evidence of target-Mac isolation or calibrated scanner accuracy. See [TEST_REPORT.md](TEST_REPORT.md) and [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).

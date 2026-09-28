@@ -47,9 +47,9 @@ installed, rather than assuming one or the other.
 **A bare `"airlock"` on PATH is not enough; GUI-launched clients need the
 resolved absolute path instead, and that is not the same fix as "found on
 PATH".** An earlier version of this fix emitted `"command": "airlock"`
-whenever `shutil.which` found it, which works for Codex, Codex, and
+whenever `shutil.which` found it, which works for Claude Code, Codex, and
 Gemini CLI, since each starts as a child of the user's interactive shell
-and inherits its `PATH`. It does not work for Codex Desktop, Cursor,
+and inherits its `PATH`. It does not work for Claude Desktop, Cursor,
 VS Code, or Zed: those are started by the window manager or `launchd`, not
 a shell, and on this machine `launchctl getenv PATH` is empty, so a
 Dock-launched app gets the system default `/usr/bin:/bin:/usr/sbin:/sbin`,
@@ -82,7 +82,7 @@ both forms happen to work.
 session; a setup script has no session to run it in.** `airlock mcp
 [--client NAME] [--json]` is the non-interactive equivalent:
 `--client` picks one of `MCP_CLIENTS`' seven supported clients and emits
-its own schema (`mcpServers` for Codex/Codex-desktop/cursor/
+its own schema (`mcpServers` for claude-code/claude-desktop/cursor/
 gemini-cli, TOML `mcp_servers` for codex, `servers` with `"type": "stdio"`
 for vscode, `context_servers` with `"source": "custom"` for zed);
 `--json` strips it to parseable output only, so a script can pipe it
@@ -141,22 +141,49 @@ That deleted three functions once and a block of constants once.
 every containment check because the worker had failed and produced nothing to
 contain. Assertions about absence need a positive control.
 
-**A step outside every try still needs to fail closed.** `run_worker`
-builds `signature = (action, step.get("path"), step.get("query"))` from the
-worker model's own step, then hashes it to check `seen_actions`, outside
-any try/except. Hashing raises `TypeError: unhashable type` if the model
-returns a dict or list for "path" or "query" instead of a string, which
-escaped `run_worker` as an uncaught exception rather than the block
-envelope every other malformed-step path in that loop returns. Reachable,
-not hypothetical: "Things that look like bugs and are not" below already
-records that installed worker models ignore JSON schema constraints, so a
-schema-violating step is ordinary input from this guard's point of view.
-Fixed by wrapping the signature build and the `seen_actions` lookup/add in
-their own try, returning a block envelope on `TypeError`. The general
-lesson: fail-closed has to be checked at every point user- or
-model-controlled data gets hashed, indexed, or otherwise used in a way
-that can raise on an unexpected shape, not just at the call sites that
-obviously look risky.
+**Validate model fields before using them.** Pydantic AI validates strict string
+arguments before tool execution or deferred approval. Invalid arguments cannot
+be coerced into paths or file contents. Repeated-write detection includes content,
+so correcting a file is distinct from repeating the same write.
+
+**Keep operator policy separate from caller intent.** Auto approval reviews the
+operator's configured objective, the caller's requested objective, and the exact
+proposal as separate fields. The caller cannot grant itself permissions by
+writing an objective. The reviewer has no tools, and its reasons stay local
+because they can quote private text. A failed reviewer falls back to the human
+channel; it never grants approval.
+
+**Approvals are per proposal, not per conversation.** Manual reviews requests,
+exact writes, and successful responses separately. Pydantic AI defers worker
+writes by tool-call ID. Extraction uses the same decision function and rolls
+back release tracking if its response is declined. A per-session lock serializes
+work and reassembly bookkeeping while waiting for an answer. Pending decisions
+and model history are in memory only; no restart recovery is promised.
+
+**Ollama's two APIs use different reasoning switches.** Pydantic AI uses
+`/v1/chat/completions`, which needs `reasoning_effort="none"`; the native
+`think=False` field was ignored there and a structured-output probe stalled.
+Model instrumentation is disabled and the Pydantic AI startup banner is
+suppressed because stdout belongs to MCP.
+
+**Close the model client before closing its event loop.** Auto review occurs
+between a deferred write and its resumption. Leaving the worker's HTTP client
+alive across separately created loops produced an event-loop binding error on
+resume. `run_agent` owns both lifetimes through the agent's async context manager;
+resumed runs reopen the client and retain only messages and usage counts.
+
+**A schema probe does not prove tool use.** The former 0.8B default repeatedly
+read a file or claimed it had copied one without writing. The installed Gemma 4
+12B MLX build completed the same Manual/Auto test through native Pydantic tools.
+`test_approval_worker` checks the actual destination bytes as well as approval
+order and privacy. The non-MLX build is the portable default but was not tested
+on this machine. Auto's authorization judgments still need a dedicated eval.
+
+**Form editing must read the complete original.** `Sandbox.read_text` deliberately
+truncates model input; using it for a read-modify-write erased the tail of long
+forms. `fill_field` reads complete UTF-8 text and rejects PDF destinations.
+Per-job I/O errors carry fixed messages outward, since exception details can
+contain private filenames and host paths.
 
 ## Invariants
 
@@ -488,9 +515,9 @@ representative. `FILE_SLICE_CHARS` is a generous ceiling that leaves
 realistic traffic untouched while bounding unshaped free-text answers.
 
 **The web console exists because `confirm_on_tty` cannot cover the case
-that matters most.** `build_server` opens `/dev/tty` for `--approve gate-*`
+that matters most.** `build_server` checks `/dev/tty` for Manual and Auto modes
 and raises when it is absent, deliberately, rather than downgrading a
-requested gate to nothing. But absent is the normal case: Codex Desktop,
+requested gate to nothing. But absent is the normal case: Claude Desktop,
 Cursor, VS Code and Zed are launched by the window manager, not a shell, so
 there is no controlling terminal and gate mode could not be used at all in
 exactly the clients airlock is for. `--ui` supplies the missing channel.
@@ -554,13 +581,11 @@ the help but is never typed: the client spawns it. The replacement is
 `airlock <folder>` is `connect`. Breaking existing invocations was chosen
 deliberately over carrying both surfaces.
 
-`--approve`'s five values collapsed to `--ask always|writes|never` with
-`--allow-writes` becoming `--write`. The old matrix still exists internally,
-derived by `resolve_ask_mode`, because gate-versus-hint is a real
-distinction the MCP spec forces; it is just not a choice a person should
-have to make from a help listing. `--model`, `--linter-threshold`,
-`--trace` and `--objective` still work and carry `help=SUPPRESS`: they exist
-for measurement, and README.md documents them.
+The approval surface is now `--mode manual|auto|yolo`, with Manual the default.
+The old `--ask` flag remains a hidden compatibility alias for existing client
+registrations: always/writes map to Manual, never maps to YOLO. Neither a mode
+nor an approval can enable writes or bypass the privacy guard. `--model`,
+`--linter-threshold`, `--trace` and `--objective` remain advanced options.
 
 **`argparse` cannot express "an optional positional OR a subcommand", and
 the two ways of faking it both have a trap.** A top-level parser holding
@@ -586,8 +611,8 @@ damage. Every path in `CLIENT_CONFIG_PATHS` was checked against a real
 machine, not recalled.
 
 The parent-directory rule needed one exception, found by running the flow
-against an empty temporary `HOME`: `~/.Codex.json` sits directly in the
-home directory, which always exists, so Codex was reported as
+against an empty temporary `HOME`: `~/.claude.json` sits directly in the
+home directory, which always exists, so Claude Code was reported as
 installed everywhere, including in a `HOME` containing nothing at all. The
 rule now excludes the home directory itself, and a dotfile living there must
 exist to count.
@@ -606,10 +631,13 @@ The regex first written for that matched the table header followed by
 `[^\[]*`, meaning "up to the next bracket" -- and the block's own body
 contains one, in `args = ["serve", ...]`. Adding airlock worked, because
 that path only appends; replacing or removing it cut the match mid-array and
-left a file that no longer parsed as TOML. It now matches to the next table
-header at the start of a line. Adding, replacing and removing are three
-different code paths through one function, and only the first was exercised
-until a test did all three.
+left a file that no longer parsed as TOML. The current edit matches to the
+next table header, then parses the result and compares it with the intended
+configuration. Quoted tables, nested tables or multiline strings that this
+small editor cannot safely change are refused before any file is written.
+Status uses the TOML parser directly, including quoted keys and escaped paths.
+JSON and TOML share shape validation; absent removals and unchanged entries
+preserve the original bytes and do not overwrite backups.
 
 **Two functions were named `resolve_approval`, and the module-level one
 defined second silently won.** The web console's `resolve_approval(id,
@@ -658,9 +686,10 @@ argument against it; the fix is smaller than a second transport would be.
 `check()` renders through `Text.assemble`, which does not parse rich markup.
 Tags in a `check` detail print literally. `console.print` does parse them.
 
-The worker model must honour JSON schema constraints. Installed and usable are
-different properties: `qwen3.5:0.8b-mlx` ignores the schema and returns a bare
-enum value, so every step fails. `doctor` probes for this.
+Structured extraction and the local reviewer require JSON schema support. Installed and usable are
+different properties: earlier tests found `qwen3.5:0.8b-mlx` returning a bare
+enum value instead of the requested object. `doctor` probes this property;
+`test_approval_worker` separately verifies that tool use completes real work.
 
 `detect-secrets` entropy plugins are filtered out deliberately. They assume
 source code; on prose they fire on nearly every sentence.

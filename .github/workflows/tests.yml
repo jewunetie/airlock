@@ -26,7 +26,7 @@ jobs:
         run: |
           uv run python - <<'PYTHON'
           import test
-          for fn in (test.test_packaging, test.test_cli, test.test_console, test.test_measurements):
+          for fn in (test.test_packaging, test.test_cli, test.test_console, test.test_approvals, test.test_measurements):
               result = fn()
               assert not result.unavailable, result.unavailable
               print(f"{fn.__name__}: {len(result.passed)} passed")
@@ -47,7 +47,7 @@ jobs:
         run: |
           uv run python - <<'PYTHON'
           import test
-          for fn in (test.test_doctor, test.test_worker, test.test_tax):
+          for fn in (test.test_doctor, test.test_worker, test.test_approval_worker, test.test_tax):
               result = fn()
               print(f"{fn.__name__}: {len(result.passed)} passed, {len(result.unavailable)} unavailable")
               for name, reason in result.unavailable:

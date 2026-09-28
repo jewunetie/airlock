@@ -118,44 +118,42 @@ point, not a guarantee.
 ### Approval policy
 
 ```
---ask always     airlock holds every call until you answer
---ask writes     airlock holds calls that can alter files  (default)
---ask never      airlock holds nothing
+--mode manual    you approve requests, writes and responses (default)
+--mode auto      a local reviewer decides; uncertainty comes back to you
+--mode yolo      skip approvals; privacy checks remain active
 ```
 
-`--ask writes` means different things depending on whether writes are on at
-all. With `--write`, a call that can alter files is held until you answer.
-Without it there is nothing to hold, so the tools are annotated with
-`destructiveHint` and the client may prompt if it chooses;
-[the MCP specification is explicit](https://blog.modelcontextprotocol.io/posts/2026-03-16-tool-annotations/)
-that annotations are hints a client may ignore. Holding is a real control;
-annotating is a request.
+Manual approves each request before work starts. Reads and searches within that
+request do not prompt again. Every write needs a separate decision showing the
+exact path and replacement contents, and each successful response needs approval
+before release. Extraction and local form filling follow the same rules.
 
-That is why writes cannot be switched on while approval is quietly left off:
-`--write` upgrades the default from annotate to hold, and only an explicit
-`--ask never` turns both off.
+Auto uses the configured local model in a separate, tool-free reviewer context.
+It evaluates proposals against your `--objective` policy; the assistant's own
+objective and document contents are untrusted context. A denial stops that
+proposal. Uncertainty, invalid output or reviewer failure asks you instead.
+This reviewer has not been benchmarked as an authorization classifier.
 
-**Holding a call needs somewhere to ask.** While serving, stdin is the
-JSON-RPC stream, so terminal prompts go to `/dev/tty`, which does not exist
-when a GUI client launches the server as a subprocess. Claude Desktop, Cursor,
-VS Code and Zed are all in that category, which is why the web console is on
-by default: it is the only channel those clients have.
+YOLO skips the human and model approval steps. All modes retain the privacy
+guard, workspace boundary and the separate `--write` capability. No approval
+can override a privacy block. Changing an outstanding decision's mode or policy
+invalidates it. Unanswered browser approvals expire without executing or releasing.
+
+Pydantic AI runs the worker's tools and pauses writes using deferred approvals.
+Airlock controls request and response approval around that loop. Approvals and
+model history stay in memory; restarting the process discards pending work.
+
+While serving, stdin belongs to MCP. Manual and Auto therefore require the web
+console or a controlling terminal. The console is enabled by default; a GUI
+client launched with `--no-ui` cannot provide that approval channel.
 
 ```sh
-airlock ~/tax-2025 --write --ask always    # you answer in the console
+airlock ~/tax-2025 --write --mode manual
 ```
 
-With `--no-ui` and no terminal, airlock refuses to start rather than
-downgrading to no approval, because silently turning a requested hold into
-nothing is the worst available outcome.
-
-**A gate approves a call, not its consequences.** One `airlock_ask` with writes
-enabled may perform several writes internally, and approving the call approves
-all of them. Per-write approval would need the gate inside the worker loop,
-which is not what this does.
-
-Tool annotations are computed at startup from `--write`, so
-`airlock_ask` reports `readOnlyHint: true` only when it is actually read-only.
+Existing `--ask always` and `--ask writes` registrations map to Manual;
+`--ask never` maps to YOLO. Reconnect to write the new `--mode` form.
+Tool annotations describe write capability; airlock enforces approvals itself.
 
 ## Install
 
@@ -181,7 +179,7 @@ cd airlock
 
 `uv` resolves the dependencies declared in that header on first run. This is the form every example below uses interchangeably with the installed `airlock` command; swap `./airlock.py` for `airlock` once it is on `PATH`.
 
-Either way, a single file is still what you are trusting: `uv tool install` builds from the same `airlock.py` that you can run directly. See the "Shape" section of CLAUDE.md for why that property, not the ability to run with zero setup, is what this project actually protects.
+Either way, a single file is still what you are trusting: `uv tool install` builds from the same `airlock.py` that you can run directly. See the "Shape" section of AGENTS.md for why that property, not the ability to run with zero setup, is what this project actually protects.
 
 ## Requirements
 
@@ -192,26 +190,22 @@ Either way, a single file is still what you are trusting: `uv tool install` buil
 `torch`, `transformers`, and the rest of `airlock`'s dependencies total roughly 2.6GB with the two guard encoders' model weights. Installed via `uv tool install`, they are resolved once into that isolated environment. Run directly with `uv run --script`, they are declared inline in `airlock.py` via PEP 723 and resolved into a cache on first run instead. Either way there is no separate `pip install` step.
 
 ```sh
-ollama pull qwen3.5:0.8B               # worker
+ollama pull gemma4:12b                 # worker
+# On Apple Silicon, the default uses the MLX build instead:
+ollama pull gemma4:12b-mlx
 ```
 
-**Do not use an `-mlx` tag for the worker.** MLX is the faster backend on Apple
-Silicon, but measured on Ollama 0.32.0, `qwen3.5:0.8B-mlx` ignores
-grammar-constrained decoding: asked for an object matching the worker schema it
-returns the bare string `answer`, so every step fails and no session completes.
-The plain tag on the same machine, same Ollama, same prompt, honours the schema.
+The worker uses Pydantic AI tool calls; extraction and the Auto reviewer use
+structured JSON that is also validated locally. The default is Gemma 4 12B,
+using `gemma4:12b-mlx` on Apple Silicon and `gemma4:12b` elsewhere.
+The installed MLX build passed the read/write approval and document workflows;
+the other build has not been exercised here. Worker weights are an additional
+download beyond the guard dependencies above.
 
-The entire worker loop is schema-constrained JSON, so correctness settles this
-over speed.
-
-`doctor` checks for exactly this, and is worth re-running whenever you change
-the worker tag:
-
-```
- fail  worker emits valid JSON  Model returned unparseable JSON. First 200 chars: 'answer'
-```
-
-Any Ollama model works for the worker role. The default is set in `airlock.py` and overridden with `--model`.
+Override with `--model`. Choose a model supporting both tool calls and structured
+output, then run `airlock status` and verify an actual task. The previous 0.8B
+default repeatedly read files or claimed completion without writing them; a
+successful schema probe alone did not catch that failure.
 
 The guard's two encoders are not Ollama models. They are downloaded once from
 Hugging Face on first load, roughly 350MB each (~700MB total), then cached
@@ -272,6 +266,12 @@ it can ask about that folder.
 It backs the file up first (`<name>.airlock-backup`), preserves every other key
 in it, and writes atomically, because that file is your configuration and
 airlock is one entry in it.
+
+Malformed configuration is refused before writing. Codex configurations with
+TOML layouts that cannot be safely edited require a manual change; use
+`airlock connect FOLDER --client codex --print` to get the entry to add.
+Connecting an unchanged entry or disconnecting an absent one leaves the file
+and its backup untouched.
 
 Undo it with `airlock disconnect`.
 
@@ -343,7 +343,7 @@ airlock ~/tax-2025          # the console is on by default; --no-ui turns it off
 Prints a `http://127.0.0.1:PORT/?token=...` link on stderr. Opening it gives
 the same activity as the terminal view, plus the two things a terminal cannot
 do: every question expands into what was read, which check stopped it and what
-actually left; and with `--ask always` or `--ask writes`, held calls are answered there,
+actually left; and in Manual or Auto mode, pending decisions are answered there,
 which is the only approval channel a GUI client has.
 
 The console binds to loopback and loads nothing from the network, fonts
@@ -375,8 +375,7 @@ Two matter:
 
 ```
 --write               let the local model write files (off by default)
---ask always|writes   hold a call until you answer (default: writes)
---ask never           hold nothing
+--mode manual|auto|yolo  who approves requests, writes and responses
 ```
 
 Four more exist for measurement rather than for use, and are left out of
@@ -425,6 +424,8 @@ assert not result.unavailable, result.unavailable
 | `test_packaging()` | Script/install dependency parity | None |
 | `test_cli()` | Parsing, client configs, settings and output | None |
 | `test_console()` | HTTP authorization, approval gates, page sync | Local sockets |
+| `test_approvals()` | Modes, deferred writes, denial, expiry and MCP approval coverage | None |
+| `test_approval_worker()` | Real Manual/Auto read, exact file copy and response release | Guard weights and Ollama |
 | `test_measurements()` | Dataset integrity and metric accounting | None |
 | `test_guard()` | Encoder behavior, thresholds, truncation and fail-closed handling | Guard weights |
 | `test_round_guard()` | Within-round reassembly and job pipeline | Guard weights |
@@ -472,7 +473,7 @@ examples limit what precision and false-block rates can establish.
 Retired architecture comparisons and alternative guard implementations remain
 in Git history at `bb64257` under `eval/`. They are historical evidence, not
 current test dependencies. Their conclusions and the previous public-corpus
-results are retained in `CLAUDE.md`.
+results are retained in `AGENTS.md`.
 
 ## Prior work
 

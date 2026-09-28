@@ -6,7 +6,7 @@ readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.11"
 # Kept in exact sync with the PEP 723 header at the top of airlock.py.
-# test.test_packaging() asserts the two lists agree; see CLAUDE.md for why
+# test.test_packaging() asserts the two lists agree; see AGENTS.md for why
 # this is a checked invariant rather than a single source of truth.
 dependencies = [
     "mcp[cli]>=2.0.0,<2.1.0",
@@ -15,6 +15,8 @@ dependencies = [
     "rich>=13.7",
     "detect-secrets>=1.5",
     "pypdf>=5.0",
+    "pydantic-ai-slim[openai]>=2.46.0,<2.47.0",
+    "jsonschema>=4.26,<5",
 ]
 
 [project.urls]

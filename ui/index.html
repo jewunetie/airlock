@@ -43,7 +43,7 @@ header{position:sticky;top:0;z-index:40;background:var(--paper);
   background:transparent;border:1px solid var(--line);border-radius:99px;
   font-family:var(--m);font-size:12.5px;color:var(--muted)}
 .ws:hover{color:var(--ink);border-color:var(--muted)}
-.ws b{font-weight:400;color:var(--ink);white-space:nowrap}
+.ws b{font-weight:400;color:var(--ink);white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .ws span{white-space:nowrap}
 .ws svg{opacity:.5}
 .wsmenu{position:absolute;top:52px;left:0;z-index:50;min-width:300px;background:var(--card);
@@ -54,7 +54,7 @@ header{position:sticky;top:0;z-index:40;background:var(--paper);
 .wsmenu .p{font-family:var(--m);font-size:12px;color:var(--muted)}
 .wsmenu .n{font-size:12px;color:var(--muted);margin-left:auto}
 .wsmenu hr{border:0;border-top:1px solid var(--line);margin:6px 0}
-.wshost{position:relative}
+.wshost{position:relative;min-width:0;max-width:100%}
 
 nav{margin-left:auto;display:flex;gap:2px}
 nav button{background:none;border:0;padding:7px 13px;border-radius:7px;
@@ -74,9 +74,10 @@ nav button[aria-current=page]{color:var(--ink);background:#F1F1EC;font-weight:50
   animation:pulse 1.8s ease-in-out infinite}
 @keyframes pulse{50%{opacity:.25}}
 @media(prefers-reduced-motion:reduce){.ask .k i{animation:none}}
-.ask .what{font-size:15.5px;line-height:1.45}
+.ask .what{font-size:15.5px;line-height:1.45;min-width:0;flex:1}
 .ask .what code{font-family:var(--m);font-size:13.5px;background:#fff;padding:2px 7px;
-  border-radius:5px;box-shadow:0 0 0 1px #EFE3BE}
+  border-radius:5px;box-shadow:0 0 0 1px #EFE3BE;display:block;
+  max-height:35vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
 .ask .acts{margin-left:auto;display:flex;gap:8px;flex:none}
 .ask .acts button{padding:8px 16px;border-radius:8px;font-size:14px;font-weight:500;
   border:1px solid var(--ink);background:var(--card);color:var(--ink)}
@@ -218,6 +219,7 @@ pre b{color:var(--ink);font-weight:400}
   /* the interrupt must stay usable at this width, so the buttons drop to their
      own row rather than shrinking to nothing next to the sentence */
   .ask .row{flex-wrap:wrap}
+  .ask .what{flex-basis:100%}
   .ask .acts{margin-left:0;flex-basis:100%}
   .ask .acts button{flex:1}
   /* shorthand padding here would wipe .wrap's horizontal padding, since .bar
@@ -501,12 +503,16 @@ function renderAsk(p){
   $('#ask').hidden=!p;
   document.title=(p?'\u25cf ':'')+'airlock';
   if (!p) return;
-  $('#askwhat').innerHTML=(p.alters?'The assistant wants to run a call that can write to this folder: '
-    :'The assistant is asking: ')+`<code>${esc(p.question)}</code>`;
+  const label={request:'Allow this request?',write:'Allow this exact file change?',response:'Release this response?'};
+  const detail={request:'Work starts only if you allow this request.',write:'Only this file change will be allowed.',response:'Work has finished. This response stays local until you allow it.'};
+  $('#asksub').textContent=detail[p.kind]||detail.request;
+  $('#askwhat').innerHTML=esc(label[p.kind]||'Allow this request?')
+    +(p.reason?`<p>${esc(p.reason)}</p>`:'')+`<code>${esc(p.question)}</code>`;
 }
 const answer=g=>{ if(!PENDING) return;
   api('/api/approve',{method:'POST',body:JSON.stringify({id:PENDING.id,granted:g})})
-    .then(()=>{renderAsk(null);poll();}); };
+    .then(r=>{if(!r.ok) throw new Error('This decision could not be saved. Refreshing.'); renderAsk(null);poll();})
+    .catch(e=>{ $('#askwhat').textContent=e.message; poll(); }); };
 $('#allow').onclick=()=>answer(true);
 $('#deny').onclick=()=>answer(false);
 

@@ -33,6 +33,10 @@ This specification defines the authorized promotion of `new_design` to the repos
 
 ## Tests and assertions
 
+The approved information-flow clarification uses the existing data model and APIs above: workspace content and derived results stay private by default, untrusted text grants no authority, and `protected_sources` is detection evidence rather than permission. Location: `ARCHITECTURE.md` for the explicit rules and boundary table; `test.py` for missing sequence checks; `VALIDATION.md` for executed evidence. No new per-file labels, runtime dependency, or public API is introduced.
+
+Sequence checks must cover a forged approval in document text, copied private content submitted in a later task, and an unexpected worker tool. Include a legitimate read/release or properly approved action as a positive control. Existing approval-replay, policy-tightening, and restart/idempotency checks remain mandatory; do not duplicate or weaken them. Use synthetic files, scripted model responses, fixture detectors, and actual Coder/SQLite/MCP where available. These checks establish policy behavior, not real detector accuracy or OS confinement.
+
 - Release review exposes the original question, disclosure purpose, workspace, policy/version, exact candidate, and canonical findings. One vote is consumed once. Changed request/candidate/policy/findings cannot reuse an earlier approval; reordered identical findings can.
 - Repeated client/native submissions return one task and one queue entry, including competing asynchronous callers, completed tasks, and reopened databases. Changed request or disclosure conflicts; another workspace or a new ID is independent. Invalid IDs fail before persistence/execution. A real synthetic write occurs once under a retried task.
 - Compare fragment coverage against an independent exhaustive interval-placement reference on seeded small graphs. Preserve repeated-character, reverse-order, overlapping, standalone-character, and decoded-fragment cases. Ordinary protected-prose fixtures must run under the unchanged minimum length and bounds; unresolved complexity still fails closed.

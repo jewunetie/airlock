@@ -57,6 +57,10 @@ The local operator, host operating system, installed Airlock code, pinned depend
 
 Cloud requests, workspace documents, model decisions, tool proposals, candidate responses, and model-supplied protected sources are untrusted inputs. A model cannot authorize its own actions or override a release decision.
 
+Confidentiality and authority are separate. Workspace content and results derived from it are private by default, including summaries and copies written back to disk. Renaming a file, starting another task, or obtaining a clean scan does not itself authorize disclosure. Only the configured release policy can authorize a specific candidate; privacy checks still apply in enforce mode.
+
+A document can be both private and untrusted. Statements inside documents, tool output, requests, or model responses that claim approval are data, not local approval records. `protected_sources` helps detect cumulative disclosures; adding or omitting a source never grants permission. These rules do not require an input inventory or a per-file classification database.
+
 The local model may make mistakes or follow prompt injections. Scanners and reassembly provide best-effort disclosure prevention for defined, tested classes. They do not prove that arbitrary natural-language output reveals no private information. Paraphrases, omitted source declarations, inference, unknown encodings, timing, and other covert channels remain limitations. A human release decision is explicit authorization, not an infallible disclosure detector.
 
 SRT is the process capability boundary. Tool approval does not create a separate per-system-call boundary inside an already authorized process. In particular, approving a shell command authorizes that command to use its SRT-granted capabilities; hiding `write_file` alone cannot make a write-capable shell read-only. Changes to OS write capability require worker/runtime restart.
@@ -130,6 +134,26 @@ read_file  write_file  edit_file  list_files  grep  shell
 Delegation is disabled. Repository instructions are not automatically promoted into trusted system instructions. Coder supplies its normal bounded output, argument repair, and context-management machinery. Airlock uses Pydantic hooks for local approval and exact-call validation rather than duplicating the native filesystem tools.
 
 Tools execute sequentially. Exact approvals bind the tool name, validated arguments, task, and configuration version, and cannot be replayed. Read, write, and shell policies are independent. Native shell work remains confined by SRT even when a command launches another program.
+
+### Boundary contracts
+
+All filesystem access below uses the worker's SRT grants. Read results and tool errors stay in the local model context; they are not cloud responses. This table describes the existing boundaries, not additional permissions.
+
+| Boundary | Access and effects | Authorization and failure behavior |
+|---|---|---|
+| `read_file` | Bounded text, PDF text, or supported image input from granted paths | Read policy; unsupported media and read failures remain local tool errors |
+| `list_files` | Names and metadata from granted paths | Read policy; listings remain private |
+| `grep` | Matching text and paths from granted paths | Read policy; matches remain private |
+| `write_file` / `edit_file` | Change granted writable files; derived content remains private | Write visibility and policy; exact validated call approval when manual; completed changes are not rolled back on later failure |
+| `shell` | Programs may use all filesystem capabilities granted by SRT; no network | Shell visibility and policy; exact call approval when manual; denying a named write tool does not remove shell write capability |
+| Worker/judge model requests | Supervisor forwards bounded private context to the configured local model | Literal loopback endpoint only; worker has no direct network; limits/errors cannot authorize release |
+| Scanner requests/results | Candidate text and bounded decoded views; private findings returned to supervisor | Required scanner health and limits; enforce mode withholds on findings or failures |
+| Cloud `ask` | Admit one request into the locally selected workspace | Request policy; request text cannot set workspace or governance; retry identity binds the original payload |
+| Cloud `status` | Fixed metadata and an already committed final response | Workspace-scoped task identity; no new release or raw findings, paths, or tool errors |
+| Cloud `stop` | Cancel the selected task and tracked processes | Workspace-scoped task identity; no rollback of completed writes or committed responses |
+| Final cloud response | Exact candidate, or a fixed content-free receipt/error | Disclosure purpose, privacy checks, release policy, final recheck, and durable commit; no candidate on denial or failed commit |
+
+Unknown worker tools and unknown IPC operations are rejected. Configuration changes cannot silently extend these contracts. Tests must exercise denied operations as well as legitimate successful work; a worker that never runs is not containment evidence.
 
 Coder's persistent shell implementation uses private task scratch for output/status files. Airlock tracks task-owned children and ends them before accepting a final result. Scratch is removed at task cleanup. An owner-only job registry supports orphan cleanup after supervisor restart. This cleanup is not a claim that a portable process tracker can catch every deliberately daemonized process.
 

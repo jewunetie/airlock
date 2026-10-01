@@ -4,6 +4,12 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+On 2026-10-01, the approved information-flow clarification completed with **50 passed, zero skipped, zero failures**. The locked environment was already complete; `UV_CACHE_DIR=/private/tmp/airlock-uv-cache uv sync --locked --offline` made no dependency changes, and the same cache location was used for `uv run --locked --offline python -B -m pytest -q test.py`. The full passing run had permission to bind localhost. A prior restricted run passed 49 checks and failed only the existing HTTP test at `socket.bind`; that restriction was not counted as a pass or removed from the suite.
+
+The two added sequence checks exercise actual supervisor authorization and SQLite. A synthetic document claiming approval cannot produce a tool grant; an exact local vote permits the call once, replay is denied, and unknown tools fail. A scripted fixture worker reads and copies synthetic confidential text into a differently named file with permitted operations. Its first task returns only a receipt; a later task's attempted disclosure is withheld by a content-sensitive fixture scanner despite an omitted source hint, and an unrelated benign response succeeds. This copy test is not live Coder/model/scanner/SRT acceptance. Existing real Coder and MCP checks, restart/idempotency checks, and approval/policy mutation checks remain in the full suite.
+
+`ARCHITECTURE.md` now states confidentiality separately from authority and records the existing tool/model/scanner/cloud boundary contracts. No new policy engine, per-file label store, public API, or production code was needed for these three changes. Fresh review checked the added rules against `run_coder`, `worker_message`, `Egress`, and the existing retry/recovery behavior; no additional concrete defect was found in that scope. `git diff --check` passes.
+
 On 2026-09-28, the redesigned root suite completed with **48 passed, zero skipped, zero failures** in the resolved project environment. It imports root `airlock.py`; it does not extract selected definitions or replace Pydantic/SQLite/OpenTelemetry with stubs.
 
 ```sh

@@ -322,6 +322,7 @@ class Settings(BaseSettings):
     scratch_root: Path | None = None
     calibration: Path | None = None
     calibration_sha256: str | None = None
+    calibration_acceptance: str | None = Field(default=None, pattern='^[0-9a-f]{64}$')
     # No implicit ownership of a shared Ollama service. Explicitly reserve it
     # for Airlock to enable ownership-aware preload/unload.
     ollama_exclusive: bool = False
@@ -482,7 +483,7 @@ def prepared_settings(root: Path = INSTALLATION_ROOT) -> dict:
     data['extra_runtime_reads'] = [str(Path(v) if Path(v).is_absolute() else root/v)
                                    for v in data.get('extra_runtime_reads', [])]
     # The manifest supplies provisioning, not silently broadened governance.
-    if 'governance' in data or 'preset' in data:
+    if any(key in data for key in ('governance', 'preset', 'calibration_acceptance')):
         raise AirlockError('manifest_policy_forbidden')
     Settings(**data)
     return data
@@ -843,6 +844,14 @@ class StateStore:
                 (workspace, version, self.opaque('configuration', settings.model_dump_json()),
                  governance.model_dump_json(), json.dumps(components), utc_now()))
         return version
+
+    def saved_governance(self, root: Path) -> dict | None:
+        """Return the last local policy for this exact workspace identity."""
+        info = root.stat()
+        row = self.db.execute('''SELECT c.governance FROM configurations c JOIN workspaces w ON w.id=c.workspace
+            WHERE w.path=? AND w.device=? AND w.inode=? ORDER BY c.version DESC LIMIT 1''',
+            (str(root), info.st_dev, info.st_ino)).fetchone()
+        return Governance.model_validate_json(row[0]).model_dump(mode='json') if row else None
 
     def begin(self, interaction: BoundaryInteraction):
         if interaction.final_response is not None:
@@ -1240,19 +1249,31 @@ def calibration_binding(settings: Settings) -> str:
         'source': SOURCE_DIGEST})).hexdigest()
 
 
-def calibrated_settings(settings: Settings) -> Settings:
-    if settings.governance.privacy == PrivacyMode.OFF:
-        return settings
+def load_calibration(settings: Settings) -> CalibrationProfile:
+    """Verify the measured profile and its binding, without accepting it."""
     if settings.calibration is None or settings.calibration_sha256 is None:
         raise AirlockError('calibration_required')
-    path = verify_digest(settings.calibration, settings.calibration_sha256)
-    owned_file(path)
-    profile = CalibrationProfile.model_validate_json(path.read_bytes())
-    if not profile.reviewed or profile.binding != calibration_binding(settings):
+    try:
+        path = verify_digest(settings.calibration, settings.calibration_sha256)
+        owned_file(path)
+        profile = CalibrationProfile.model_validate_json(path.read_bytes())
+        Settings.model_validate({**settings.model_dump(), **profile.thresholds})
+    except (OSError, ValueError):
+        raise AirlockError('calibration_invalid') from None
+    if profile.binding != calibration_binding(settings):
         raise AirlockError('calibration_not_accepted')
     permitted = {'pii_threshold', 'policy_threshold', 'policy_overrides', 'reassembly_fraction'}
     if set(profile.thresholds) != permitted:
         raise AirlockError('calibration_invalid')
+    return profile
+
+
+def calibrated_settings(settings: Settings) -> Settings:
+    if settings.governance.privacy == PrivacyMode.OFF:
+        return settings
+    profile = load_calibration(settings)
+    if not profile.reviewed and settings.calibration_acceptance != settings.calibration_sha256:
+        raise AirlockError('calibration_not_accepted')
     return Settings.model_validate({**settings.model_dump(), **profile.thresholds})
 
 
@@ -3130,8 +3151,6 @@ class WorkspaceRuntime:
         if policy.write_visibility != self.settings.governance.write_visibility:
             raise AirlockError('restart_required_for_os_capabilities')
         if self.governance.privacy == PrivacyMode.OFF and policy.privacy != PrivacyMode.OFF:
-            # Loading/accepting calibration is a startup boundary, never a TUI bypass.
-            calibrated_settings(Settings(**{**self.settings.model_dump(), 'governance':policy}))
             raise AirlockError('restart_required_for_scanners')
         self.config_version = self.store.record_config(self.id, self.settings, policy)
         self.governance = policy
@@ -3558,6 +3577,11 @@ class Supervisor:
                     runtime.revalidate()
                     if runtime.state not in ('READY','ACTIVE'):
                         raise AirlockError('runtime_requires_stop')
+                    requested = settings.model_dump(exclude={'preset','calibration_acceptance'})
+                    current = runtime.settings.model_copy(update={'governance':runtime.governance}).model_dump(
+                        exclude={'preset','calibration_acceptance'})
+                    if requested != current:
+                        raise AirlockError('runtime_settings_changed')
                     return runtime
                 if overlaps(root, runtime.root):
                     raise AirlockError('workspace_overlap')
@@ -3600,6 +3624,10 @@ class Supervisor:
             return {'pid':os.getpid(),'version':VERSION,'source_sha256':SOURCE_DIGEST}
         if operation == 'ps':
             return {'runtimes':[r.snapshot() for r in self.runtimes.values()]}
+        if operation == 'preferences':
+            root = canonical_workspace(Path(request['target']))
+            running = next((r.snapshot() for r in self.runtimes.values() if r.root == root), None)
+            return {'governance':self.store.saved_governance(root), 'running':running}
         if operation == 'start':
             runtime = await self.start_runtime(request['target'], Settings.model_validate(request['settings']))
             return runtime.snapshot()
@@ -3796,6 +3824,68 @@ async def ensure_supervisor(state: Path, max_bytes: int = DEFAULT_STATE_BYTES):
     raise AirlockError('supervisor_start_failed')
 
 
+def make_startup_tui(settings: Settings, root: Path):
+    """Review local workspace rules; return accepted settings or None on cancel."""
+    from textual.app import App, ComposeResult
+    from textual.containers import Horizontal, VerticalScroll
+    from textual.widgets import Header, Footer, Static, Select, Button
+    try:
+        profile = load_calibration(settings)
+        summary = (f'Scanner sensitivity: personal information {profile.thresholds["pii_threshold"]}, '
+            f'sensitive context {profile.thresholds["policy_threshold"]}, '
+            f'fragment coverage {profile.thresholds["reassembly_fraction"]}.\n'
+            f'Held-out evaluation: {profile.heldout_cases} examples, '
+            f'{profile.heldout_false_positives} false blocks, {profile.heldout_false_negatives} missed private examples.\n'
+            'These measurements describe this test corpus, not accuracy on your documents.')
+    except AirlockError as error:
+        profile = None
+        summary = 'Scanner profile unavailable: '+error.code+'. Prepare a compatible measured profile before scanning.'
+    fields = [('request', 'Incoming tasks', Mode), ('read', 'Read files', Mode),
+        ('write', 'Write files', Mode), ('shell', 'Run commands', Mode), ('release', 'Share answers', Mode),
+        ('privacy', 'Privacy checks', PrivacyMode), ('write_visibility', 'Workspace writes', Visibility),
+        ('shell_visibility', 'Command tool', Visibility)]
+
+    class StartupApp(App):
+        TITLE = 'Airlock workspace settings'
+        CSS = 'VerticalScroll {padding:1;} Select {margin-bottom:1;} Horizontal {height:3;} #notice {height:auto;}'
+        BINDINGS = [('q', 'quit', 'Cancel')]
+        def compose(self) -> ComposeResult:
+            yield Header()
+            with VerticalScroll():
+                yield Static(f'These are the rules for {root}. Accept them or change them below.', markup=False)
+                yield Static('Enforce blocks privacy findings. Warn permits authorized review. Off disables privacy checks.\n'
+                    'Manual asks you per proposal. Auto follows your existing local automatic rules.\n'
+                    'Workspace writes require visible access; changing OS access later requires a restart.', markup=False)
+                yield Static(summary, markup=False, id='calibration_summary')
+                for key, label, kind in fields:
+                    yield Static(label, markup=False)
+                    choices = [(f'auto ({"allow" if getattr(settings.governance, "auto_"+key) else "deny"} by local rule)'
+                        if kind is Mode and v is Mode.AUTO else v.value, v.value) for v in kind]
+                    yield Select(choices, value=getattr(settings.governance, key).value,
+                                 allow_blank=False, id=key)
+                yield Static('Scanner sensitivity is set by a tested profile; changing it requires a new profile and restart.', markup=False)
+            yield Static('', id='notice', markup=False)
+            with Horizontal():
+                yield Button('Accept and start', id='accept', variant='primary')
+                yield Button('Cancel', id='cancel')
+            yield Footer()
+        def on_button_pressed(self, event):
+            if event.button.id == 'cancel':
+                self.exit(None)
+            elif event.button.id == 'accept':
+                try:
+                    policy = {**settings.governance.model_dump(),
+                        **{key:self.query_one('#'+key, Select).value for key, _, _ in fields}}
+                    chosen = Settings.model_validate({**settings.model_dump(), 'governance':policy,
+                        'calibration_acceptance':settings.calibration_sha256 if profile else None})
+                    self.exit(calibrated_settings(chosen))
+                except AirlockError as error:
+                    self.query_one('#notice', Static).update('Airlock: '+error.code)
+                except Exception:
+                    self.query_one('#notice', Static).update('Invalid local settings; nothing accepted.')
+    return StartupApp()
+
+
 def make_tui(state: Path, target: str):
     from textual.app import App, ComposeResult
     from textual.widgets import Header, Footer, Static, DataTable, Button, Input, Select, TextArea
@@ -3893,7 +3983,6 @@ class CLI(BaseSettings):
     model_config = SettingsConfigDict(cli_parse_args=False, cli_kebab_case=True,
         cli_implicit_flags=True, cli_hide_none_type=True, extra='forbid', env_prefix='AIRLOCK_CLI_')
     args: CliPositionalArg[list[str]] = Field(default_factory=list)
-    headless: CliImplicitFlag[bool] = False
     all: CliImplicitFlag[bool] = False
     config: Path | None = None
     preset: Preset | None = None
@@ -3952,14 +4041,20 @@ async def public_cli(args: CLI):
         if missing_dependencies():
             print('Missing runtime packages: '+', '.join(missing_dependencies()), file=sys.stderr)
             raise AirlockError('dependencies_missing')
-        if not args.headless and importlib.util.find_spec('textual') is None:
+        if importlib.util.find_spec('textual') is None:
             raise AirlockError('textual_missing')
         await ensure_supervisor(state, settings.max_state_bytes)
+        preferences = await control_request(state, {'op':'preferences', 'target':target})
+        if preferences['running'] is not None:
+            await make_tui(state, preferences['running']['id']).run_async()
+            return
+        if preferences['governance'] is not None and args.preset is None:
+            settings = load_settings(args.config, merge_dicts({'governance':preferences['governance']}, overrides))
+        settings = await make_startup_tui(settings, Path(target)).run_async()
+        if settings is None:
+            return
         view = await control_request(state, {'op':'start','target':target,'settings':settings.model_dump(mode='json')})
-        if args.headless:
-            print(json.dumps(view,indent=2,ensure_ascii=True))
-        else:
-            await make_tui(state, view['id']).run_async()
+        await make_tui(state, view['id']).run_async()
     else:
         try:
             view = await control_request(state, {'op':action,'target':target})

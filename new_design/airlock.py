@@ -3739,7 +3739,6 @@ class CLI(BaseSettings):
     model_config = SettingsConfigDict(cli_parse_args=False, cli_kebab_case=True,
         cli_implicit_flags=True, cli_hide_none_type=True, extra='forbid', env_prefix='AIRLOCK_CLI_')
     args: CliPositionalArg[list[str]] = Field(default_factory=list)
-    headless: CliImplicitFlag[bool] = False
     all: CliImplicitFlag[bool] = False
     config: Path | None = None
     preset: Preset | None = None
@@ -3792,14 +3791,11 @@ async def public_cli(args: CLI):
         if missing_dependencies():
             print('Missing runtime packages: '+', '.join(missing_dependencies()), file=sys.stderr)
             raise AirlockError('dependencies_missing')
-        if not args.headless and importlib.util.find_spec('textual') is None:
+        if importlib.util.find_spec('textual') is None:
             raise AirlockError('textual_missing')
         await ensure_supervisor(state)
         view = await control_request(state, {'op':'start','target':target,'settings':settings.model_dump(mode='json')})
-        if args.headless:
-            print(json.dumps(view,indent=2,ensure_ascii=True))
-        else:
-            await make_tui(state, view['id']).run_async()
+        await make_tui(state, view['id']).run_async()
     else:
         try:
             view = await control_request(state, {'op':action,'target':target})

@@ -645,6 +645,178 @@ def test_enforced_startup_requires_explicit_calibration():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize('action', ['start', 'cancel', 'attach'])
+async def test_public_workspace_start_opens_local_screen(tmp_path, monkeypatch, action):
+    calls = []
+    settings_calls = []
+    saved = a.Governance(request='allow', read='deny').model_dump(mode='json')
+    def load(path, overrides):
+        settings_calls.append(overrides)
+        return a.Settings(governance=a.Governance(**overrides.get('governance', {})))
+    async def ensure(state, max_bytes):
+        calls.append('supervisor')
+    async def control(state, request):
+        assert request['target'] == str(tmp_path)
+        calls.append(request['op'])
+        if request['op'] == 'preferences':
+            return {'governance':saved, 'running':{'id':'synthetic-runtime'} if action == 'attach' else None}
+        assert request['settings']['governance']['read'] == 'manual'
+        assert request['settings']['governance']['request'] == 'allow'
+        return {'id': 'synthetic-runtime'}
+    class Screen:
+        async def run_async(self):
+            calls.append('screen')
+    class Setup:
+        async def run_async(self):
+            calls.append('setup')
+            return None if action == 'cancel' else load(None, settings_calls[-1])
+    monkeypatch.setattr(a, 'load_settings', load)
+    monkeypatch.setattr(a, 'missing_dependencies', lambda: [])
+    monkeypatch.setattr(a, 'ensure_supervisor', ensure)
+    monkeypatch.setattr(a, 'control_request', control)
+    monkeypatch.setattr(a, 'make_tui', lambda state, target: Screen())
+    monkeypatch.setattr(a, 'make_startup_tui', lambda settings, target: Setup())
+    assert set(a.CLI.model_fields) == {'args', 'all', 'config', 'preset', 'privacy', 'release',
+        'admission', 'read', 'write', 'shell', 'write_visibility', 'shell_visibility'}
+    await a.public_cli(a.CLI(args=[str(tmp_path)], read='manual'))
+    assert calls == ['supervisor', 'preferences'] + (
+        ['screen'] if action == 'attach' else ['setup'] if action == 'cancel' else ['setup', 'start', 'screen'])
+
+
+def calibration_fixture(tmp_path):
+    settings = a.Settings()
+    profile = a.CalibrationProfile(format=1, binding=a.calibration_binding(settings), corpus_sha256='a'*64,
+        evaluated_at=1, thresholds={'pii_threshold':0.3, 'policy_threshold':0.5, 'policy_overrides':{},
+        'reassembly_fraction':1.0}, calibration_cases=24, heldout_cases=24,
+        heldout_false_positives=6, heldout_false_negatives=0)
+    path = tmp_path/'profile.json'
+    a.atomic_private_write(path, profile.model_dump_json().encode())
+    return settings.model_copy(update={'calibration':path,
+        'calibration_sha256':a.hashlib.sha256(path.read_bytes()).hexdigest()})
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('action', ['accept', 'cancel', 'invalid'])
+async def test_startup_screen_exact_acceptance_and_cancellation(tmp_path, action):
+    from textual.widgets import Select, Static
+    settings = calibration_fixture(tmp_path)
+    original = settings.calibration.read_bytes()
+    if action == 'invalid':
+        settings = settings.model_copy(update={'worker_model':'changed-model'})
+    app = a.make_startup_tui(settings, tmp_path)
+    async with app.run_test(size=(110, 36)) as pilot:
+        assert app.query_one('#calibration_summary', Static).region.y < 36
+        app.query_one('#release', Select).value = 'auto'
+        assert await pilot.click('#cancel' if action == 'cancel' else '#accept')
+        await pilot.pause()
+        if action == 'invalid':
+            assert 'calibration_not_accepted' in str(app.query_one('#notice', Static).content)
+            assert app.return_value is None
+        elif action == 'cancel':
+            assert app.return_value is None
+        else:
+            chosen = app.return_value
+            assert chosen.governance.release == a.Mode.AUTO and chosen.governance.privacy == a.PrivacyMode.ENFORCE
+            assert chosen.calibration_acceptance == settings.calibration_sha256
+            assert chosen.pii_threshold == 0.3 and chosen.policy_threshold == 0.5
+            assert a.calibrated_settings(chosen) == chosen
+    assert settings.calibration.read_bytes() == original
+    assert not a.CalibrationProfile.model_validate_json(original).reviewed
+
+
+def test_calibration_acceptance_does_not_survive_profile_or_binding_change(tmp_path):
+    settings = calibration_fixture(tmp_path)
+    with pytest.raises(a.AirlockError, match='calibration_not_accepted'):
+        a.calibrated_settings(settings)
+    accepted = settings.model_copy(update={'calibration_acceptance':settings.calibration_sha256})
+    assert a.calibrated_settings(accepted).policy_threshold == 0.5
+    with pytest.raises(a.AirlockError, match='calibration_not_accepted'):
+        a.calibrated_settings(accepted.model_copy(update={'worker_model':'changed-model'}))
+    changed = a.CalibrationProfile.model_validate_json(settings.calibration.read_bytes()).model_copy(update={'evaluated_at':2})
+    a.atomic_private_write(settings.calibration, changed.model_dump_json().encode())
+    new_digest = a.hashlib.sha256(settings.calibration.read_bytes()).hexdigest()
+    with pytest.raises(a.AirlockError, match='calibration_not_accepted'):
+        a.calibrated_settings(accepted.model_copy(update={'calibration_sha256':new_digest}))
+
+
+@pytest.mark.asyncio
+async def test_malformed_profile_cannot_be_accepted_in_startup_screen(tmp_path):
+    from textual.widgets import Static
+    settings = calibration_fixture(tmp_path)
+    a.atomic_private_write(settings.calibration, b'not valid JSON')
+    settings = settings.model_copy(update={'calibration_sha256':a.hashlib.sha256(settings.calibration.read_bytes()).hexdigest()})
+    app = a.make_startup_tui(settings, tmp_path)
+    async with app.run_test(size=(110, 36)) as pilot:
+        assert await pilot.click('#accept')
+        await pilot.pause()
+        assert app.return_value is None
+        assert 'calibration_invalid' in str(app.query_one('#notice', Static).content)
+
+
+def test_provisioning_manifest_cannot_accept_settings(tmp_path):
+    source = tmp_path/'airlock.py'
+    source.write_bytes(Path(a.__file__).read_bytes())
+    manifest = a.PreparedRuntime(format=1, source_sha256=a.SOURCE_DIGEST, packages={},
+        settings={'calibration_acceptance':'a'*64})
+    a.atomic_private_write(tmp_path/'runtime.manifest.json', manifest.model_dump_json().encode())
+    with pytest.raises(a.AirlockError, match='manifest_policy_forbidden'):
+        a.prepared_settings(tmp_path)
+
+
+@pytest.mark.asyncio
+async def test_competing_startup_cannot_replace_accepted_rules(tmp_path):
+    supervisor = a.Supervisor(tmp_path/'state')
+    f = Fixture(tmp_path, store=supervisor.store)
+    supervisor.runtimes[f.runtime.id] = f.runtime
+    try:
+        assert await supervisor.start_runtime(str(f.root), f.settings) is f.runtime
+        changed = f.settings.model_copy(update={'governance':f.runtime.governance.model_copy(update={'privacy':a.PrivacyMode.WARN})})
+        with pytest.raises(a.AirlockError, match='runtime_settings_changed'):
+            await supervisor.start_runtime(str(f.root), changed)
+        assert f.runtime.governance.privacy == a.PrivacyMode.ENFORCE
+    finally:
+        f.store.close()
+
+
+@pytest.mark.asyncio
+async def test_local_workspace_edits_persist_and_do_not_change_another_workspace():
+    from textual.widgets import TextArea
+    with tempfile.TemporaryDirectory(dir='/private/tmp' if sys.platform == 'darwin' else None) as directory:
+        home = Path(directory)
+        supervisor = a.Supervisor(home/'state')
+        f = Fixture(home, store=supervisor.store)
+        other = Fixture(home, store=supervisor.store, name='other')
+        supervisor.runtimes = {r.id:r for r in (f.runtime, other.runtime)}
+        server = await asyncio.start_unix_server(supervisor.connection, str(supervisor.socket))
+        supervisor.socket.chmod(0o600)
+        policy = f.runtime.governance.model_copy(update={'release':a.Mode.MANUAL, 'privacy':a.PrivacyMode.WARN})
+        try:
+            app = a.make_tui(supervisor.state, f.runtime.id)
+            async with app.run_test(size=(140, 55)) as pilot:
+                app.query_one('#settings', TextArea).load_text(policy.model_dump_json())
+                assert await pilot.click('#apply')
+                await pilot.pause()
+                assert f.runtime.governance == policy
+                assert f.store.saved_governance(f.root) == policy.model_dump(mode='json')
+                assert other.runtime.governance.privacy == a.PrivacyMode.ENFORCE
+        finally:
+            server.close()
+            await server.wait_closed()
+            f.store.close()
+        reopened = a.StateStore(home/'state')
+        try:
+            assert reopened.saved_governance(f.root) == policy.model_dump(mode='json')
+            replacement = home/'replacement'
+            replacement.mkdir()
+            assert reopened.saved_governance(replacement) is None
+            # Simulate a changed identity without relying on inode reuse by the OS.
+            reopened.db.execute('UPDATE workspaces SET inode=inode+1 WHERE id=?', (f.runtime.id,))
+            assert reopened.saved_governance(f.root) is None
+        finally:
+            reopened.close()
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize('vote', ['approve', 'deny', 'blocked'])
 async def test_manual_release_through_textual_and_local_socket(vote):
     from textual.widgets import DataTable, TextArea

@@ -4,6 +4,10 @@ This specification defines the authorized promotion of `new_design` to the repos
 
 ## Data model
 
+- Startup review uses `Settings`, `Governance`, and the existing `CalibrationProfile`. `Settings.calibration_acceptance: str | None` is the exact selected profile SHA-256 accepted by the local user for this workspace startup; it grants nothing when the source/assets binding or file digest changes. Existing owner-only SQLite configuration rows retain the chosen governance and calibration reference; load the latest governance for the same canonical path/device/inode, never from workspace files. No new database table or dependency is needed.
+
+- Remove the public background-startup boolean from `CLI`. Preserve the existing workspace target, trusted configuration, presets, governance, and all attach/control models. No replacement background-startup switch is introduced.
+
 - Approved Codex plugin: reuse `AskRequest`, task/final responses, local runtime selection, and all existing governance. The local connection is a JSON `mcpServers.airlock` stdio entry with absolute Python/source/workspace paths and `-I -B`; no token is written into it. Repository plugin metadata and skill instructions contain no private folder or credentials. Prepared dependencies use the existing `AssetSpec`, `PreparedRuntime`, and `CalibrationProfile`; calibration records measured calibration/held-out cases and remains unreviewed until local acceptance.
 
 - Preserve the redesign's typed governance, settings, worker output, findings, task states, boundary history, and finite-occurrence fragment graphs.
@@ -15,6 +19,11 @@ This specification defines the authorized promotion of `new_design` to the repos
 - Explicit history deletion removes completed boundary interactions in the selected workspace. Active interactions, audit/configuration records, opaque task identity/payload fingerprints, and the disclosure ledger/key remain. Deleted retry identities become durable tombstones; no raw request, purpose, or final response remains in those records.
 
 ## API contract
+
+- Before starting a new workspace runtime, the public CLI opens a local settings screen with saved governance or current defaults, editable approval/privacy/visibility modes, and read-only scanner thresholds/held-out results. Accept validates and returns the exact `Settings`; cancel returns `None` and starts no runtime. Unreviewed measured profiles can be accepted here, independently of their global `reviewed` flag. `calibrated_settings` still verifies the exact profile digest, code/assets binding, permitted thresholds, and either existing explicit review or the workspace's exact acceptance. Missing/incompatible profiles cannot be accepted for scanning modes. Scanner sensitivity changes require a compatible measured profile and restart.
+- Local `preferences(target)` returns the last saved governance for the current workspace identity, or an already-running runtime snapshot. It reads only local metadata. Explicit CLI governance overrides apply after saved workspace governance; an explicit preset starts from its configured preset instead. An existing runtime opens its current control screen. Valid new-runtime settings are recorded before readiness probes; runtime governance edits continue to persist through existing configuration versioning. Failed validation/cancellation cannot replace saved choices. Pending tasks retain policy intersection and approvals are invalidated by edits.
+
+- Public workspace startup always opens the local Textual interface; the retired startup flag is rejected by CLI parsing before creating a supervisor. Existing `plugin`, `ps`, `status`, and `stop` remain noninteractive control operations. Internal supervisor/worker/bridge processes retain their current IPC behavior; a background supervisor is still necessary for a runtime to survive closing its screen.
 
 - Pinned SRT invocation preserves the existing profile/role/command data and uses its explicit `-c COMMAND` CLI contract for the shell-quoted command string. Location: `SRTLauncher.spawn` in `airlock.py`; assertions in `test.py` check exact argv and unchanged deny-all networking, with the real scanner/worker probes checking execution and confinement. Startup failure remains fail-closed.
 - Private scratch uses its canonical filesystem path in the profile and child environment, preserving the same directory and capabilities when the host temporary directory has a symlink alias. The SRT regression asserts the `TMPDIR` grant is canonical; live scanner probes verify temporary-cache use without allowing shared temp access.
@@ -33,6 +42,10 @@ This specification defines the authorized promotion of `new_design` to the repos
 
 ## Location
 
+- Startup review and calibration acceptance stay in root `airlock.py`; actual Textual startup/cancel/edit, acceptance-binding, saved-governance, runtime-edit, and CLI regressions stay in `test.py`. Root `ARCHITECTURE.md`, `README.md`, and `VALIDATION.md` describe the contract and executed limits. No private acceptance is committed in a runtime manifest or global calibration file.
+
+- Startup cleanup: root `airlock.py`, regression assertions in `test.py`, and active command documentation in `README.md` / `ARCHITECTURE.md`. Remove the retired option from any checked-in historical design reference as well, preserving the originals in Git.
+
 - Codex plugin metadata/skill: `plugins/airlock/.codex-plugin/plugin.json`, `plugins/airlock/skills/airlock/SKILL.md`; local marketplace: `plugins/.agents/plugins/marketplace.json`. Machine-specific `plugins/airlock/.mcp.json` is generated locally and ignored by Git. Connection generation stays in `airlock.py`; regressions remain in `test.py`; usage/evidence in `README.md`/`VALIDATION.md`. Provisioning scripts, downloaded assets, manifests, dummy files, and calibration results stay outside committed source and outside the dummy workspace. No second production Python module is introduced.
 
 - Active production module: root `airlock.py`, promoted from the saved candidate.
@@ -42,6 +55,11 @@ This specification defines the authorized promotion of `new_design` to the repos
 - Historical design/review files in `new_design` remain a saved reference and must identify which root files are authoritative.
 
 ## Tests and assertions
+
+- Verify startup acceptance and cancellation through Textual, invalid profile/binding rejection, exact profile acceptance without altering its global review flag, per-workspace identity isolation, reload after SQLite reopen, explicit CLI precedence, and persistent runtime governance edits. Manual release remains unable to override an enforce-mode finding; warn/off require deliberate local selection. Retain actual local-socket approve/deny and full contract checks. Synthetic UI/calibration artifacts do not establish live model or scanner accuracy.
+- For local review, a temporary preview harness in `/private/tmp` may load the prepared `Settings` and measured `CalibrationProfile` and export the real Textual startup screen as SVG. It must press no acceptance button, start no runtime, and leave `reviewed` false; assert matching calibration binding and no returned acceptance. The preview uses only synthetic dummy-workspace paths and operational settings. A conflicting competing start must fail explicitly rather than use different accepted rules.
+
+- Assert CLI rejection of the retired startup flag and startup routing through Textual. Preserve and run the existing local control, manual approval UI, plugin bridge, and full contract suite. Record exact executed evidence in `VALIDATION.md`.
 
 - Manual UI verification reuses `Governance`, exact `Approval` records, `FinalResponse`, and synthetic candidates. The existing local `review` / `decide` control API is exercised through `make_tui` with the real owner-only Unix socket and Textual test pilot, not by replacing the UI handlers. Location: assertions in `test.py`; executed evidence in `VALIDATION.md`. Check request/purpose/candidate review, approve and deny outcomes, one-use votes, and that enforce-mode findings cannot reach a manual override. No live private documents are used.
 

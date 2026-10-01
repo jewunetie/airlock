@@ -76,7 +76,6 @@ Use `config.example.toml`, owner-only permissions, and explicit `--config` when 
 
 ```sh
 uv run --no-sync airlock /absolute/workspace
-uv run --no-sync airlock /absolute/workspace --headless
 uv run --no-sync airlock ps
 uv run --no-sync airlock status /absolute/workspace
 uv run --no-sync airlock stop /absolute/workspace
@@ -96,7 +95,7 @@ Start the workspace locally first. The bridge never silently creates a runtime. 
 
 Clients with negotiated MCP Tasks receive native task handling. Legacy clients use a quick `ask` receipt and later `status`. Never repeatedly submit `ask` merely because approval or work is pending. `disclosure_request` asks for information; it cannot weaken privacy or authorize filesystem access.
 
-The Textual UI lists approvals and local state, permits exact approval/denial, edits runtime governance, stops tasks, and views/deletes interaction history. A headless manual approval waits for the local user. It is never delegated to the cloud caller.
+The Textual UI lists approvals and local state, permits exact approval/denial, edits runtime governance, stops tasks, and views/deletes interaction history. Manual approval waits for the local user. It is never delegated to the cloud caller.
 
 ## Storage and resource behavior
 

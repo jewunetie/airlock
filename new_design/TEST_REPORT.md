@@ -34,7 +34,7 @@ The deterministic graph smoke corpus contains 12 scenarios and 26 output decisio
 
 An editable build/install succeeded in the pre-existing tool environment using `--no-deps --no-build-isolation --offline`. A preceding fresh virtual environment attempt failed because that environment did not have the build backend. The successful check did not resolve or install the application's dependency set. Both attempts are retained in `validation/editable-install.txt`.
 
-Actual installed `airlock --help`, `airlock ps`, and `uv run --no-sync --active airlock` help/process-list commands exited 0. An unprovisioned headless startup exited 2 rather than bypassing missing components. See `validation/cli-smoke.json`. Source/tests/tools compiled; provisioning and evaluation `--help` paths also ran.
+Actual installed `airlock --help`, `airlock ps`, and `uv run --no-sync --active airlock` help/process-list commands exited 0. An unprovisioned startup exited 2 rather than bypassing missing components. See `validation/cli-smoke.json`. Source/tests/tools compiled; provisioning and evaluation `--help` paths also ran.
 
 With `AIRLOCK_STRICT_ACCEPTANCE=1`, a selected missing-library integration failed with exit 1 instead of skipping. This expected negative control is saved separately in `validation/strict-acceptance-negative-control.txt`; it is not counted as a failure of the normal suite.
 

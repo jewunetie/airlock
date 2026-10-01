@@ -26,6 +26,10 @@ The worker uses the native Coder tools `read_file`, `write_file`, `edit_file`, `
 
 A manual release review shows the original request, disclosure purpose, workspace, effective policy/version, exact proposed answer, and full findings. A vote applies to that proposal once. Changed decision context invalidates the vote. Approval is a local operation; the cloud caller cannot answer it.
 
+Starting a workspace first shows its rules. Accept your saved choices or configured defaults, or change the approval, privacy, and tool access modes before starting. Cancel leaves the workspace stopped. Valid choices are saved locally for that exact workspace. An explicit `--preset` starts from that preset instead; explicit permission flags override saved choices.
+
+The screen also shows scanner sensitivity and measured evaluation errors. Accepting a compatible profile applies it to this workspace without approving it globally. Sensitivity changes require a new tested profile and restart. In the running screen, edit the governance settings and select Apply governance to save changes. Pending work keeps the stricter rules it has encountered; changes invalidate pending approvals. Enabling scanners after an off-mode start or changing workspace write access requires stop/start.
+
 Release checks serialize across workspaces. SQLite commits the disclosure evidence and final response before the response is published. A failed commit publishes no candidate and makes the runtime unavailable.
 
 ## Preparation and limits
@@ -43,7 +47,7 @@ uv run --locked airlock --help
 
 Python 3.11 or newer on macOS/Linux is required. Package installation and `uv run --script airlock.py --help` use the same bounded direct dependencies as the project. The lockfile fixes the complete development/CI resolution; installing the wheel or script can resolve newer versions within those bounds. Package installation does not provision reviewed executables, model assets, or calibration.
 
-After local preparation, the CLI accepts a workspace, `--headless`, `--config PATH`, `ps`, `status WORKSPACE`, and `stop WORKSPACE` or `stop --all`. The local bridge attaches to an already running workspace; it does not silently start one. A stdio MCP client uses the prepared environment's absolute Python executable with `-I -B /absolute/airlock.py _bridge /absolute/workspace`.
+After local preparation, starting a workspace opens the local Textual screen. The CLI accepts a workspace, `--config PATH`, `ps`, `status WORKSPACE`, and `stop WORKSPACE` or `stop --all`. The local bridge attaches to an already running workspace; it does not silently start one. A stdio MCP client uses the prepared environment's absolute Python executable with `-I -B /absolute/airlock.py _bridge /absolute/workspace`.
 
 ## Codex plugin
 

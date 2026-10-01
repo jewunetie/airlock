@@ -82,13 +82,14 @@ ABSENT -> STARTING -> READY <-> ACTIVE -> DRAINING -> STOPPED
 
 Startup validates configuration, pinned assets, accepted calibration, model availability, required scanner health, SRT probes, state access, and MCP startup before reporting readiness. A replaced, removed, or inaccessible workspace becomes unavailable.
 
+Starting a new runtime first opens a local settings screen. The operator sees the workspace, saved rules or configured defaults, editable approval/privacy/visibility modes, and the measured scanner profile. Accepting starts with those exact rules; cancelling starts no runtime. Valid choices are retained in owner-only configuration history before readiness probes. A running workspace opens its current control screen, where explicit governance edits are saved. Scanner findings cannot override the chosen rules or accept their own configuration.
+
 Each workspace executes one task at a time and queues additional tasks. Workspace runtimes share expensive model and scanner resources rather than loading a copy per workspace.
 
 The public commands are:
 
 ```text
 airlock [PATH]
-airlock [PATH] --headless
 airlock ps
 airlock status [PATH|ID]
 airlock stop [PATH|ID]
@@ -288,11 +289,13 @@ When the last runtime stops, shared scanner/model clients are closed and the sha
 
 ## 14. Configuration, provisioning, and calibration
 
-Configuration precedence is defaults, preset, trusted user configuration, explicit CLI overrides, and temporary runtime settings. Workspace files and ambient environment variables cannot broaden governance.
+Configuration precedence is defaults, preset, trusted user configuration, saved workspace governance, explicit CLI overrides, and temporary runtime settings. An explicit CLI preset bypasses saved workspace governance. Saved rules are bound to the workspace's canonical path/device/inode and still shown for acceptance before a new runtime starts. Workspace files and ambient environment variables cannot broaden governance.
 
 All runtime assets are local and pinned: application source, Python package versions, SRT, Betterleaks/rules, model/tokenizer/custom code assets, and the selected Ollama model digest. A preparation utility builds the local manifest. Provisioning may install dependencies; the running application does not download them.
 
 PII, policy, and reassembly thresholds come from a labeled adversarial benchmark. Calibration and held-out cases are distinct. Profiles bind the evaluated code, assets, model, and relevant configuration, report false positives and false negatives, and require local review. Missing or incompatible calibration does not silently become an arbitrary enforced default.
+
+The startup screen can accept the exact measured profile for that workspace without changing its global review flag. Acceptance is tied to its SHA-256 digest and current code/assets binding. Scanner sensitivity stays read-only in the screen; changing it requires a compatible measured profile and restart. Runtime privacy/approval modes can be edited explicitly. Pending tasks retain policy intersections, and edits invalidate pending votes. Enabling scanners after an off-mode start requires restart; changing workspace write capabilities also requires restart.
 
 Cloud tool descriptions and behavior are evaluated on synthetic use/no-use, disclosure intent, status polling, cancellation, permission-bypass, and withheld-output cases. Actual target models must be evaluated; schema validity alone is not evidence of correct tool selection.
 

@@ -84,7 +84,6 @@ The public commands are:
 
 ```text
 airlock [PATH]
-airlock [PATH] --headless
 airlock ps
 airlock status [PATH|ID]
 airlock stop [PATH|ID]

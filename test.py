@@ -645,6 +645,52 @@ def test_enforced_startup_requires_explicit_calibration():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize('vote', ['approve', 'deny', 'blocked'])
+async def test_manual_release_through_textual_and_local_socket(vote):
+    from textual.widgets import DataTable, TextArea
+    with tempfile.TemporaryDirectory(dir='/private/tmp' if sys.platform == 'darwin' else None) as directory:
+        home = Path(directory)
+        supervisor = a.Supervisor(home/'state')
+        scanner = Scanner([a.ScanResult([finding()])]) if vote == 'blocked' else Scanner()
+        f = Fixture(home, a.Governance(request='allow', read='allow', release='manual'), scanner, supervisor.store)
+        supervisor.runtimes[f.runtime.id] = f.runtime
+        server = await asyncio.start_unix_server(supervisor.connection, str(supervisor.socket))
+        supervisor.socket.chmod(0o600)
+        task = f.task()
+        release = asyncio.create_task(f.release('synthetic candidate', task=task))
+        try:
+            app = a.make_tui(supervisor.state, f.runtime.id)
+            async with app.run_test(size=(140, 55)) as pilot:
+                await pilot.pause()
+                table = app.query_one('#approvals', DataTable)
+                if vote == 'blocked':
+                    assert (await asyncio.wait_for(release, 5))['response'] is None
+                    assert table.row_count == 0 and not f.runtime.approvals.pending
+                    assert f.store.final(task.id, f.runtime.id)['reason'] == 'privacy'
+                else:
+                    assert table.row_count == 1
+                    table.focus()
+                    await pilot.press('enter')
+                    await pilot.pause()
+                    review = a.json.loads(app.query_one('#review', TextArea).text)
+                    assert review['content']['request'] == task.request.request
+                    assert review['content']['disclosure_request'] == task.request.disclosure_request
+                    assert review['content']['candidate'] == 'synthetic candidate'
+                    assert await pilot.click('#'+vote)
+                    result = await asyncio.wait_for(release, 5)
+                    assert result['state'] == ('completed' if vote == 'approve' else 'withheld')
+                    assert result['response'] == ('synthetic candidate' if vote == 'approve' else None)
+                    assert not f.runtime.approvals.pending
+                    assert not f.runtime.approvals.decide(review['id'], True, review['version'])
+        finally:
+            release.cancel()
+            await asyncio.gather(release, return_exceptions=True)
+            server.close()
+            await server.wait_closed()
+            f.store.close()
+
+
+@pytest.mark.asyncio
 async def test_conflicting_identity_pairs_do_not_merge_distinct_tasks(tmp_path):
     f = Fixture(tmp_path)
     try:

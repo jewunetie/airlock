@@ -2781,6 +2781,7 @@ async def run_coder(command: dict, channel: ChildChannel, settings: Settings, ro
         raise AirlockError('coder_contract_changed')
     hooks = Hooks()
     verdict = {'value':'not_assessed'}
+    deferred_args = {}
 
     def record_verdict(value):
         # No model-generated explanation ever goes to status or audit.
@@ -2809,6 +2810,7 @@ async def run_coder(command: dict, channel: ChildChannel, settings: Settings, ro
                    'approved': bool(ctx.tool_call_approved)}
         reply = await channel.call('tool_check', details)
         if reply['decision'] == 'manual':
+            deferred_args[call.tool_call_id] = dict(args)
             raise ApprovalRequired(metadata={'airlock':'local_only'})
         if reply['decision'] != 'allow':
             raise ToolFailed('This operation is not permitted by local policy.')
@@ -2842,8 +2844,11 @@ async def run_coder(command: dict, channel: ChildChannel, settings: Settings, ro
             raise AirlockError('external_tools_forbidden')
         results = DeferredToolResults()
         for call in requests.approvals:
+            args = deferred_args.pop(call.tool_call_id, None)
+            if args is None:
+                raise AirlockError('approval_arguments_missing')
             reply = await channel.call('approve_tool', {'name':call.tool_name,
-                'args':call.args_as_dict(), 'id':call.tool_call_id})
+                'args':args, 'id':call.tool_call_id})
             results.approvals[call.tool_call_id] = reply['allow']
         return results
 

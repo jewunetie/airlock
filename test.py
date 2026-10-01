@@ -439,6 +439,8 @@ async def test_actual_coder_tools_and_approval_hook_contract(tmp_path, manual, m
     document.write_text('Synthetic local file read positive control')
     policy = a.Governance(request='allow', read='manual' if manual else 'allow', write='allow', shell='allow',
                           write_visibility='visible', release='auto')
+    fixture = Fixture(tmp_path, policy)
+    task = fixture.task()
     class Channel:
         def __init__(self):
             self.calls = []
@@ -461,9 +463,15 @@ async def test_actual_coder_tools_and_approval_hook_contract(tmp_path, manual, m
                                         {'response': 'Synthetic result', 'protected_sources': []})
                 return {'response': TypeAdapter(ModelResponse).dump_python(ModelResponse(parts=[part]), mode='json')}
             if op == 'tool_check':
-                return {'decision': 'manual' if manual and not value['approved'] else 'allow'}
+                return await fixture.runtime.worker_message(task, {'op':op, 'payload':value})
             if op == 'approve_tool':
-                return {'allow': True}
+                pending = asyncio.create_task(fixture.runtime.worker_message(task, {'op':op, 'payload':value}))
+                while not fixture.runtime.approvals.pending:
+                    await asyncio.sleep(0)
+                vote = next(iter(fixture.runtime.approvals.pending.values()))
+                assert vote.content['args'] == next(data['args'] for name, data in self.calls if name == 'tool_check')
+                assert fixture.runtime.approvals.decide(vote.id, True, vote.version)
+                return await pending
             if op == 'guard':
                 return {'decision': 'allow'}
             if op in ('tool_finished', 'trajectory'):
@@ -480,6 +488,7 @@ async def test_actual_coder_tools_and_approval_hook_contract(tmp_path, manual, m
     assert len(approvals) == int(manual)
     assert [value['approved'] for value in checks] == ([False, True] if manual else [False])
     assert [value for op, value in channel.calls if op == 'tool_finished'] == [{'id': 'read-1'}]
+    assert task.tool_calls == 1 and 'read-1' in task.consumed
 
 
 def test_caller_fields_cannot_grant_authority():

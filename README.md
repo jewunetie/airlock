@@ -36,6 +36,8 @@ Release checks serialize across workspaces. SQLite commits the disclosure eviden
 
 The complete runtime needs compatible Pydantic AI/Harness, FastMCP/Tasks, Textual, scanner/media dependencies, a pinned Sandbox Runtime, a pinned Betterleaks executable/rules, reviewed local encoder assets/helpers, and a local Ollama model with tools. Enforce/warn startup also requires an explicitly reviewed calibration profile bound to the actual source and assets. The supplied design references provisioning tools and a test corpus that are absent from this repository. No accepted live profile is supplied.
 
+Native `list_files` and `grep` also need `rg` on the worker's clean PATH. Grant the executable, its required libraries, and loader symlinks through local `extra_runtime_reads`; do not grant unrelated user folders. On macOS, a Homebrew library's `opt` symlink may require its own read permission even when the resolved library is allowed.
+
 Install the locked development dependencies and run the synthetic contract suite:
 
 ```sh

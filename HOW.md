@@ -4,6 +4,8 @@ This specification defines the authorized promotion of `new_design` to the repos
 
 ## Data model
 
+- Approved Codex plugin: reuse `AskRequest`, task/final responses, local runtime selection, and all existing governance. The local connection is a JSON `mcpServers.airlock` stdio entry with absolute Python/source/workspace paths and `-I -B`; no token is written into it. Repository plugin metadata and skill instructions contain no private folder or credentials. Prepared dependencies use the existing `AssetSpec`, `PreparedRuntime`, and `CalibrationProfile`; calibration records measured calibration/held-out cases and remains unreviewed until local acceptance.
+
 - Preserve the redesign's typed governance, settings, worker output, findings, task states, boundary history, and finite-occurrence fragment graphs.
 - `AskRequest` contains immutable UTF-8 `request: str`, `disclosure_request: str | None`, and optional `request_id: str | None`. IDs are nonblank and at most 256 characters, matching the existing native identity bound. IDs grant no authority. Request/disclosure fields retain their existing bounds.
 - A release review contains the exact request, disclosure purpose, candidate text, local workspace ID/path, effective governance, configuration version, canonical findings, and fixed scanner failures. This is private review data, never public status or content-free audit data.
@@ -13,6 +15,12 @@ This specification defines the authorized promotion of `new_design` to the repos
 - Explicit history deletion removes completed boundary interactions in the selected workspace. Active interactions, audit/configuration records, opaque task identity/payload fingerprints, and the disclosure ledger/key remain. Deleted retry identities become durable tombstones; no raw request, purpose, or final response remains in those records.
 
 ## API contract
+
+- Pinned SRT invocation preserves the existing profile/role/command data and uses its explicit `-c COMMAND` CLI contract for the shell-quoted command string. Location: `SRTLauncher.spawn` in `airlock.py`; assertions in `test.py` check exact argv and unchanged deny-all networking, with the real scanner/worker probes checking execution and confinement. Startup failure remains fail-closed.
+- Private scratch uses its canonical filesystem path in the profile and child environment, preserving the same directory and capabilities when the host temporary directory has a symlink alias. The SRT regression asserts the `TMPDIR` grant is canonical; live scanner probes verify temporary-cache use without allowing shared temp access.
+- SRT's `CLAUDE_CODE_TMPDIR` is set to the same private scratch directory because SRT otherwise replaces `TMPDIR`. Its implicit shared `/tmp/claude` write grants are explicitly denied in both alias spellings; scratch overlapping that shared location fails with `scratch_overlap`. Existing data models/API remain unchanged. Profile/env assertions and an existing shared-temp synthetic canary test that denial with real SRT.
+
+- Local-only `airlock plugin [PATH]` emits the stdio MCP connection JSON for an existing canonical folder (current directory when omitted). It does not start a runtime, change policy, read document contents, install dependencies, or grant cloud folder selection. `codex_mcp_config(target: Path) -> dict` validates the folder and uses the current prepared Python executable and production source. Invalid folders use the existing fixed workspace error; invalid CLI shapes use `invalid_command`. The bridge remains attach-only and fails when its selected runtime is absent. Rebinding requires regenerating the local connection and reinstalling/reloading the plugin; an existing bridge remains bound to its original runtime.
 
 - `ask(request, disclosure_request=None, request_id=None)` admits one logical task. With no identity, intentional duplicate requests remain separate tasks. A repeated identity with identical payload returns the original task/committed result; changed payload returns a fixed identity-conflict error. A new native delivery can attach to an existing client-identified task. Identity lookup and new task creation occur in one transaction before queueing; failures schedule no work.
 - Supervisor restart retains committed results and marks unfinished tasks interrupted without rerunning writes. A replay attaches to that terminal result. Storage migration preserves existing native identities and disclosure geometry.
@@ -25,6 +33,8 @@ This specification defines the authorized promotion of `new_design` to the repos
 
 ## Location
 
+- Codex plugin metadata/skill: `plugins/airlock/.codex-plugin/plugin.json`, `plugins/airlock/skills/airlock/SKILL.md`; local marketplace: `plugins/.agents/plugins/marketplace.json`. Machine-specific `plugins/airlock/.mcp.json` is generated locally and ignored by Git. Connection generation stays in `airlock.py`; regressions remain in `test.py`; usage/evidence in `README.md`/`VALIDATION.md`. Provisioning scripts, downloaded assets, manifests, dummy files, and calibration results stay outside committed source and outside the dummy workspace. No second production Python module is introduced.
+
 - Active production module: root `airlock.py`, promoted from the saved candidate.
 - Public architecture and usage: root `ARCHITECTURE.md` and `README.md`, updated for accepted contracts.
 - Dependency/build metadata and CI: root `pyproject.toml`, generated `uv.lock`, `.gitignore`, the PEP 723 source header, and `.github/workflows/tests.yml`, migrated to the redesigned contracts. One source version drives build metadata. Dependency changes and lock generation use `uv`.
@@ -32,6 +42,8 @@ This specification defines the authorized promotion of `new_design` to the repos
 - Historical design/review files in `new_design` remain a saved reference and must identify which root files are authoritative.
 
 ## Tests and assertions
+
+- Validate plugin metadata and selected-folder connection generation, including spaces, symlink canonicalization, nonexistent folders, strict three-tool schemas, attach-only failure, and actual stdio-to-authenticated-HTTP bridge operation against a synthetic dummy runtime. Check that the bridge cannot select another workspace through tool arguments, that no private output appears in receipts/errors, and that legitimate work succeeds. Exercise the installed plugin's connection settings. Provision pinned sandbox/scanners without re-downloading cached weights; test real confinement and scanner canaries before starting a live worker. Measure calibration and held-out cases separately, report false positives/negatives, and seek local acceptance of the concrete profile before enforced runtime startup. Never set privacy off or label fixture results as live acceptance.
 
 The approved information-flow clarification uses the existing data model and APIs above: workspace content and derived results stay private by default, untrusted text grants no authority, and `protected_sources` is detection evidence rather than permission. Location: `ARCHITECTURE.md` for the explicit rules and boundary table; `test.py` for missing sequence checks; `VALIDATION.md` for executed evidence. No new per-file labels, runtime dependency, or public API is introduced.
 

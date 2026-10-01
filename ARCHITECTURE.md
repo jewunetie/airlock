@@ -93,9 +93,12 @@ airlock ps
 airlock status [PATH|ID]
 airlock stop [PATH|ID]
 airlock stop --all
+airlock plugin [PATH]
 ```
 
 An omitted target means the current directory. The developer workflow is `uv run airlock` from a prepared local repository. Closing a TUI does not stop its runtime. A cloud bridge never silently creates a runtime.
+
+`plugin` emits local Codex connection settings for the chosen folder. It does not start a runtime or alter policy. The repository's plugin carries the existing three-tool bridge and usage instructions. Machine-specific connection paths stay out of Git. A changed folder requires a regenerated connection and plugin reload; an already running bridge keeps its original binding.
 
 ## 6. Cloud interface
 

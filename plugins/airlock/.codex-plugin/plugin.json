@@ -1,0 +1,15 @@
+{
+  "name": "airlock",
+  "version": "0.4.0-dev.0",
+  "description": "Delegate work in a locally selected private folder through governed Airlock tools.",
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Airlock",
+    "shortDescription": "Work privately in a folder you choose locally.",
+    "longDescription": "Use the local Airlock worker and approval window. Only a requested, authorized answer can return. Requires a prepared, running Airlock workspace; privacy checks are best effort.",
+    "category": "Developer Tools",
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": ["Use Airlock to work in my selected private folder."]
+  }
+}

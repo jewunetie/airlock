@@ -1741,7 +1741,8 @@ class SRTLauncher:
                 raise AirlockError('workspace_too_broad')
             allowed.append(root)
         if scratch is not None:
-            if overlaps(scratch, self.state) or (root is not None and overlaps(scratch, root)):
+            if (overlaps(scratch, self.state) or overlaps(scratch, Path('/private/tmp/claude'))
+                    or (root is not None and overlaps(scratch, root))):
                 raise AirlockError('scratch_overlap')
             allowed.append(scratch)
         writes = ([str(root)] if root is not None and writable else []) + ([str(scratch)] if scratch else [])
@@ -1749,7 +1750,8 @@ class SRTLauncher:
                            'allowLocalBinding': False, 'allowAllUnixSockets': False, 'allowUnixSockets': []},
                 'filesystem': {'denyRead': ['/', str(self.state), '/proc', '/sys'],
                     'allowRead': sorted(set(map(str, allowed))), 'allowWrite': writes,
-                    'denyWrite': [str(self.state), '/proc', '/sys', *map(str, runtime), *map(str, assets)]
+                    'denyWrite': [str(self.state), '/proc', '/sys', '/tmp/claude', '/private/tmp/claude',
+                                  *map(str, runtime), *map(str, assets)]
                         + ([str(root)] if root is not None and not writable else [])},
                 'enableWeakerNestedSandbox': False, 'enableWeakerNetworkIsolation': False,
                 'allowAppleEvents': False}
@@ -1782,7 +1784,7 @@ class SRTLauncher:
         parent = self.settings.scratch_root
         if parent is None and sys.platform.startswith('linux') and Path('/dev/shm').is_dir():
             parent = Path('/dev/shm')
-        scratch = Path(tempfile.mkdtemp(prefix='airlock-job-', dir=parent))
+        scratch = Path(tempfile.mkdtemp(prefix='airlock-job-', dir=parent)).resolve(strict=True)
         path = self.state/('srt-'+uuid.uuid4().hex+'.json')
         marker = secrets.token_hex(32)
         registry = private_directory(self.state/'jobs')/(marker+'.json')
@@ -1790,10 +1792,10 @@ class SRTLauncher:
         try:
             profile = self.profile(root, writable=writable, assets=list(assets), scratch=scratch)
             atomic_private_write(path, json_bytes(profile))
-            env = {**clean_environment(), 'TMPDIR': str(scratch), 'HOME': str(scratch),
+            env = {**clean_environment(), 'TMPDIR': str(scratch), 'CLAUDE_CODE_TMPDIR': str(scratch), 'HOME': str(scratch),
                    'AIRLOCK_JOB': marker}
             cmd = shlex.join([sys.executable, '-I', '-B', str(self.source), '_'+role])
-            process = await asyncio.create_subprocess_exec(str(self.executable), '--settings', str(path), cmd,
+            process = await asyncio.create_subprocess_exec(str(self.executable), '--settings', str(path), '-c', cmd,
                 stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
                 cwd='/', env=env, start_new_session=True)
             return SandboxProcess(process, path, scratch=scratch, marker=marker, registry=registry,
@@ -3472,6 +3474,20 @@ async def bridge(target: str, state: Path):
     await proxy.run_async(transport='stdio')
 
 
+def codex_mcp_config(target: Path) -> dict:
+    """Return a local stdio connection bound to one existing canonical folder.
+
+    Does not start Airlock or grant permissions. The Python environment and
+    source must remain installed at these paths. Invalid folders fail with
+    the existing fixed workspace error; credentials stay in the supervisor.
+    """
+    root = canonical_workspace(target)
+    return {'mcpServers': {'airlock': {
+        'command': str(Path(sys.executable).absolute()),
+        'args': ['-I', '-B', str(Path(__file__).resolve()), '_bridge', str(root)],
+    }}}
+
+
 
 
 DEPENDENCIES = {'pydantic_ai':'pydantic-ai-slim', 'pydantic_ai_harness':'pydantic-ai-harness',
@@ -3899,6 +3915,10 @@ def cli_action(args: CLI, cwd: Path):
     tokens = args.args
     if len(tokens) > 2:
         raise AirlockError('invalid_command')
+    if tokens and tokens[0] == 'plugin':
+        if args.all:
+            raise AirlockError('invalid_command')
+        return 'plugin', str(Path(tokens[1] if len(tokens) == 2 else cwd).expanduser().resolve())
     if tokens and tokens[0] in ('ps','status','stop'):
         operation = tokens[0]
         if operation == 'ps':
@@ -3919,7 +3939,9 @@ def cli_action(args: CLI, cwd: Path):
 async def public_cli(args: CLI):
     state = user_state_path('airlock')
     action, target = cli_action(args, Path.cwd())
-    if action == 'start':
+    if action == 'plugin':
+        print(json.dumps(codex_mcp_config(Path(target)), indent=2, ensure_ascii=True))
+    elif action == 'start':
         governance = {key:value for key,value in {'request':args.admission, 'read':args.read, 'write':args.write,
             'shell':args.shell, 'release':args.release, 'privacy':args.privacy,
             'write_visibility':args.write_visibility, 'shell_visibility':args.shell_visibility}.items() if value is not None}

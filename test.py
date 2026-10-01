@@ -7,6 +7,7 @@ import random
 import sys
 from pathlib import Path
 import subprocess
+import tempfile
 import tomllib
 
 import pytest
@@ -759,6 +760,117 @@ async def test_real_http_auth_and_browser_boundary(tmp_path):
     finally:
         await f.runtime.stop()
         f.store.close()
+
+
+def test_codex_plugin_connection_and_metadata(tmp_path):
+    root = tmp_path/'chosen folder'
+    root.mkdir()
+    alias = tmp_path/'alias'
+    alias.symlink_to(root, target_is_directory=True)
+    config = a.codex_mcp_config(alias)
+    entry = config['mcpServers']['airlock']
+    assert entry == {'command': str(Path(sys.executable).absolute()),
+                     'args': ['-I', '-B', str(Path(a.__file__).resolve()), '_bridge', str(root)]}
+    assert 'token' not in a.json.dumps(config)
+    assert a.cli_action(a.CLI(args=['plugin']), root) == ('plugin', str(root))
+    with pytest.raises(a.AirlockError, match='invalid_command'):
+        a.cli_action(a.CLI(args=['plugin'], all=True), root)
+    with pytest.raises(a.AirlockError, match='workspace_unavailable'):
+        a.codex_mcp_config(tmp_path/'missing')
+    plugin = Path(__file__).parent/'plugins'/'airlock'
+    manifest = a.json.loads((plugin/'.codex-plugin'/'plugin.json').read_text())
+    assert manifest['name'] == 'airlock' and manifest['mcpServers'] == './.mcp.json'
+    assert manifest['version'].replace('-dev.', '.dev') == a.__version__
+    assert (plugin/'skills'/'airlock'/'SKILL.md').is_file()
+    catalog = a.json.loads((plugin.parent/'.agents'/'plugins'/'marketplace.json').read_text())
+    assert catalog['plugins'][0]['source'] == {'source': 'local', 'path': './airlock'}
+
+
+@pytest.mark.asyncio
+async def test_srt_command_string_uses_explicit_flag(tmp_path, monkeypatch):
+    executable = tmp_path/'srt'
+    executable.write_text('Synthetic executable, never run')
+    digest = a.hashlib.sha256(executable.read_bytes()).hexdigest()
+    settings = a.Settings(srt=executable, srt_sha256=digest, srt_version='fixture',
+        srt_asset=a.AssetSpec(path=tmp_path, revision='fixture', sha256={'srt': digest}), scratch_root=tmp_path)
+    launcher = a.SRTLauncher(settings, a.private_directory(tmp_path/'state'))
+    calls = []
+    async def capture(*args, **kwargs):
+        calls.append((args, kwargs))
+        return object()
+    monkeypatch.setattr(a.asyncio, 'create_subprocess_exec', capture)
+    monkeypatch.setattr(a, 'SandboxProcess', lambda *args, **kwargs: object())
+    await launcher.spawn('scanner')
+    args, options = calls[0]
+    assert args[0] == str(executable) and args[1] == '--settings' and args[3] == '-c'
+    assert a.shlex.split(args[4]) == [sys.executable, '-I', '-B', str(Path(a.__file__).resolve()), '_scanner']
+    profile = a.json.loads(Path(args[2]).read_text())
+    assert profile['network']['allowedDomains'] == [] and profile['network']['deniedDomains'] == ['*']
+    assert options['env']['HF_HUB_OFFLINE'] == '1' and options['cwd'] == '/'
+    scratch = Path(options['env']['TMPDIR'])
+    assert scratch == scratch.resolve(strict=True)
+    assert profile['filesystem']['allowWrite'] == [str(scratch)]
+    assert options['env']['CLAUDE_CODE_TMPDIR'] == str(scratch)
+    assert {'/tmp/claude', '/private/tmp/claude'} <= set(profile['filesystem']['denyWrite'])
+    with pytest.raises(a.AirlockError, match='scratch_overlap'):
+        launcher.profile(None, scratch=Path('/private/tmp/claude/job'))
+
+
+@pytest.mark.asyncio
+async def test_codex_stdio_bridge_selected_folder_and_attach_only():
+    from fastmcp import Client
+    from fastmcp.client.transports import StdioTransport
+    # Short socket paths also work on macOS; no real user history is touched.
+    with tempfile.TemporaryDirectory(dir='/private/tmp' if sys.platform == 'darwin' else None) as directory:
+        home = Path(directory)
+        # Ask the same isolated Python/platformdirs used by the bridge for its path.
+        env = {**a.os.environ, 'HOME': str(home), 'XDG_STATE_HOME': str(home/'state')}
+        probe = subprocess.run([sys.executable, '-I', '-B', '-c',
+            "from platformdirs import user_state_path; print(user_state_path('airlock'))"],
+            env=env, capture_output=True, text=True, check=True)
+        state = Path(probe.stdout.strip())
+        supervisor = a.Supervisor(state)
+        f = Fixture(home, store=supervisor.store)
+        other = Fixture(home, store=f.store, name='other')
+        supervisor.runtimes = {r.id: r for r in (f.runtime, other.runtime)}
+        server = await asyncio.start_unix_server(supervisor.connection, str(supervisor.socket))
+        supervisor.socket.chmod(0o600)
+        entry = a.codex_mcp_config(f.root)['mcpServers']['airlock']
+        transport = StdioTransport(**entry, env=env, keep_alive=False)
+        try:
+            await a.start_mcp(f.runtime)
+            async with Client(transport, mode='legacy', timeout=20) as client:
+                tools = {t.name: t for t in await client.list_tools()}
+                assert set(tools) == {'ask', 'status', 'stop'}
+                assert set(tools['ask'].input_schema['properties']) == {'request', 'disclosure_request', 'request_id'}
+                with pytest.raises(Exception):
+                    await client.call_tool('ask', {'request': 'Work', 'workspace': str(other.root)})
+                assert not f.runtime.tasks and not other.runtime.tasks
+                args = {'request': 'Synthetic plugin work', 'request_id': 'plugin-retry'}
+                call = asyncio.create_task(client.call_tool('ask', args))
+                for _ in range(1000):
+                    if f.runtime.tasks:
+                        break
+                    await asyncio.sleep(0.005)
+                task = next(iter(f.runtime.tasks.values()))
+                await f.release('Synthetic private candidate', task=task)
+                submitted = (await call).data
+                assert submitted['task_id'] == task.id
+                result = (await client.call_tool('status', {'task_id': task.id})).data['result']
+                assert result['state'] == 'completed' and result['response'] is None
+                assert 'Synthetic private candidate' not in str(result)
+                assert not other.runtime.tasks
+                assert (await client.call_tool('ask', args)).data['task_id'] == task.id
+                assert (await client.call_tool('status', {'task_id': task.id})).data['result'] == result
+            supervisor.runtimes.clear()
+            with pytest.raises(a.AirlockError, match='runtime_not_running'):
+                await a.bridge(str(f.root), state)
+            assert not supervisor.runtimes
+        finally:
+            server.close()
+            await server.wait_closed()
+            await f.runtime.stop()
+            f.store.close()
 
 
 def test_storage_limit_configuration_and_reopen(tmp_path):

@@ -45,6 +45,36 @@ Python 3.11 or newer on macOS/Linux is required. Package installation and `uv ru
 
 After local preparation, the CLI accepts a workspace, `--headless`, `--config PATH`, `ps`, `status WORKSPACE`, and `stop WORKSPACE` or `stop --all`. The local bridge attaches to an already running workspace; it does not silently start one. A stdio MCP client uses the prepared environment's absolute Python executable with `-I -B /absolute/airlock.py _bridge /absolute/workspace`.
 
+## Codex plugin
+
+The local plugin lives in `plugins/airlock`. Choose an existing folder locally,
+then generate its connection from this checkout's prepared environment:
+
+```sh
+uv run --locked airlock plugin "/absolute/chosen folder" > plugins/airlock/.mcp.json
+codex plugin marketplace add "$PWD/plugins" --json
+codex plugin add airlock@airlock-local --json
+```
+
+These commands require a Codex CLI with `plugin` support. On this Mac, the app's
+bundled CLI is `/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex`;
+the separately installed CLI is older. The generated connection is ignored by
+Git and contains no token. It uses absolute paths to this checkout and Python
+environment, which must remain available.
+
+Start that same folder locally with `uv run --locked airlock "/absolute/chosen folder"`.
+The default policy asks for local admission/read/release approval and keeps privacy
+enforced. In Codex, enable/reload the plugin and ask it to use Airlock for the work.
+It exposes only `ask`, `status`, and `stop`; the cloud cannot choose another folder
+or approve its own operations. A missing runtime returns an unavailable connection.
+The skill guides usage; the supervisor and sandbox enforce the boundary.
+
+To choose a different folder, regenerate the connection, reinstall/reload the
+plugin, and start the new folder locally. Existing bridges retain their original
+binding. Installation does not provision scanners or accept a calibration profile.
+Check `VALIDATION.md` for the distinction between synthetic bridge checks and live
+scanner/worker evidence before using private documents.
+
 Protected sources are fallible model-supplied hints. An omitted or late declaration can miss a cumulative disclosure. Raw sources live in memory; after restart, old fragment evidence reconnects only when the source is declared again. Semantic answers, timing, refusal patterns, and arbitrary covert encodings are not comprehensively detected. Scanner accuracy and actual platform confinement require live evidence.
 
 SQLite deliberately stores exact requests, disclosure purposes, and committed final responses in owner-only local history. Rejected candidates, raw source hints, tool output, and model reasoning are excluded. History is kept until explicit local deletion, which removes completed transcripts for the selected workspace. Active tasks, audit/configuration records, opaque retry records, and disclosure evidence remain.

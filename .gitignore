@@ -19,3 +19,7 @@ decisions*.json
 # SDD process artifacts: implementer reports and ledgers. Scratch for how the
 # work was done, not part of the tool. Kept on disk, never committed.
 .superpowers/
+
+# Local machine binding and prepared assets/calibration, not public source.
+plugins/airlock/.mcp.json
+runtime.manifest.json

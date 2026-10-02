@@ -4,6 +4,176 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+Task 5 prepared a private measured candidate for the current source, without
+activation or acceptance. Actual SRTLauncher/ScannerService required startup
+probes passed; one scanner generation measured every original calibration and
+held-out case at unchanged sensitivity `0.3` / `0.5`, no overrides and reassembly
+fraction `1.0`. Both splits contain 12 benign and 12 private examples, are
+disjoint and exclude startup canaries. Calibration: **4/12 benign false blocks,
+0/12 private misses**. Held-out: **6/12 benign false blocks, 0/12 private misses**.
+No detector failed; all false blocks came from the policy linter. These are
+fresh measurements of a small synthetic corpus, not field accuracy or a reason
+to recommend the profile for real documents. No threshold selection occurred.
+
+Candidate root: `/private/tmp/airlock-tax-refresh-9tp83mfy`; profile SHA-256:
+`223d90c8c74a24876267e5789803ce86221938399526fbace00c878d237b22ee`.
+It retains raw corpus/provenance/findings and an exact current-source copy.
+Original prepared_settings verifies its source/packages; load_calibration
+verifies its new binding. A separate fresh process importing the candidate copy
+independently recomputed errors and verified bindings and permissions. The
+profile remains `reviewed: false`, workspace acceptance remains null, and
+calibrated_settings refuses `calibration_not_accepted`. The actual Textual
+startup displayed the measured summary and Cancel returned None. No runtime
+started. Active manifest/profile/settings and all existing top-level preparation
+artifacts remain byte-identical. Owned scanner processes/jobs are gone; the
+existing empty old-source supervisor and shared resident model are retained.
+Detailed commands/evidence are in `.superpowers/sdd/tax-task-5-report.md`.
+Activation and exact per-workspace local acceptance require separate approval;
+the old installed bindings and supervisor remain stale by design.
+
+Task 4's authorized bounded cleanup/PDF changes passed **23 focused locked
+checks, zero skips/failures, 105 deselected**. Corrected regressions against the
+unchanged `f981b60` source snapshot first produced **9 failed, 13 passed**,
+including the nullable-UID dereference, already-gone final-status race and lost
+PDF resource-error identity. Positive controls discover/terminate an actual
+owned marked child and extract actual PDF text through framed child IPC with
+test-only successful limits. Those injected limits prove wiring, not resource
+enforcement. Memory/unknown/parser errors, uncertain/live survivors, watcher
+faults, exact safe Coder ToolFailed text and cancellation cleanup are asserted.
+
+The controller's subsequent full locked suite recorded **127 passed, 1 failed**:
+the existing storage-configuration fixture consulted the active ignored runtime
+manifest, whose source binding correctly became stale. This full-suite failure
+is preserved, not counted as a pass. Reviewer also found the actual-hard-cap
+test incorrectly inferred capability from platform name. Authorized test-only
+corrections now probe actual required limit installation in an owned fresh child
+with production imports/executor/settings, requiring real extraction when limits
+install or exact resource refusal when the probe proves failure. Storage uses an
+owned current-source PreparedRuntime fixture through original prepared_settings;
+all cap/reopen assertions remain and actual source tampering must reject
+load_settings with asset_hash_mismatch. Targeted corrected run: **24 passed,
+104 deselected, zero skips/failures**. Active manifest/profile and production
+source bytes are independently verified unchanged. Independent rereview approved
+the corrected bounded changes. The controller's final full locked suite passed
+**128 tests, zero skips/failures, exit 0**. Offline source/wheel builds and actual
+archive listings under `/private/tmp/airlock-tax-reviewed-build-c639` verify one
+root production module, packaging metadata/docs and no historical/private
+configuration. The earlier 127/1 failure remains recorded above; final core
+success does not establish financial workflow or PDF readiness.
+
+The new-source actual SRT PDF diagnostic passed confinement startup probes;
+both synthetic text/encrypted PDFs returned exact
+`pdf_resource_limit_unavailable` without extracted text. The watcher remained
+running before close, close succeeded and no private job records remained.
+Actual unmodified macOS hard-limit installation also refuses parsing. All
+required limits remain; PDF readiness, original cleanup failure causation and
+original arithmetic failures are not claimed resolved. No RSS monitor or model
+changes were introduced. Detailed evidence is in
+`.superpowers/sdd/tax-task-4-report.md`.
+
+Production source changed from SHA-256
+`fe055275b0deb74d9dd3f1da7dcafb57879ecdcc7668b1a0a94237c384b3b145` to
+`c639cd39d2ad63411ccf3120fc81b8efe909770092a08f41ccf113c4d96b761a`.
+Existing runtime manifest/calibration bindings remain untouched and stale:
+current `prepared_settings()` correctly refuses `asset_hash_mismatch`. The SRT
+diagnostic used previously captured trusted settings privately, never a rebound
+live profile or acceptance. New enforced live startup requires honest preparation,
+compatible measurement and explicit local acceptance. The unaccepted private
+candidate above satisfies measurement preparation only. Final controller core
+verification is recorded separately from the actual SRT refusal evidence.
+
+Task 3's bounded actual SRT arithmetic diagnostic passed startup probes but
+failed useful completion: two successful model requests returned malformed
+`4` plus a protected_sources line; strict LocalOutput JSON validation exhausted
+the existing retry. No output guard or release was reached. Installed backend
+preparation of the exact recorded parameters requires final_result tool output;
+the malformed reply violated that contract. This differs from the original
+single-call component failures and does not assign their cause. Owned watcher
+was running before close; original terminate/close succeeded, no owned process
+or job record remained, default supervisor was empty and shared model remained.
+The diagnostic runner's final binding check separately exited 1 due its local
+wrapper digest; a fresh independent process verified unchanged production/profile,
+reviewed false and thresholds 0.3/0.5. No inference rerun or production/test edit.
+
+Two separate fresh owned macOS Python children recorded RSS around 20 MiB and
+VMS around 500.5 billion bytes; both unchanged 512 MiB RLIMIT_AS and RLIMIT_DATA
+assignments raised ValueError: current limit exceeds maximum limit. Both children
+exited and were verified absent. These native probes support the existing PDF
+initialization failure, not a working alternative limit. RSS-monitor semantics
+remain pending human choice and unimplemented. Detailed evidence and limits are
+in `.superpowers/sdd/tax-task-3-report.md`; no earlier failure is recast as a pass.
+
+On 2026-10-02, bounded actual synthetic financial workflows exercised natural
+requests through the unchanged generated bridge, real stdio/authenticated MCP,
+local Textual votes, Coder, SRT, existing Ollama `gemma4:12b-mlx` and scanners.
+These used unique owner-only temporary workspaces, not the installed plugin's
+exact dummy-folder binding. The global profile remained `reviewed: false`, privacy
+enforce and thresholds `0.3` / `0.5` remained unchanged. Synthetic-only visible
+workspace writes were accepted locally with manual request/read/write/release and
+hidden shell. No production, dependency, manifest/profile binding or model changes.
+
+The ten primary cases had mixed outcomes. Local-only revised financial preparation
+and missing-field work produced actual correct artifacts and fixed null-response
+receipts. The revised source omitted all printed totals: independent Decimal and
+source-line checks confirm final wages, supplies and derived net. In that same
+runtime without source clearing, selected wages were withheld for privacy before
+review; selected net later released the exact correct amount through a real local
+Approve vote. The public-fact case also released its exact correct answer. Identifier
+and full-document requests were withheld; local admission Deny performed zero model
+or tool work. `2+2` and the arithmetic-based release-denial control failed with
+`component_unavailable`, rather than reaching review. All ten exact request retries
+returned the original task/result. Every reached primary vote rejected wrong
+versions and replay. No tested private identifier was released; this is bounded
+synthetic evidence, not field privacy accuracy.
+
+PDF evaluation preserved a failed, confounded first attempt: it wrote correct
+fields but also read a duplicate plaintext statement and later failed. Its next
+public-fact denial request was immediately committed as failed; a private harness
+assumption about queued tasks raised an error. That final result was recovered from
+its exact read-only SQLite record, and the private harness assumption was corrected.
+The bounded rerun had no plaintext financial sidecar. Both encrypted-input and
+text-PDF local tasks completed with fixed receipts. Independent Decimal/source
+checks confirm the actual PDF-only artifact; encrypted-input output marked wages
+unavailable without invented numbers, although its explanation incorrectly claimed
+PDF format was unsupported. The text case used `read_file` and native `grep` on
+the PDF. A separate actual SRT diagnostic isolates an unresolved adapter failure:
+both PDFs return `pdf_unavailable` at initialization, before any PDF bytes are sent.
+Direct parsing succeeds for text and rejects encrypted input. The useful
+PDF-only artifact is consistent with its observed grep fallback, not working sandboxed PDF
+`read_file` acceptance. Scanned-image/OCR readiness remains unmeasured.
+
+The controller independently reproduced the matching macOS platform failure:
+setting `resource.RLIMIT_AS` to the existing 512 MiB cap raises
+`ValueError: current limit exceeds maximum limit`. `pdf_child` does this before
+its first acknowledgement. This is direct platform-API evidence consistent with
+the observed initialization failure; the actual parser child's exception stack
+was not exposed. Production remains unchanged pending a separately approved fix.
+
+An owned actual prepared ScannerService under SRT measured six predetermined
+candidates with unchanged thresholds, separately from model/reassembly. Arithmetic,
+selected wages, selected net and public fact had zero findings/failures; synthetic
+identifier and full statement had findings and zero failures. The actual withheld
+wages candidate and raw hints are not available, so its live cause cannot be assigned
+to scanner versus reassembly/model behavior. A bounded local-only non-SRT Coder
+diagnostic returned the correct arithmetic answer, unlike the bridge failures; it
+does not reproduce or resolve their cause and is not release evidence.
+
+Two earlier runtime stops reported `process_cleanup_failed`; subsequent checks
+confirmed no active runtimes, scanner or worker processes, with shared Ollama
+intact. The final PDF-only runtime stopped cleanly. An owned-child ProcessTree
+probe and the owned SRT adapter diagnostic also closed cleanly; the intermittent
+cleanup cause remains unresolved. Actual release Deny was not reached and remains
+a live acceptance gap. Full private evidence and exact outcomes are listed in
+`.superpowers/sdd/tax-task-2-report.md`. No real financial data, tax year/law,
+calibration tuning, downloads, commit or push were used.
+
+The repository retains 16 synthetic golden cases and two generated text/blank PDF
+parser checks in `test.py`. Reproduce the focused checks with
+`uv run --locked python -B -m pytest -q test.py -k financial`.
+The authorized PDF parser addition passed its focused locked run: **2 passed,
+103 deselected**. The preceding controller full core run passed **103 tests**;
+the controller's final suite after the PDF addition is recorded separately.
+
 On 2026-10-01, the operator explicitly authorized accepting the measured profile for `/private/tmp/airlock-dummy-workspace` and running manual/automatic live workflows. The actual Textual startup screen accepted the exact profile for each tested workspace configuration; privacy stayed enforced, OS workspace access stayed read-only, and the global profile remained `reviewed: false`. The installed plugin's exact cached connection exercised real stdio, owner-only control, authenticated HTTP, Coder, SRT, Ollama `gemma4:12b-mlx`, and the real scanners together. No real private documents or new model downloads were used.
 
 The final five-scenario run **did not pass**. Manual and automatic benign requests both read the synthetic public file (two actual tool executions each) but returned `withheld`; no manual release approval was reached. Manual admission denial passed with zero model/tool calls. A no-disclosure task completed with a fixed receipt and no response text. The synthetic SSN request was withheld with no sensitive value in the result. Repeated exact request IDs returned the same committed results. All test runtimes were stopped afterward; the empty supervisor and shared Ollama service were left intact. Detailed synthetic evidence is local at `/private/tmp/airlock-live-workflow-results.json`.
@@ -78,7 +248,7 @@ Fresh review found and corrected a history-deletion reference to the removed `na
 
 ## Still required
 
-- Resolve the failed benign live release checks and complete live manual release approval. Combined Coder/SRT/Ollama/scanner execution now has dummy-only evidence; field privacy accuracy, image-model behavior, general process escape resistance, and combined memory use remain unmeasured.
-- Exercise interactive history flows and native disconnect/cancellation recovery. Actual startup and manual admission/read/denial handlers were exercised; the existing synthetic release UI checks do not establish successful live release or all client-recovery behavior.
+- Diagnose selected-wages withholding, arithmetic component failures and original intermittent cleanup failures; complete actual release Deny. Correct live net and public-fact manual releases have actual synthetic workflow evidence. Task 4 identifies PDF initialization refusal at required hard-limit installation and returns its exact safe error; usable sandboxed PDF parsing remains unavailable on this host. Field privacy accuracy, image/scanned-PDF behavior, general process escape resistance and combined memory use remain unmeasured.
+- Exercise interactive history flows and native disconnect/cancellation recovery. Actual startup, manual admission/read/denial and net/public-fact release Approve handlers were exercised; actual release Deny and complete client-recovery behavior remain open.
 
-The referenced preparation/calibration tools and corpus are absent from committed source; temporary local preparation and an explicitly accepted dummy-only profile were used above. Source tracking remains fallible and reconnects old evidence only when sources are declared again after restart. Core hardening checks pass, while live benign release acceptance remains outstanding.
+The referenced preparation/calibration tools and corpus are absent from committed source; temporary local preparation and an explicitly accepted dummy-only profile were used above. Source tracking remains fallible and reconnects old evidence only when sources are declared again after restart. Current core hardening checks pass. Selected-wages/arithmetic usability, original cleanup causation, actual release Deny and usable sandboxed PDF parsing remain open. The newly measured private candidate requires separate activation approval and exact local workspace acceptance; it grants no new approval evidence.

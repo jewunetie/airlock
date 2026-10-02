@@ -1639,7 +1639,7 @@ class ProcessTree:
         # Native shell helpers may detach/reparent before the next ancestry poll.
         for process in psutil.process_iter(['pid', 'uids']):
             with contextlib.suppress(psutil.Error, OSError):
-                if process.info['uids'].real == os.getuid() and process.environ().get('AIRLOCK_JOB') == self.marker:
+                if process.info['uids'] is not None and process.info['uids'].real == os.getuid() and process.environ().get('AIRLOCK_JOB') == self.marker:
                     self.known[process.pid] = process
 
     async def watch(self):
@@ -1663,8 +1663,10 @@ class ProcessTree:
             with contextlib.suppress(psutil.Error):
                 process.kill()
         _, survivors = await asyncio.to_thread(psutil.wait_procs, alive, timeout=2)
-        if any(p.is_running() and p.status() != psutil.STATUS_ZOMBIE for p in survivors):
-            raise AirlockError('process_cleanup_failed')
+        for process in survivors:
+            with contextlib.suppress(psutil.NoSuchProcess):
+                if process.is_running() and process.status() != psutil.STATUS_ZOMBIE:
+                    raise AirlockError('process_cleanup_failed')
 
 
 class SandboxProcess:
@@ -2657,9 +2659,13 @@ async def pdf_child():
         if type(expected) is not int or not 1 <= expected <= settings.max_pdf_bytes:
             raise AirlockError('pdf_input_limit')
         cap = settings.pdf_memory_mb*1024*1024
-        resource.setrlimit(resource.RLIMIT_AS, (cap, cap))
-        resource.setrlimit(resource.RLIMIT_CPU, (math.ceil(settings.pdf_timeout), math.ceil(settings.pdf_timeout)))
-        resource.setrlimit(resource.RLIMIT_FSIZE, (0, 0))
+        try:
+            resource.setrlimit(resource.RLIMIT_AS, (cap, cap))
+            resource.setrlimit(resource.RLIMIT_CPU, (math.ceil(settings.pdf_timeout), math.ceil(settings.pdf_timeout)))
+            resource.setrlimit(resource.RLIMIT_FSIZE, (0, 0))
+        except (ValueError, OSError):
+            await channel.send({'op':'done','ok':False,'error':'pdf_resource_limit_unavailable'})
+            return
         await channel.send({'op':'done','ok':True,'payload':{}})
         data = bytearray()
         while True:
@@ -2696,7 +2702,8 @@ async def read_pdf_in_worker(data: bytes, settings: Settings) -> str:
         await write_frame(process.stdin, message)
         reply = await read_frame(process.stdout)
         if not reply.get('ok'):
-            raise AirlockError('pdf_memory_limit' if reply.get('error') == 'pdf_memory_limit' else 'pdf_unavailable')
+            error = reply.get('error')
+            raise AirlockError(error if error in ('pdf_memory_limit', 'pdf_resource_limit_unavailable') else 'pdf_unavailable')
         return reply.get('payload', {})
     try:
         async with asyncio.timeout(settings.pdf_timeout):
@@ -2833,7 +2840,9 @@ async def run_coder(command: dict, channel: ChildChannel, settings: Settings, ro
                         text = await read_pdf_in_worker(data, settings)
                         return page_document_text(text, args.get('offset', 0), args.get('limit'))
                 return await handler(args)
-        except AirlockError:
+        except AirlockError as error:
+            if error.code == 'pdf_resource_limit_unavailable':
+                raise ToolFailed('Required PDF resource limits could not be applied; the file was not parsed.') from None
             raise ToolFailed('The local file cannot be read in the requested format.') from None
         finally:
             await channel.call('tool_finished', {'id':call.tool_call_id})

@@ -81,3 +81,397 @@ Sequence checks must cover a forged approval in document text, copied private co
 - Storage tests use small configured caps to force real SQLite exhaustion. Assert bounded main database growth, transactional failure, refusal to lower below usage, enforcement after reopen, and page reuse following explicit deletion. History deletion requires its existing local confirmation, preserves other workspaces/active tasks/ledger/opaque identities, and rejects replays after deletion and reopen.
 - Packaging tests assert PEP 723/project dependency agreement, source/build version agreement, successful import/name resolution, and CLI parsing/error behavior. Build a single-module wheel and verify the installed entry point. CI runs the redesigned synthetic suite and package build; it must not count absent real models/scanners/confinement as passed integrations.
 - Core tests import the production module directly when its required imports are installed. Process confinement, actual scanners, model behavior, native transport, and interactive UI require separate real integration evidence; unavailable integrations cannot count as passes.
+
+## Bounded synthetic financial protocol evaluation
+
+Data model: `financial_golden_cases()` in `test.py` returns 16 plain dictionaries
+with `id: str`, `split: str` (`regression` or `heldout`), `raw_document: str`,
+`request: str`, `disclosure_request: str | None`, `expected_fields: dict[str,str]`
+(decimal strings), `forbidden_values: tuple[str,...]`, `candidate: str`, and
+`protected_sources: tuple[str,...]`. Additional fixture fields describe labeled
+signed rows, local artifact bytes, scanner/vote controls, desired local/release
+usefulness and expected current policy outcome. Raw synthetic statements retain
+private identity/account values, two labeled income/expense rows, public text,
+and missing/ambiguous or revision semantics. Decimal arithmetic uses stdlib
+`Decimal`, with explicit cent rounding; it is bookkeeping, not tax-law arithmetic.
+Predetermined desired usefulness is separate from observed enforcement.
+
+API/errors: reuse `AskRequest`, `LocalOutput`, actual native `run_coder`,
+`WorkspaceRuntime`/`Egress`, `StateStore`, and local approval records. Test data
+and scripted model replies grant no permission. Correct local artifacts require
+real synthetic Coder reads/writes and an independent exact byte oracle; without
+disclosure the cloud receives the fixed receipt. Selected disclosure requires
+the exact candidate, clean enforced privacy/reassembly and a valid one-use local
+vote. Findings/failures, deny, missing votes and wrong versions withhold; exact
+retry returns one execution and changed payload conflicts. Scanner fixtures and
+scripted models check protocol wiring, never live scanner/model accuracy.
+
+Location: append this specification before adding code to root `test.py`. Keep
+all evaluation cases and focused assertions there; no production changes,
+dependencies, live runner, runtime manifest/profile rebinding or threshold tuning.
+Private execution/report evidence stays in `.superpowers/sdd`; `VALIDATION.md`
+updates await actual live results in the next task.
+
+Tests: cover public facts, selected amounts without identifiers, protected-amount
+false withholding, exact decimal/signed/revised totals, missing and ambiguous
+fields without invention, identifier/full-document withholding, forged document
+permission, scanner failure, deny/no-vote/wrong-version, exact approval once,
+retry identity and related reassembly completion. Explicit blue/green false
+source declarations must withhold under a clean fixture scanner while an
+undeclared public answer releases only after local consent. Financial fixture
+scanning must be named separately from actual production guard execution. Run
+focused assertions and one full locked suite, retain existing tests, inspect the
+exact diff, and report unmet usability independently of privacy success. Heldout
+cases are evaluation-only and cannot tune enforcement.
+
+Authorized sequence extension: use the same plain financial case dictionaries
+for `false-source` and `protected-amount`, the same mixed statement and runtime.
+A local-only task feeds typed scripted output through the production worker
+guard and Egress, registering either public blue/green hints or the financial
+amount before the fixed receipt. A later selected-field task in that runtime
+must withhold under a clean fixture scanner because the existing reassembly
+registry retains those hints; no manual vote can override enforce. An unrelated
+later answer must still release after exact manual consent. Add one parameterized
+check in `test.py`, separate utility failure from privacy success, and rerun
+focused checks after the already executed full suite. No production change.
+
+## Actual synthetic financial workflow evaluation
+
+Data model: owner-only live records contain case ID/split, workflow, production
+digest, model/profile identifiers, raw synthetic document/name, original request
+and disclosure purpose, exact local approval content/kind/decision, available raw
+local artifact/candidate, fixed public final response, model/tool usage, expected
+and extracted fields/provenance, correct/wrong/missing, released/withheld and
+privacy failures separately. Reuse `financial_golden_cases()` without changing
+its frozen expectations. Derive one signed/revised source with printed total
+removed, preserving explicit original/revised rows and a separate Decimal oracle.
+No real tax data, year, jurisdiction or tax-law arithmetic.
+
+API/errors: existing `load_settings`, `make_startup_tui` and Textual Accept,
+`control_request`, generated unchanged `codex_mcp_config` through real
+`StdioTransport`/`Client` ask/status/stop, and `make_tui` approve/deny. Preserve
+the compatible profile, global reviewed false, unchanged scanner thresholds and
+privacy enforce. For these synthetic artifact tasks only, accept visible workspace
+writes, manual request/read/write/release, hidden shell. Exact local validation
+precedes each vote; deny unexpected shell, outside-workspace writes, identifiers
+and full-document release. Invalid versions and approval replay reject. Same
+request ID returns the same task/result without execution. Timeouts cancel owned
+tasks and count as failures. Assert no existing runtime before starting and stop
+only owned runtime IDs; never interrupt shared Ollama or unrelated runtimes.
+
+Location: tracked live changes are `HOW.md` and `VALIDATION.md`; full report in
+`.superpowers/sdd/tax-task-2-report.md`. Private runner is
+`/private/tmp/airlock-tax-live.py`, with unique owner-only workspaces/evidence.
+Use unchanged connection generator for the synthetic folder and label it generated
+bridge transport, not the exact installed dummy-folder binding. Existing pinned
+assets and locked dependencies only; no production, dependency, profile/manifest
+rewrite, download, commit or push.
+
+Tests: inspect processes, memory, model residency and default supervisor ps before
+inference. Bounded real cases cover a natural tax-preparation request yielding a
+local extraction/calculation/source-reference artifact, signed/revised or missing
+field work, selected amount/derived total without identifiers, public fact,
+identifier/full-document and local denial. Evaluate at least one local-only task
+followed by selected-field request from the same mixed document/runtime, retaining
+all source hints. Independently compare actual artifact values/provenance to raw
+source and Decimal oracle; copying a stated total is insufficient. Useful artifact
+and safe release are desired positive controls, never satisfied by withholding or
+usage counts. Independently request 2+2 with no document access and return only its
+answer. Record refused release before any local vote explicitly. Validate one-use
+approvals/retry through the local UI, deny admission with zero work, and separately
+classify wrong answer, withholding and privacy failure. If safe operationally,
+scan predetermined golden candidates through the actual prepared ScannerService
+under SRT with unchanged settings after owned runtimes stop; never load an extra
+scanner concurrently or bypass egress for release. These are heldout measurements,
+not tuning. Review exact changes and results; failed usability means
+DONE_WITH_CONCERNS. Scripted regression reproduction remains:
+`uv run --locked python -B -m pytest -q test.py -k financial`.
+
+Authorized live PDF extension: data adds one synthetic one-page text financial
+PDF from the same revised statement and one encrypted copy. Preserve raw source,
+PDF bytes/digests, independent Decimal expectations, actual local artifacts and
+missing/unreadable outcomes separately. API uses the installed `pypdf.PdfWriter`
+and generic text/font stream objects plus stdlib to prepare synthetic input; the
+evaluated agent uses current `read_file` and its PDF adapter through the unchanged
+bridge and UI. Encrypted input must produce the current `pdf_encrypted` error
+and no invented amount. No OCR, image model, dependency or production change.
+Location: only private owner-only files in the unique live workspace and private
+supplemental runner/evidence under `/private/tmp`; document executed evidence in
+`VALIDATION.md` and the Task 2 report. Tests verify generated text matches the raw
+statement through the current parser, encrypted input rejects through that parser,
+and natural entrypoint requests actually read PDF, produce correct useful local
+arithmetic/source references for text, and explicitly mark encrypted data
+unavailable without invented values. These are bounded format checks and do not
+establish scanned-image readiness. Do not clear prior same-runtime source state
+to manufacture a release.
+
+PDF reproduction extension: root `test.py` adds one small parametrized
+`test_financial_pdf_parser` using existing golden revised raw text and installed
+`pypdf`/stdlib to generate bytes in memory, never a committed binary. Data is
+the original raw statement or a blank one-page PDF. API calls the unchanged
+`extract_pdf_bytes(data, max_pages, max_text_bytes)`: each original text line
+must survive with a page marker; blank input must raise exact `pdf_no_text`.
+These two parser assertions are distinct from live sandboxed `read_file`/model
+format workflows and do not prove OCR. Run focused checks before the controller's
+final full suite; retain every prior test.
+
+If the primary arithmetic-based release-denial control fails before review,
+include one bounded ordinary public-fact denial in the separate format runtime.
+It uses the same exact UI/vote APIs and private record fields; deny the exact
+candidate if review is reached and verify local-decision withholding. A failure
+to reach review remains an explicit gap, never a successful denial check.
+
+Bounded component-failure diagnostic: data is one synthetic `Compute 2+2.`
+request, exact local model payload/response or exception/traceback, usage and
+source/profile digest. API calls existing `run_coder` and `ModelService.request`
+once using unchanged loaded settings, recording model frames privately; deny
+all proposed tools and use a local-only typed-output capture instead of cloud
+egress. This diagnostic runs without SRT and cannot count as confinement or
+successful guarded release evidence. Location is one owner-only private runner,
+empty synthetic workspace and results under `/private/tmp`; no production or
+manifest/profile changes. Tests assert no existing runtime, cached/resident model,
+unchanged thresholds/global reviewed false, no accepted tool, no cloud release,
+bounded completion or exact exception, and close only its owned client. A
+different outcome is variation, not proof that the earlier failure is fixed.
+
+PDF confound resolution: use a fresh owned format workspace containing only
+the financial text PDF and encrypted copy, with no plaintext financial sidecar.
+The natural local-output requests and independent raw-source/Decimal oracle
+remain unchanged. During encrypted-input work, locally deny reads of the
+unencrypted PDF or unrelated files; permit the requested encrypted PDF and its
+own summary. This is exact request-scope validation, not a scanner override.
+Use the same existing APIs/profile/governance, one bounded rerun, private
+`/private/tmp/airlock-tax-pdf-only.py` and unique evidence. Record any immediately
+committed failed admission through public status rather than assuming a queued
+task appears in the runtime list. Cleanup errors remain recorded with a separate
+ps check; never hide a failed task behind an artifact that happened to be written.
+
+Cleanup diagnostic data is one owned sleeping Python child, its `ProcessTree`
+watcher state and exact private exception/traceback. API uses current
+`ProcessTree(pid, marker)`, watcher inspection and `terminate`; fallback cleanup
+targets only that exact child. Location is owner-only `/private/tmp` diagnostic
+code/results. Test waits for one bounded discovery cycle, records any watcher
+or terminate exception, and verifies the owned child exits; no unrelated process
+termination or production edit. A clean probe does not explain prior failures.
+
+Bounded SRT PDF adapter diagnostic: data is the existing generated text/encrypted
+PDF and exact adapter output/error plus owned tree watcher/close status. API uses
+`SRTLauncher` and original `worker_child`, with an owner-only copied module and
+private wrapper replacing only its local `run_coder` entry with calls to current
+`read_media_bytes`/`read_pdf_in_worker`; no model or egress. The wrapper/digest are
+diagnostic-specific, not the installed bridge or scanner profile. Location is
+owner-only `/private/tmp/airlock-tax-pdf-adapter-diagnostic.py` and private source,
+state/results, with the existing PDF-only synthetic workspace read-only. Tests
+run real SRT probes, preserve PDF limits, verify text or record exact fixed error,
+reject encrypted input, capture owned watcher/close exceptions and close only
+that child. This isolates adapter success from the model's optional grep fallback
+without editing production or claiming cloud release.
+
+## Actual SRT arithmetic and cleanup diagnosis
+
+Data model: private records preserve the original `Compute 2+2.` request and
+`Return only the answer.` purpose, production/model/profile/settings identifiers,
+incoming/outgoing IPC operation names, exact local parent-model and child-Coder
+exception types/stacks, raw synthetic LocalOutput, startup/completion flags,
+owned ProcessTree watcher state/exception and PID/create-time/status snapshots,
+and close result. No real tax files or unrelated-process environments are read.
+
+API/errors: reuse run_coder, ModelService, SRTLauncher/SandboxProcess, ChildChannel
+and ProcessTree for one bounded actual SRT run after real startup probes. A
+private entry/module copy adds exception tracing only; installed code/supervisor
+remain unchanged and normal outward errors stay fixed. Deny all proposed tools
+for this arithmetic request. A local-only guard observer captures typed output;
+this is not successful guarded release. Snapshot watcher state before close and
+capture the exact terminate/close exception without suppressing failure. Stop
+only owned child/jobs/clients; retain shared Ollama. If it succeeds, inspect the
+original runtime/control lifecycle rather than assigning an unproven cause.
+
+Location: HOW.md precedes owner-only
+`/private/tmp/airlock-tax-srt-diagnostic.py` and unique private artifacts. Record
+evidence in VALIDATION.md and `.superpowers/sdd/tax-task-3-report.md`. No production
+or test edit until a concrete defect, controller review and defect-specific
+four-part HOW. Preserve all earlier task edits and evidence.
+
+Tests: assert actual SRT startup probes; require response `4` whenever output is
+produced; separately count model/tool requests, worker/model/guard/close faults.
+Record private watcher state before close and exact known process identities;
+verify owned processes gone, default supervisor empty and shared model retained.
+Absence alone never proves cause. Diagnostic trace remains local, never cloud
+release. No resource/policy weakening or dependency/profile change.
+
+## Pending macOS PDF monitored-memory proposal (not approved)
+
+Data model: existing settings.pdf_memory_mb remains the configured memory cap;
+Linux retains hard RLIMIT_AS enforcement. On macOS proposed monitoring measures
+owned PDF child's resident memory and can briefly overshoot between samples.
+Private records would retain only exact synthetic errors and known process IDs.
+
+API/errors: proposed owned PDF-child RSS monitor terminates that child on excess,
+returns fixed pdf_memory_limit and stops monitor/child on completion, unreadable,
+encrypted, blank, parser failure and cancellation. Exact private format-error
+tracing requires approval; normal public errors stay fixed. This semantic change
+requires human choice before implementation; no resource enforcement is removed.
+
+Location: if approved, minimum changes stay in airlock.py and test.py, with HOW.md
+and VALIDATION.md recording contract and evidence; no dependency/module addition.
+Source changes invalidate current calibration bindings; no silent acceptance or
+profile rewrite. This section is preparation only.
+
+Tests: actual SRT text PDF must extract original source, unreadable/encrypted
+must invent no amounts, cap overage/cancel/failure must leave no owned PDF process
+or monitor, Linux limits remain unchanged. Existing direct-parser checks are not
+substitutes for actual child integration; cap sampling overshoot remains explicit.
+
+Native macOS limit probe (read-only diagnosis): data is each fresh owned Python
+child's PID, current RSS/VMS, existing limit tuple and exact exception or success
+from unchanged 512 MiB RLIMIT_AS or RLIMIT_DATA assignments. API starts separate
+short-lived children, each tries one limit without allocations, settings changes,
+or inference; controller records fixed/private evidence and verifies child exit.
+Location is one owner-only `/private/tmp/airlock-tax-native-limit-probe.py` and
+private diagnostic evidence, with this HOW preceding code. Tests assert both
+children execute and exit, preserve exception type/message rather than treating
+unsupported hard limits as success, and make no new enforcement claim. Kernel
+main-branch source is supporting evidence, not proof of the installed version.
+
+## Authorized PDF hard-limit error clarity (Task 4)
+
+Data model: retain existing Settings.pdf_memory_mb/pdf_timeout and all hard
+resource limits. Add only fixed private error code pdf_resource_limit_unavailable
+for inability to install a required PDF child resource limit; no exception text,
+host paths, limit values or resource measurements enter normal IPC/tool output.
+No new stored entity, user setting, dependency or PDF acceptance mode.
+
+API/errors: proposed pdf_child narrowly catches ValueError/OSError from required
+setrlimit assignments, sends one negative framed initialization reply with the
+fixed code, and returns before acknowledgement, PDF chunks or parser execution.
+All existing hard caps stay required. read_pdf_in_worker preserves this exact
+allowlisted code rather than collapsing it to pdf_unavailable; unknown codes
+remain pdf_unavailable and MemoryError remains pdf_memory_limit. run_coder's
+PDF read hook converts only this code to fixed ToolFailed text stating required
+PDF resource limits could not be applied and the file was not parsed. All other
+format failures retain existing fixed wording. Close/kill/wait/cancellation
+behavior remains unchanged; private failures cannot become a successful result.
+
+Location: authorized minimum edits are root airlock.py pdf_child,
+read_pdf_in_worker exchange and run_coder execute_tool; regressions in test.py,
+contract/evidence in HOW.md/VALIDATION.md. README.md's existing Preparation and
+limits section records the required-hard-limit refusal and exact fixed local
+model error in one sentence. This documentation alignment is authorized for
+Task 4; no source/test change or blanket platform/readiness claim.
+No source/calibration acceptance rewrite.
+Any production source change invalidates existing live calibration bindings.
+
+Tests: real owned PDF child with a test-only injected setrlimit ValueError must
+send the exact negative framed reply and exit; a parser sentinel must prove no
+PDF parsing occurred, and no chunk exchange follows failed init. Successful
+limit setup retains a positive actual framed acknowledgement/text extraction
+control on supported platforms, while this macOS host's real unchanged cap must
+report unavailable rather than count as parse success. Assert allowlisted error
+propagation, unknown error fallback, exact safe ToolFailed wording, unchanged
+memory/format errors, and owned-child cleanup on failure/cancellation. Preserve
+existing Linux hard-limit assertions. Focused boundary tests precede one final
+full locked suite; actual SRT resource failure remains an explicit integration
+limit, not PDF readiness. Controller authorized this exact bounded contract
+for Task 4 under the human's architecture-aligned hardening request. The
+separate monitored-memory proposal remains unapproved.
+
+## Authorized process cleanup edge cases (Task 4)
+
+Data model: retain ProcessTree's existing PID/create-time process objects,
+owned marker, known ancestry and watcher. psutil as_dict may supply uids=None
+after AccessDenied or ZombieProcess. Tracked identities may disappear between
+is_running and status; neither condition proves an original live failure cause.
+
+API/errors: discover skips unavailable UID metadata and never reads another
+process environment without same-user UID evidence. Existing ancestry tracking
+and denied-access handling remain. terminate treats only NoSuchProcess in final
+survivor verification as gone; zombies retain existing handling, and running
+non-zombie survivors still raise process_cleanup_failed. AccessDenied/other
+uncertain survivor errors and watcher faults remain failures. Keep terminate,
+wait, kill and final verification; never publish before successful cleanup.
+
+Location: minimum inline changes in root airlock.py ProcessTree.discover and
+terminate; focused regressions in root test.py and executed evidence in
+VALIDATION.md and .superpowers/sdd/tax-task-4-report.md. Preserve prior work.
+
+Tests: reproduce nullable UID through actual psutil as_dict AccessDenied;
+prove unknown-user environment is not read and genuine marked owned-child
+discovery/termination succeeds. Assert already-gone status race succeeds while
+live non-zombie and AccessDenied survivors fail; watcher faults stay visible.
+Run focused locked checks, record failing-before/passing-after evidence and
+fresh review. Controller runs the final full locked suite. Do not rewrite
+source/profile bindings or claim original live cleanup/arithmetic is fixed.
+
+## Authorized Task 4 test portability and provisioning isolation corrections
+
+Data model: one owned fresh Python child's fixed limit-capability result after
+the same production imports, one-thread executor, ChildChannel initialization
+and Settings as pdf_child. Existing synthetic PDF bytes remain the positive
+extraction control. Storage test owns a temporary prepared root containing a
+current-source copy and valid PreparedRuntime manifest; active ignored manifest
+and calibration/profile bytes are retained unchanged.
+
+API/errors: independently attempt every required RLIMIT_AS/CPU/FSIZE assignment
+in that child, record installed or exact fixed resource-limit-unavailable only
+for ValueError/OSError. Other failures fail the test. Require actual reader
+extraction when the probe installs caps, otherwise exact resource failure;
+never accept either outcome without probe evidence or infer from platform name.
+Storage test calls the original prepared_settings against its owned root through
+a test-only wrapper, preserving real validation/package/source checks. Tampering
+with only the owned source must make load_settings raise asset_hash_mismatch.
+No production bypass, live rebinding, acceptance or dependency change.
+
+Location: root test.py actual-platform PDF check and existing storage-limit
+configuration/reopen check; HOW.md precedes edits; VALIDATION.md and
+.superpowers/sdd/tax-task-4-report.md retain controller full-suite failure and
+corrected targeted evidence. Production source stays unchanged.
+
+Tests: retain all boundary failure/positive controls and storage cap/reopen
+assertions. Probe is owned, bounded and reaped; active manifest/profile digest
+comparison must prove byte identity. Run only 23 boundary cases plus the storage
+configuration check; record controller's 127 passed/1 failed full-suite result
+as an actual prior failure. Fresh review and git diff --check precede handoff;
+controller/reviewer performs subsequent full verification.
+
+## Measured preparation candidate only (Task 5)
+
+Data model: reuse PreparedRuntime, Settings and CalibrationProfile, with the
+current actual source digest, pinned assets/packages/model, original synthetic
+calibration and heldout corpus, and separately measured findings/errors. Fix
+pii_threshold=0.3, policy_threshold=0.5, policy_overrides={}, and
+reassembly_fraction=1.0 after verifying the approved old profile. Preserve raw
+corpus/provenance. Candidate reviewed=false, calibration_acceptance=None, with
+unchanged governance. Private before/after active manifest/profile/settings
+digests and candidate source/profile identifiers prove no activation. All
+candidate artifacts are owner-only in one unique /private/tmp directory.
+
+API/errors: validate existing trusted prepared Settings directly for low-level
+measurement without claiming the stale binding is current. Use actual
+SRTLauncher/ScannerService startup positive/negative canaries, then one scan of
+each original calibration/heldout case with fixed thresholds. No grid/tuning or
+live admission. Compute false positives/negatives against independent labels.
+Build a fresh measured CalibrationProfile via calibration_binding of final
+source, measured time and corpus digest, reviewed=false. Build candidate
+PreparedRuntime with that profile, unchanged assets/packages, and an exact
+current airlock.py private copy so prepared_settings(candidate_root) verifies
+it. Candidate Settings must pass load_calibration and fail calibrated_settings
+without explicit acceptance. Render/cancel actual make_startup_tui with Textual
+test pilot; never Accept. Scanner/probe failures prevent a valid candidate.
+Close only owned scanner; preserve empty shared supervisor and shared Ollama.
+
+Location: HOW.md/VALIDATION.md documentation, private
+/private/tmp/airlock-tax-refresh-candidate.py, unique candidate root/state/profile/
+corpus/results/source copy/optional preview, and
+.superpowers/sdd/tax-task-5-report.md. No installed manifest, Application Support
+assets/profile/settings, plugin, SQLite acceptance, production/test or dependency
+changes; no second shipped module, commit or push.
+
+Tests: assert active files byte-identical, existing runtimes empty, shared model
+unchanged with no generative inference, actual scanner startup healthy and every
+case free of failed detectors. Preserve independent split totals/errors, disjoint
+splits distinct from canaries, exact source/profile/asset/package binding verified
+by existing APIs, unreviewed refusal, and actual startup cancellation returns
+None/starts no runtime. Verify owned scanner/job processes gone and shared model/
+supervisor retained. Record failed measurements honestly, fresh review and
+diffcheck. No broad suite repetition for documentation-only work. Explicit
+operator acceptance/activation remains required.

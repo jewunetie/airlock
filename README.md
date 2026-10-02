@@ -38,6 +38,8 @@ The complete runtime needs compatible Pydantic AI/Harness, FastMCP/Tasks, Textua
 
 Native `list_files` and `grep` also need `rg` on the worker's clean PATH. Grant the executable, its required libraries, and loader symlinks through local `extra_runtime_reads`; do not grant unrelated user folders. On macOS, a Homebrew library's `opt` symlink may require its own read permission even when the resolved library is allowed.
 
+PDF reading refuses to parse the file when required hard process limits cannot be applied, and the local model receives the fixed error "Required PDF resource limits could not be applied; the file was not parsed."
+
 Install the locked development dependencies and run the synthetic contract suite:
 
 ```sh

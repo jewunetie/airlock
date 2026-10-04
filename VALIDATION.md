@@ -4,6 +4,85 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+**The complete shadow comparison ran after removing the unrequested CPU gate.**
+The human rejected that limit on October 4. New runner `3edad2d4` removes CPU
+sampling, the threshold and its wait; no substitute limit was added. Full independent
+review and offline assertions passed before execution. All 60 native requests
+completed: one schema probe, seven health probes, 48 frozen corpus cases and four
+exact historical regressions. There were no request-validation, primary or cleanup
+errors. All 682 remaining recorded checks passed, with zero CPU admission checks.
+
+| Split | Private required-rule hits | Private cases meeting frozen criterion | Benign false matches | Cases with uncertainty |
+| --- | --- | --- | --- | --- |
+| Calibration | 12/12 | 9/12 | 1/12 | 3/24 |
+| Heldout | 12/12 | 11/12 | 0/12 | 1/24 |
+| Historical regressions | No private cases | No private cases | 1/4 | 0/4 |
+
+The required six health anchors matched, and the neutral health probe was clear;
+legal health also had unnecessary company-rule uncertainty, so six of seven
+health cases met the frozen criterion. This criterion requires the labeled rule and no
+uncertainty; it does not establish exhaustive six-rule accuracy. Uncertainty does
+not count as a correct detection, even when another rule matched. Extra positive
+matches are reported separately; some are legitimate overlaps, while personal
+settlements being treated as company information and a
+payment obligation being treated as hardship show category overreach. Several
+clear/uncertain explanations contradict their verdict or describe absent facts.
+
+The public bipolar-education false block reproduced. Negative wages
+`{"wages":"-10.05"}` also falsely matched financial hardship. The other three
+historical examples were clear; all four had been falsely blocked by Liquid in
+the stored first-64 run. That is the only matched Liquid comparison. The fresh
+48-case results do not establish comparative Liquid accuracy. The earlier eleven
+observed corpus cases remain regression evidence; no prompt, label or option was
+tuned between runs. Reported native latency was median 6.94s/max 8.83s per call,
+with 16,993 prompt tokens and 12,688 generated tokens across all 60 calls; these
+are measured costs, not estimates. `technical_complete` is true but `semantic_fit`
+is false. No backend replacement, profile acceptance or tax-readiness claim follows.
+
+Evidence `/private/tmp/airlock-shadow-comparison-no-cpu-_iwypz7q/evidence.json`
+has SHA256 `36bcd5310852b2c69e8590bd6d6487e10250d8509c78f72b94730b86c412913c`;
+the 79-file index is
+`973de3be38e6e868441ccd2e151551ad90ddb3d8a3c96b0c3d33bb5baa281f5f`.
+All indexed files, 518 before/after immutable snapshots, twelve fixtures and
+original process/model/catalog identities were verified. Source, tests, settings,
+assets and earlier indexed failures remain unchanged. No model was replaced or
+interrupted; no runtime/job was admitted. Residency allocation/expiration may
+change after inference and is not claimed byte-identical. This remains a small
+synthetic contextual test, not an end-to-end scanner, sandbox or real-tax evaluation.
+
+**Control authorship audit: specifications and agent review are not human approval.**
+These choices were made during implementation under the broader hardening/evaluation
+request, rather than individually selected by the human:
+
+- New shadow-only choices: the removed 5% CPU/two-second gate, the 6 GiB memory
+  minimum, exact previous process/model/catalog and empty runtime/job admission,
+  200-call cap, 32 KiB HTTP/24 KiB content caps, stateless tool-free classifier,
+  six-key clear/match/uncertain response schema and evidence bounds, and the
+  48-case/seven-health/four-regression evaluation layout.
+- Borrowed production defaults: 4096 output tokens, 4000-character chunks with
+  1024 overlap, 12000 candidate characters and 2048 findings. The 120-second scanner
+  default was reused as a new whole-comparison-case deadline; it was not the
+  pre-existing 180-second model or 1800-second task timeout. These defaults existed
+  at `cde842e`; this observation does not make them human-authored numerical choices.
+- Material production choices in the tax wave: exact two-decimal values with at
+  most twelve integer digits, lowercase field labels up to 48 characters, flat
+  literal JSON/plain-value formatting, detailed source/artifact occurrence proofs
+  and fresh Verify-and-Approve, the optional fixed Docker/Linux PDF route and its
+  pins/ceilings, sanitized local diagnostics, stricter ownership/cleanup handling,
+  and contextual-rule wording revisions. PDF ceilings reused existing default
+  values, but made them hard maxima for the optional fixed route; selected text
+  proof reads also reuse the PDF byte cap. These are implementation restrictions,
+  not separately requested policy just because they appear in HOW/ARCHITECTURE.
+
+The human explicitly requested selected-field local approval, stopping repeat
+blocks for fully shared values, startup/editable workspace rules, a configurable
+1 GiB storage cap with explicit deletion, retry identity, the local plugin,
+single-file logic, testing and Git checkpoints. Implementation details above serve
+those goals but remain distinguishable from their explicit choices. This audit
+does not remove other controls or introduce a new approval flow. No general
+production CPU/6 GiB gate, tool registry/Pi integration or scanner replacement was
+introduced by the shadow comparison.
+
 **The fresh shadow comparison stopped on a recorded CPU gate; the candidate is not accepted.**
 Runner `be13a1e4` passed independent static review and all offline assertions with
 the original corpus, prompt, schema, options and limits unchanged. It completed

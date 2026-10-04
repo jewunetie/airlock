@@ -3276,3 +3276,44 @@ arithmetic or tax readiness; those live gates remain separate.
   record association and all preservation channels. Completion supplies synthetic
   contextual-classifier evidence only, with no calibration acceptance, financial
   publication approval, full pipeline accuracy or tax-readiness claim.
+
+## Resume the frozen comparison without a CPU admission limit
+
+### Data model
+
+- The human rejected the 5% CPU gate on October 4. This section supersedes that
+  gate in the active synthetic comparison only. Preserve every earlier contract,
+  runner and indexed outcome, including the measured 5.9% stopped run.
+- Keep the same 48-case corpus, four historical regressions, prompt, schema,
+  options, six rule meanings and health anchors. Record a separate fresh run;
+  previously observed cases stay visible as regression evidence, not new holdout.
+
+### API contract
+
+- Remove CPU admission sampling, its threshold and its associated waiting from
+  the comparison runner. Do not replace it with another CPU limit or idle-wait
+  protocol. Original process identity/ownership, model digest/catalog, memory,
+  empty runtime/job and forbidden-process checks remain enforced before requests.
+- Preserve stateless tool-free loopback requests, privacy, evidence validation,
+  input/view/output/token/call bounds and the 120-second complete-case timeout.
+  Keep errors and uncertainty separate from detections; no automatic request
+  retries, model interruption, new model load or production scanner adoption.
+
+### Location
+
+- Create only `/private/tmp/airlock-shadow-comparison-no-cpu.py` and a new private
+  evidence directory; update root `HOW.md` and `VALIDATION.md`. Copy the reviewed
+  previous runner with the smallest gate/pin changes and retain its exact original.
+  Pin the previous 36-file comparison index alongside earlier evidence. Source,
+  tests, dependencies, settings, assets and twelve fixtures remain unchanged.
+
+### Tests and assertions
+
+- Read and independently review the entire new runner before executing. Run
+  assertions that the active admission path has no CPU sample/threshold/wait and
+  that a failed remaining gate prevents generation. Retain validator, uncertainty,
+  quote/health, frozen-input and preservation assertions.
+- Independently review actual complete/partial replies and separately reported
+  split metrics, including prior observed failures. Verify all evidence indexes,
+  fixtures and process/file invariants. Report remaining limits without granting
+  release authority, calibration acceptance or tax-readiness status.

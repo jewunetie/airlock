@@ -4,14 +4,65 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
-**Source3bceb scanner preparation passed; activation and inference remain pending.**
+**Exact library repair passed; the next live artifact failed the requested completeness check.**
+The two independently backed-up preparation dictionaries gained only the resolved
+PCRE2 10.49 library read grant. Effective settings and calibration binding stayed
+equal except that grant; global acceptance, thresholds and saved rules remained
+unchanged. The verified empty supervisor was normally replaced, and the actual
+native startup screen accepted the dummy workspace at configuration 14.
+The installed plugin task completed four model requests and three native tools:
+list_files, read_file and write_file. Its local artifact contains correct decimal
+wages 1150.25, supplies 250.10 and net 900.15, with no synthetic private identity or
+account, but omits the requested source quotes entirely. The fixed completion
+receipt is therefore not evidence of satisfying the complete task. The unchanged
+usefulness oracle fails; runner exit 1 and artifact are preserved at
+`/private/tmp/airlock-pcre2-repair-task-3bceb-8ejpl1c8/evidence.json`.
+Same-ID replay did no extra work. Normal owned stop succeeded with empty runtimes,
+jobs and recorded survivors; cleanup and diagnostic errors are empty. Both numeric
+captures correctly report diagnostics_unavailable for this completed task. No
+further inference, selected publication or readiness claim follows this result.
+
+
+**Source3bceb single-task diagnostic integration failed usefulness but captured the failure boundary.**
+Actual native startup preserved the saved rules, reaching READY config 13. The
+installed dummy bridge submitted one local revised-summary task, which failed
+after two model requests and two accounted list_files calls. No artifact or public
+response was produced. Both private numeric captures identify exact
+UnexpectedModelBehavior at airlock.py line 4357, the native handler call, followed
+by the fixed parent conversion. They do not recover the discarded underlying
+tool error or establish the prior task's cause. Same-ID replay did no extra work;
+one normal owned stop left no runtime, jobs or recorded survivors. Diagnostic and
+cleanup error lists are empty, fixtures/history/evidence were preserved, and
+independent evidence review confirmed these narrow claims. Evidence is private at
+`/private/tmp/airlock-diagnostic-text-3bceb-tya2nm_l/evidence.json`.
+A subsequent no-model probe confirmed that both native listing calls fail because
+the sandbox blocks the installed PCRE2 10.49 library. A temporary grant for only
+that exact read-only library file made both listing oracles pass. Both owned
+children and temporary resources were cleaned up; fixtures and frozen files stayed
+unchanged. The runner still exited 1: its final profile-comparison assertion omitted
+the added denyWrite entry. A separate offline assertion verified equality after
+removing that same exact file from allowRead and denyWrite and normalizing only
+the owned scratch paths. The original failed aggregate evidence is preserved at
+`/private/tmp/airlock-native-list-probe-3bceb-d3qg350n/evidence.json`. This supports
+a narrow permission repair, without establishing the older task cause or model
+usefulness. Active preparation was unchanged during this probe; the later repair
+and model task are recorded separately above.
+
+**Source3bceb scanner preparation and native startup passed.**
 The unchanged reviewed runner completed 48 fresh fixed-threshold scans after a
 narrow local-socket escalation. Calibration had 4/12 benign false blocks and
 held-out 6/12, with 0/12 private misses per split and no detector failures.
 Independent candidate checks verified raw rows, current binding, unaccepted
 refusal, Cancel, preservation and owned cleanup. Profile `a7a07745...` remains
-unaccepted. The first sandbox-denied attempt is retained separately. These small
+globally unaccepted. The first sandbox-denied attempt is retained separately. These small
 synthetic results establish no field accuracy or tax readiness.
+Root then activated three backed-up preparation files, normally replaced the
+verified empty old supervisor, and accepted the actual native screen for the
+dummy folder's saved manual/enforce/visible-write/hidden-shell rules. READY config
+12 had healthy scanners and no tasks. One normal owned stop succeeded with no
+remaining jobs or recorded survivors. Independent activation review confirmed
+binding, acceptance, governance and preservation. Global acceptance stays unset;
+the earlier worker failure and live financial/PDF usefulness remain unresolved.
 
 **Content-free diagnostic source correction passed independent review and core/build checks.**
 Focused synthetic checks exercise original child/handler/IPC/execution failures,

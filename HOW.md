@@ -1985,3 +1985,240 @@ Actual startup rendered these measurements then Cancel only. Recorded owned
 cleanup and active/prior/fixture preservation passed. Candidate profilea7a077 and
 binding9c4b remain reviewable only; independent candidate gate then separate root
 activation/native acceptance handoff are still required. This is not tax readiness.
+
+## Source3bceb activation runner: static-only handoff
+
+1. Data: reviewed measured candidate /private/tmp/airlock-final-3bceb-9ujbxgiw,
+   source3bceb/testb149/helperbdb2; exact profile SHA256
+   a7a07745555aac16b09a8f6f0a8fac05efa267640883ae4a27347df4ecf495ab and
+   indexab3a868330fca59dac62ac52067d010361a564808f5f0bfcb00ca9eb734ff968.
+   Independently derive48 ordered labels/actual findings/error counts from frozen
+   records before writes. Global Settings remains STRICT/acceptanceNone/parserNone,
+   fixed .3/.5/overrides{}/reassembly1, profile reviewedFalse. Separate exact saved
+   workspace Governance is manual request/read/write/shell/release, enforce,
+   write_visibilityVISIBLE/shell_visibilityHIDDEN, other flags unchanged from
+   strict. Read via original preferences API before mutations and after supervisor
+   replacement; equality is required, never reset it from global strict defaults.
+   Seven retained fixture identities/modes/bytes must match measured candidate's
+   immutable fixtures_after; six artifact names remain absent. Evidence records
+   exact old/current supervisor PID/creation/source, model service identity/residency,
+   primary errors and independently attempted owned cleanup, backups and readback.
+2. API: this turn reads/AST/hashes only; no runner/source import or execution.
+   Later root PTY execution verifies all candidate hashes/current bindings/assets/
+   packages/unaccepted refusal and empty runtime/jobs/process/resource gate.
+   Existing supervisor must be37079/create1791082558.465754/source229dde at the
+   actual repository path; ambiguity/occupation fails before writes. Ollama serve
+   1290/create1790953712.354191 and pinned model metadata observed fresh, never
+   loaded/unloaded/interrupted; ordinary resident expiry is allowed. Back up and
+   atomically write/read back only three exact active targets. Recheck empty old
+   identity immediately before one normal stop_all, then normal ensure_supervisor
+   and current-source ping. Current preferences must equal the saved pre-write
+   workspace policy. Build separate native settings by model_copy(governance=saved)
+   from unchanged global settings. Original make_startup_tui.run_async on operator
+   PTY displays those exact rules and current measured24/6/0. Root observes rendered
+   fields and sends normal keyboard input to existing Accept. No Pilot, direct
+   handler, force acceptance, SQL write or new UI flow. Only native result with
+   acceptance=exact profile and every other field equal to displayed settings may
+   start the dummy runtime through original control start. Require READY/healthy
+   scanners/no tasks or approvals/config-versioned unchanged saved governance.
+   One normal owned stop, empty runtime/jobs/exact owned identity absence and
+   unchanged shared service/fixture/prior evidence follows. Cancel starts no runtime.
+   First primary/cleanup failures remain separate; uncertain stop/start has no
+   automatic retry or blind cleanup. Evidence-write failure is reported separately.
+3. Location: owner0600 /private/tmp/airlock-activation-3bceb.py and later unique
+   private airlock-activation-3bceb-* evidence/backups. Only activation targets are
+   repo/runtime.manifest.json and existing runtime prepared-settings.json and
+   calibration-profile.json. Static wave changes HOW and preparation report only,
+   with report append coordinated after independent candidate review append.
+   Preserve both measured candidates, earlier activation/failed integration/scanner
+   failures, prior runners, all seven dummy inputs and SQLite history. No source,
+   tests, VALIDATION, plugin, packages/assets, Git/Context/Docker or inference actions.
+4. Tests: static ast.parse/hash/mode0600/full fresh-eyes review, exact pins/seven
+   frozen fixtures, three targets only, strict global vs separate saved workspace
+   policy, native run_async/TTY/no Pilot or handler injection, first-stop/unknown
+   mutation guards, independent cleanup and evidence-save errors. No broad tests
+   or current APIs executed during static wave. Root full-script review and exact
+   external-write/runtime permission gate precede any execution; candidate approval
+   alone does not prove activation/native acceptance or tax readiness.
+
+## One-task source3bceb diagnostic reproduction: static runner handoff
+
+1. Data: frozen source3bceb4133b2534751bc0bc5c4371eced6710d2743312641f3e4b48f445ed4eaa,
+   testb149c3aea90e0def3980429e1c8e5f65eb5ffee467d02375ebf56e186c369297,
+   helperbdb2 and exact profilea7a07745555aac16b09a8f6f0a8fac05efa267640883ae4a27347df4ecf495ab
+   from independently reviewed candidate /private/tmp/airlock-final-3bceb-9ujbxgiw.
+   Seven existing fixtures must equal its immutable fixtures_after identities/bytes/
+   modes; all six old artifact names initially absent, only tax-preparation.json may
+   be created. Preserve old history/failed task/evidence and prior runners. One
+   fresh UUID request ID, exact original local-revised request/no disclosure, same
+   Decimal1150.25/250.10/900.15 and exact wages/supplies source-quote oracle. Private
+   evidence holds proposals/votes/artifact/fixed result/counters, strictly correlated
+   numeric diagnostics and separate primary/diagnostic/cleanup errors, owned identities.
+2. API: static-only now; root's independent activation gate and explicit PTY/runtime
+   handoff precede execution. Validate current source/test/helper/profile/bridge/
+   preparation pins and empty current supervisor59719 identity/jobs/runtime/resources,
+   >=6GiB available and exact pinned already-resident cached model; never load/unload.
+   Global STRICT/unaccepted/parserNone remains unchanged. Original preferences must
+   equal saved manual request/read/write/shell/release, enforce, visible writes and
+   hidden shell; config12 is retained history, not reset. Native startup is actual
+   run_async on operator PTY/root normal keyboard Accept with exact chosen fields.
+   Task votes use original actual Textual run_test Pilot widget clicks, explicitly
+   automated UI-handler coverage rather than human-interactive task-vote acceptance.
+   Allow only exact request/scoped reads and exact artifact write; deny shell/outside/
+   other writes. Exactly one installed-dummy-bridge ask. At first terminal state,
+   exact local control keys op/target/task_id capture diagnostics before identical
+   same-ID replay; capture again immediately before one normal owned runtime stop.
+   Validate <=256 exact numeric schema/task/source-line correlation. Missing matching
+   records raises diagnostics_unavailable even on success; record that fixed absence,
+   never manufacture an empty reply/cause. Terminal precedes cleanup, so both snapshots
+   imply no absence guarantee for later cleanup; stop/resource evidence stays separate.
+   Replay must preserve task/result/counters without work/consent; failure forbids
+   further inference. Timeout stops exact task once, is failure, no mutation retry.
+   Independent diagnostics/tracking/save failures cannot skip normal owned cleanup;
+   no raw exception text is printed publicly. No fixture creation/ledger/selected flow.
+3. Location: new owner0600 /private/tmp/airlock-diagnostic-text-3bceb.py and later unique
+   private evidence root. Only HOW/private runner in this static wave; preserve old
+   /private/tmp/airlock-final-text-integration-229dde.py unchanged. Source/test/config/
+   plugin/history/packages/assets and old failures unchanged. No runtime/inference/
+   process/socket/network/Git/Context/Docker or runner/source imports during static work.
+4. Tests: static AST/hash/mode/full fresh-eyes checks require one original request,
+   no fixture writes/SQL/selected routes, exact pins/seven fixtures, native PTY startup,
+   real task-handler widget clicks, two diagnostic-before-replay/stop captures, bounded
+   failure/cleanup/save ordering and no model mutation. Isolated pure oracle checks
+   establish correct Decimal/source quotes and wrong/missing artifact refusal without
+   importing runner. Later actual run must require completed fixed receipt/correct
+   artifact including absence of exact raw fixture identity 'Synthetic Person QZXV'
+   and account 'SYN-ACCOUNT-QZXVJKMP' as the original request requires; retain the
+   Decimal/source-quote oracle. Same-ID result/counters, unchanged seven inputs/five other artifact names,
+   immutable pins/shared-service identity and owned cleanup. Wrong answer/task/diagnostic
+   absence/cleanup uncertainty are distinct outcomes. Root full-script review and
+   independent activation verdict precede execution; no successful reproduction claimed.
+
+## Source3bceb native listing dependency comparison: static private handoff
+
+1. Data: unchanged source3bceb/testb149/helperbdb2/profilea7a077, verified pinned SRT
+   assets and existing prepared settings. Preserve candidate9ujbxgiw seven exact
+   synthetic fixture identities/modes/bytes, six absent artifact names, prior history,
+   failed diagnostic tya2nm_l evidence and every prior runner. Record the exact
+   owner regular PCRE2 10.49 dylib device/inode/mode/uid/hash. Two temporary profiles
+   use production SRTLauncher.profile(workspace,writable=True,scratch=owned fresh)
+   and clean_environment plus exact HOME/TMPDIR/CLAUDE_CODE_TMPDIR/AIRLOCK_JOB.
+   Baseline settings are unchanged; comparison model_copy adds only resolved
+   /opt/homebrew/Cellar/pcre2/10.49/lib/libpcre2-8.0.dylib to extra_runtime_reads.
+   No directory grant, active settings write or broader alias. Private evidence stores
+   bounded child results/error text and wrapper stderr (8192-byte cap each), fixed
+   categories/oracle booleans/return codes/hashes, exact owned identities and separate
+   primary/cleanup errors. No model content, unrelated workspace listing or events.
+2. API: static-only until root full read and explicit execution handoff. Require
+   fresh exact current59719 supervisor UID/create/source identity, ps empty and jobs
+   empty, no existing worker/scanner/pdf. Local control ping/ps only; no model API,
+   inference, scanner/model load/unload or runtime start. No additional socket
+   listeners/connections beyond the explicit existing local control ping/ps. Each SRT
+   children waits for framed init before execution, then invokes installed native
+   FileSystemToolset.list_files directly for path='.' with glob='tax-revised.txt'
+   and glob=None, once each, no Coder/Agent. Constructor matches installed Coder's
+   unrestricted root='/'/cwd=workspace, empty patterns, content_hashes=False,
+   native 2000/60000 read limits and 1000 list/search/find limits; only list_files is
+   registered. Returned names must match the seven already-known synthetic names;
+   unknown names are reduced to fixed oracle failure/hash rather than retained.
+   Each call and parent transaction has finite timeout; timeout invalidates result.
+   Child ModelRetry/other failures retain bounded local text privately, never public.
+   Wrapper stderr is concurrently drained with bounded retained bytes, no deadlock.
+   Production SandboxProcess/ProcessTree owns exact marker/PID/create/descendants;
+   normal close is attempted independently, verifying every known owner gone and
+   scratch/profile/registry absent. No retry/tuning: baseline pass disconfirms the
+   hypothesis and stops; baseline failure plus both comparison oracles passing is
+   required for a supported permission repair. Neither proves the old229 cause or
+   core/scanner/privacy readiness. Preserve first primary failure and separate cleanup
+   uncertainty; evidence-save failure prints fixed category only.
+3. Location: HOW plus new owner0600 /private/tmp/airlock-native-list-probe-3bceb.py,
+   with later unique owner0700 private evidence directory containing two temporary
+   profiles/scratch/registries and bounded evidence. Inline child code only. Existing
+   SandboxProcess close removes only these newly owned scratch/profile/registry
+   resources; evidence and fixtures are preserved. No airlock.py/test.py/settings/
+   manifests/plugin/library/dependency/assets/Git/Context/Docker changes.
+4. Tests: static AST of parent and inline child, root full-script read, SHA/mode,
+   exact two argument sets/native direct method, only one exact-file grant, current
+   pins/fixture equality and absence guards, no Agent/Coder/model/network calls,
+   fixed stdout categories, bounded private capture and independent normal cleanup.
+   Later actual assertions distinguish baseline failure/comparison success, baseline
+   pass/hypothesis disconfirmed, comparison failure, timeout and cleanup uncertainty.
+   Require both native positive listing oracles and no owned survivors/resource
+   residue for supported repair; preserve all other outcomes rather than manufacture
+   success. No probe execution or production imports in the static writer turn.
+
+## Native listing comparison executed evidence and corrected scope
+
+The original d3qg350n evidence SHA108a7a99cb03e66fe62d72458f8c9756768dd5c2356fec56e512404ee4573f35
+retains exit1/complete:false/AssertionError. Both baseline native calls failed with
+ModelRetry/dyld blocked library; both exact-file comparison calls passed their
+positive listing oracles, both wrappers exited0 and normal owned cleanup/immutable
+assertions passed. Offline entire-profile equality passes after removing the ONE
+new dylib from BOTH allowRead and denyWrite and normalizing only owned scratch.
+The prior runner omitted denyWrite from its comparison, a harness assertion defect;
+no rerun or original evidence rewrite. Functional permission evidence is distinct
+from failed aggregate status, old229 cause, model task usefulness and privacy/scanner
+readiness. Private static-verification-report.md under the retained evidence root
+records the exact assertions and original failure.
+
+## Exact PCRE2 file repair plus one original local task: static handoff
+
+1. Data: unchanged source3bceb/testb149/helperbdb2/profilea7a077 and seven candidate
+   fixture identities/bytes/modes, six initially absent artifacts, old history and
+   all failed evidence/runners. Exact dylib /opt/homebrew/Cellar/pcre2/10.49/lib/
+   libpcre2-8.0.dylib identity/hash equals successful no-model probe. Separately
+   preserve manifest240b5b9454b3ab3fc424d9a4df1afd5dc74aa14ad0ce89e9111085cf0564f7ba
+   and external prepared117e56eb1213cf82c40129787df11c39395adcedb531c6196fd8531e54f0a68d
+   original bytes/modes/owner/identity in owner-private backups. Manifest.settings
+   and external dictionary intentionally differ: add identical single exact file
+   only to each existing extra_runtime_reads list, preserving every other field
+   separately and every prior list entry. No directories/aliases/general symlink
+   logic or calibration/profile/source changes. Global STRICT/acceptanceNone/
+   parserNone, thresholds .3/.5/overrides{}/fraction1, profile reviewedFalse and
+   calibration_binding are invariant. Saved workspace governance remains manual
+   request/read/write/shell/release, enforce, visible writes/hidden shell.
+2. API: static-only before root full read and execution handoff. Later verify exact
+   old59719 source/UID/create identity, empty ps/jobs/no worker/scanner/pdf, all
+   source/test/helper/profile/bridge/assets and fixture pins, exact dylib identity,
+   >=6GiB availability and root-approved already-resident pinned cached model with
+   original model service/process identities; never load/unload. Read original
+   preferences and back up both exact targets. Immediately recheck empty ownership
+   and target bytes before atomic owner-private writes/readback. Assert exact JSON
+   candidates with only list additions; preserve original manifest/external policy
+   distinctions. Any uncertain partial write is recorded and stops without retry,
+   blind rollback or another task. Compare old/new effective settings excluding only
+   extra_runtime_reads, binding equal, existing unaccepted profile retained. Normal
+   stop_all must return stopped:true/warnings:[], original supervisor identity must
+   end, then original ensure_supervisor starts current source from repaired effective
+   manifest. Verify new UID/create/source/empty ps/jobs and saved governance equality.
+   Native startup is actual run_async on root operator PTY/normal keyboard Accept,
+   exact settings with saved workspace rules; cancellation starts no runtime/task.
+   Exactly one fresh-ID original local-revised request/no disclosure through installed
+   dummy bridge. Votes are existing Textual run_test Pilot clicks invoking actual
+   approval handler, labeled automated UI-handler coverage. Exact request/read/artifact
+   approvals only; deny shell/outside/other writes. Same Decimal1150.25/250.10/900.15,
+   exact source quotes and omission of raw synthetic identity/account artifact oracle.
+   Capture strict owner-only diagnostics at terminal before exact same-ID replay and
+   again before one normal owned runtime stop; missing is diagnostics_unavailable,
+   no guessed cause/empty records or late-cleanup absence promise. Replay performs
+   no work/consent. First task failure or timeout stops further inference. Separate
+   primary/diagnostic/cleanup/save failures; known owned absence and unchanged shared
+   model identity/fixtures/pins after normal cleanup. Settings additions persist;
+   backups support later explicitly authorized rollback, no automatic recovery policy.
+3. Location: HOW, private static-verification report and ONE new owner0600
+   /private/tmp/airlock-pcre2-repair-task-3bceb.py, later unique private evidence/
+   backups. Later mutation targets ONLY repo/runtime.manifest.json.settings.
+   extra_runtime_reads and /Users/jewunetie/Library/Application Support/airlock-runtime/
+   prepared-settings.json extra_runtime_reads, same file append. No config.toml,
+   source/test/library/packages/assets/plugin/calibration/history/Git/Context/Docker
+   mutations. Preserve all original runners, probe aggregate and prior failures.
+4. Tests: static AST/hash/mode/full fresh-eyes and root full-script read, separately
+   preserved target dicts, exact one-file appends/readback/backups, binding allowlist
+   exclusion plus actual later binding equality, old/new settings equality, explicit
+   empty stop/restart guards, native PTY startup and one original task, strict numeric
+   diagnostic ordering, immutable fixtures/pins/shared service, independent cleanup
+   and fixed save-fault output. Later actual artifact usefulness/receipt/idempotency
+   and cleanup assertions required; no success inferred from repaired native listing.
+   Root owns model/process slot and explicit execution/external-write handoff. No
+   source imports, execution, runtime/model/scanner or external writes during writer
+   static turn; no new broad suites/calibration/preparation.

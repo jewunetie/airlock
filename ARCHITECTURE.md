@@ -141,6 +141,8 @@ read_file  write_file  edit_file  list_files  grep  shell
 
 Delegation is disabled. Repository instructions are not automatically promoted into trusted system instructions. Coder supplies its normal bounded output, argument repair, and context-management machinery. Airlock uses Pydantic hooks for local approval and exact-call validation rather than duplicating the native filesystem tools.
 
+Airlock additionally registers a native `calculate` tool for exact plain-decimal addition, subtraction and multiplication. `Settings.enabled_tools` selects among these seven built-ins; worker preparation and owner model/tool boundaries reject disabled names. Startup selections apply to that start; trusted TOML supplies defaults across starts. Calculation uses admitted-task authorization without filesystem or shell grants, retaining tool budgets, deduplication, audit and cancellation. Its eventual response still passes disclosure checks and release governance.
+
 Tools execute sequentially. Exact approvals bind the tool name, validated arguments, task, and configuration version, and cannot be replayed. Read, write, and shell policies are independent. Native shell work remains confined by SRT even when a command launches another program.
 
 ### Boundary contracts
@@ -154,6 +156,7 @@ All filesystem access below uses the worker's SRT grants. Read results and tool 
 | `grep` | Matching text and paths from granted paths | Read policy; matches remain private |
 | `write_file` / `edit_file` | Change granted writable files; derived content remains private | Write visibility and policy; exact validated call approval when manual; completed changes are not rolled back on later failure |
 | `shell` | Programs may use all filesystem capabilities granted by SRT; no network | Shell visibility and policy; exact call approval when manual; denying a named write tool does not remove shell write capability |
+| `calculate` | Exact bounded decimal addition, subtraction and multiplication; no files, commands or monetary rounding | Admitted task and enabled tool; fixed local argument errors, existing accounting and eventual disclosure checks |
 | Worker/judge model requests | Supervisor forwards bounded private context to the configured local model | Literal loopback endpoint only; worker has no direct network; limits/errors cannot authorize release |
 | Scanner requests/results | Candidate text and bounded decoded views; private findings returned to supervisor | Required scanner health and limits; enforce mode withholds on findings or failures |
 | Cloud `ask` | Admit one request into the locally selected workspace | Request policy; request text cannot set workspace or governance; retry identity binds the original payload |

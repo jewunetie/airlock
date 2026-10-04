@@ -1184,7 +1184,8 @@ def test_source_cli_help_and_fixed_invalid_command():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('manual', [False, True])
-async def test_actual_coder_tools_and_approval_hook_contract(tmp_path, manual, monkeypatch):
+@pytest.mark.parametrize('tool', ['read_file', 'calculate'])
+async def test_actual_coder_tools_and_approval_hook_contract(tmp_path, manual, tool, monkeypatch):
     from pydantic import TypeAdapter
     from pydantic_ai.messages import ModelResponse, ToolCallPart
     scratch = tmp_path/'scratch'
@@ -1192,7 +1193,7 @@ async def test_actual_coder_tools_and_approval_hook_contract(tmp_path, manual, m
     monkeypatch.setenv('TMPDIR', str(scratch))
     document = tmp_path/'synthetic.txt'
     document.write_text('Synthetic local file read positive control')
-    policy = a.Governance(request='allow', read='manual' if manual else 'allow', write='allow', shell='allow',
+    policy = a.Governance(request='allow', read='deny' if tool == 'calculate' else 'manual' if manual else 'allow', write='allow', shell='allow',
                           write_visibility='visible', release='auto')
     fixture = Fixture(tmp_path, policy)
     task = fixture.task()
@@ -1211,9 +1212,10 @@ async def test_actual_coder_tools_and_approval_hook_contract(tmp_path, manual, m
                 params = value['parameters']
                 self.visible_tools = {tool['name'] for tool in params['function_tools']}
                 if self.model_calls == 1:
-                    part = ToolCallPart('read_file', {'path': str(document)}, tool_call_id='read-1')
+                    args = {'operation':'subtract', 'left':'-10.05', 'right':'5.00'} if tool == 'calculate' else {'path':str(document)}
+                    part = ToolCallPart(tool, args, tool_call_id='read-1')
                 else:
-                    assert 'Synthetic local file read positive control' in str(value['messages'])
+                    assert ('-15.05' if tool == 'calculate' else 'Synthetic local file read positive control') in str(value['messages'])
                     part = ToolCallPart(params['output_tools'][0]['name'],
                                         {'response': 'Synthetic result', 'protected_sources': []})
                 return {'response': TypeAdapter(ModelResponse).dump_python(ModelResponse(parts=[part]), mode='json')}
@@ -1236,14 +1238,129 @@ async def test_actual_coder_tools_and_approval_hook_contract(tmp_path, manual, m
     result = await a.run_coder({'ask': {'request': 'Read the synthetic file', 'disclosure_request': 'Synthetic result'}},
                                channel, a.Settings(governance=policy), tmp_path)
     assert result == {'response': 'Synthetic result', 'protected_sources': []}
-    assert channel.visible_tools == a.TOOL_NAMES
+    assert channel.visible_tools == (a.TOOL_NAMES - a.READ_TOOLS if tool == 'calculate' else a.TOOL_NAMES)
     assert channel.model_calls == 2
     checks = [value for op, value in channel.calls if op == 'tool_check']
     approvals = [value for op, value in channel.calls if op == 'approve_tool']
-    assert len(approvals) == int(manual)
-    assert [value['approved'] for value in checks] == ([False, True] if manual else [False])
+    needs_approval = manual and tool == 'read_file'
+    assert len(approvals) == int(needs_approval)
+    assert [value['approved'] for value in checks] == ([False, True] if needs_approval else [False])
     assert [value for op, value in channel.calls if op == 'tool_finished'] == [{'id': 'read-1'}]
     assert task.tool_calls == 1 and 'read-1' in task.consumed
+
+
+@pytest.mark.parametrize('operation,left,right,expected', [
+    ('add','0.1','0.2','0.3'), ('subtract','-10.05','5.00','-15.05'),
+    ('multiply','19.95','3','59.85'), ('add','1.20','2.00','3.20'),
+    ('multiply','-0.00','2','-0.00'), ('add','+001','2','3'),
+    ('add','1','0.'+'0'*80+'1','1.'+'0'*80+'1'),
+    ('multiply','9'*80,'9'*80,str((10**80-1)**2)),
+])
+def test_decimal_calculator_exact(operation, left, right, expected):
+    with a.localcontext() as context:
+        context.prec = 2
+        assert a.calculate_decimal(operation, left, right, 12000) == expected
+        assert context.prec == 2
+
+
+@pytest.mark.parametrize('operation,left,right', [
+    ('divide','1','2'), ('add',1,'2'), ('add',True,'2'), ('add',0.1,'2'),
+    ('add','1e2','2'), ('add','NaN','2'), ('add','Infinity','2'),
+    ('add',' 1','2'), ('add','.5','2'), ('add','5.','2'), ('add','١','2'),
+    ('add','1+2','2'), ('add','1\n','2'), ('add','1'*65,'2'),
+])
+def test_decimal_calculator_fixed_invalid_arguments(operation, left, right):
+    with pytest.raises(a.AirlockError, match='^calculator_invalid_arguments$'):
+        a.calculate_decimal(operation, left, right, 64)
+
+
+def test_enabled_tools_configuration():
+    settings = a.Settings(enabled_tools=('calculate',))
+    assert a.Settings.model_validate_json(settings.model_dump_json()) == settings
+    assert a.Settings(enabled_tools=()).enabled_tools == ()
+    for names in [('unknown',), ('calculate','calculate'), (1,)]:
+        with pytest.raises(ValidationError): a.Settings(enabled_tools=names)
+
+
+@pytest.mark.asyncio
+async def test_calculator_owner_accounting_and_disabled_model_boundary(tmp_path):
+    fixture = Fixture(tmp_path, a.Governance(request='allow', read='deny', shell='deny', write='deny'))
+    task = fixture.task()
+    payload = {'name':'calculate', 'args':{'operation':'add','left':'0.1','right':'0.2'}, 'id':'calc-1'}
+    assert await fixture.runtime.worker_message(task, {'op':'approve_tool','payload':payload}) == {'allow':False}
+    assert await fixture.runtime.worker_message(task, {'op':'tool_check','payload':payload}) == {'decision':'allow'}
+    assert task.tool_calls == 1 and task.consumed == {'calc-1'} and task.current_tool == 'calculate'
+    assert fixture.store.db.execute("SELECT COUNT(*) FROM audit WHERE task=? AND event='tool_allowed'", (task.id,)).fetchone()[0] == 1
+    assert await fixture.runtime.worker_message(task, {'op':'tool_check','payload':payload}) == {'decision':'deny'}
+    await fixture.runtime.worker_message(task, {'op':'tool_finished','payload':{'id':'calc-1'}})
+    assert task.current_tool is None
+    fixture.runtime.settings = fixture.settings.model_copy(update={'max_tool_calls':1})
+    with pytest.raises(a.AirlockError, match='tool_budget_exhausted'):
+        await fixture.runtime.worker_message(task, {'op':'tool_check','payload':{**payload,'id':'calc-2'}})
+    fixture.runtime.settings = fixture.settings.model_copy(update={'enabled_tools':()})
+    with pytest.raises(a.AirlockError, match='invalid_tool_call'):
+        await fixture.runtime.worker_message(task, {'op':'tool_check','payload':{**payload,'id':'disabled'}})
+    service = ollama_budget_service(a.Settings(enabled_tools=()))
+    try:
+        with pytest.raises(a.AirlockError, match='unknown_tool'):
+            await service.request(ollama_budget_payload(tools=True), fixture.task())
+    finally:
+        await service.close()
+
+
+@pytest.mark.asyncio
+async def test_disabled_worker_tools_are_not_exposed(tmp_path, monkeypatch):
+    from pydantic_ai.messages import ModelResponse, ToolCallPart
+    scratch = tmp_path/'scratch'; scratch.mkdir()
+    monkeypatch.setenv('TMPDIR', str(scratch))
+    class Channel:
+        async def call(self, op, data):
+            if op == 'policy': return {'policy':a.Governance().model_dump(mode='json')}
+            if op == 'model':
+                assert data['parameters']['function_tools'] == []
+                part = ToolCallPart(data['parameters']['output_tools'][0]['name'], {'response':'','protected_sources':[]})
+                return {'response':a.TypeAdapter(ModelResponse).dump_python(ModelResponse(parts=[part]), mode='json')}
+            if op == 'guard': return {'decision':'allow'}
+            if op == 'trajectory': return {}
+            pytest.fail(f'Unexpected boundary {op}')
+    assert await a.run_coder({'ask':{'request':'Synthetic no-tool task'}}, Channel(),
+                             a.Settings(enabled_tools=()), tmp_path) == {'response':'','protected_sources':[]}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('operand', [0.1, True, 'NaN', '1'*65])
+async def test_native_calculator_invalid_operands_stay_local(tmp_path, monkeypatch, operand):
+    from pydantic_ai.messages import ModelResponse, ToolCallPart
+    scratch = tmp_path/'scratch'; scratch.mkdir()
+    monkeypatch.setenv('TMPDIR', str(scratch))
+    class Channel:
+        model_calls = 0
+        operations = []
+        async def call(self, op, data):
+            self.operations.append(op)
+            if op == 'policy': return {'policy':a.Governance().model_dump(mode='json')}
+            if op == 'model':
+                self.model_calls += 1
+                if self.model_calls == 1:
+                    part = ToolCallPart('calculate', {'operation':'add','left':operand,'right':'2'}, tool_call_id='bad-calc')
+                else:
+                    if isinstance(operand, str):
+                        assert 'Calculator requires bounded plain ASCII decimal strings' in str(data['messages'])
+                    else:
+                        assert 'retry-prompt' in str(data['messages'])
+                    part = ToolCallPart(data['parameters']['output_tools'][0]['name'], {'response':'','protected_sources':[]})
+                return {'response':a.TypeAdapter(ModelResponse).dump_python(ModelResponse(parts=[part]), mode='json')}
+            if op == 'tool_check': return {'decision':'allow'}
+            if op == 'guard': return {'decision':'allow'}
+            if op in ('tool_finished','trajectory'): return {}
+            pytest.fail(f'Unexpected boundary {op}')
+    channel = Channel()
+    assert await a.run_coder({'ask':{'request':'Synthetic validation task'}}, channel,
+                             a.Settings(max_candidate_chars=64, enabled_tools=('calculate',)), tmp_path) == {'response':'','protected_sources':[]}
+    assert channel.model_calls == 2
+    assert channel.operations.count('tool_check') == int(isinstance(operand, str))
+    assert channel.operations.count('tool_finished') == int(isinstance(operand, str))
+    assert channel.operations.count('guard') == 1
 
 
 def test_caller_fields_cannot_grant_authority():
@@ -1462,7 +1579,7 @@ def calibration_fixture(tmp_path):
 @pytest.mark.asyncio
 @pytest.mark.parametrize('action', ['accept', 'cancel', 'invalid'])
 async def test_startup_screen_exact_acceptance_and_cancellation(tmp_path, action):
-    from textual.widgets import Select, Static
+    from textual.widgets import Select, SelectionList, Static
     settings = calibration_fixture(tmp_path)
     original = settings.calibration.read_bytes()
     if action == 'invalid':
@@ -1471,6 +1588,7 @@ async def test_startup_screen_exact_acceptance_and_cancellation(tmp_path, action
     async with app.run_test(size=(110, 36)) as pilot:
         assert app.query_one('#calibration_summary', Static).region.y < 36
         app.query_one('#release', Select).value = 'auto'
+        app.query_one('#enabled_tools', SelectionList).deselect('shell')
         assert await pilot.click('#cancel' if action == 'cancel' else '#accept')
         await pilot.pause()
         if action == 'invalid':
@@ -1480,6 +1598,7 @@ async def test_startup_screen_exact_acceptance_and_cancellation(tmp_path, action
             assert app.return_value is None
         else:
             chosen = app.return_value
+            assert chosen.enabled_tools == tuple(name for name in settings.enabled_tools if name != 'shell')
             assert chosen.governance.release == a.Mode.AUTO and chosen.governance.privacy == a.PrivacyMode.ENFORCE
             assert chosen.calibration_acceptance == settings.calibration_sha256
             assert chosen.pii_threshold == 0.3 and chosen.policy_threshold == 0.5

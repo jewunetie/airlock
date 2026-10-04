@@ -3317,3 +3317,108 @@ arithmetic or tax readiness; those live gates remain separate.
   split metrics, including prior observed failures. Verify all evidence indexes,
   fixtures and process/file invariants. Report remaining limits without granting
   release authority, calibration acceptance or tax-readiness status.
+
+## Configurable local decimal calculation
+
+### Data model
+
+- Add `Settings.enabled_tools: tuple[str, ...]`, defaulting to the existing six
+  Coder tools plus `calculate`. Reject unknown names and duplicates; allow empty.
+- Calculation takes an operation (`add`, `subtract`, or `multiply`) and two
+  strict string operands. Accept only ASCII `[+-]?[0-9]+(?:\.[0-9]+)?` and cap
+  each operand with the existing `max_candidate_chars`. No float conversion,
+  exponent, whitespace, expression evaluation or monetary rounding.
+
+### API contract
+
+- A pure helper returns a fixed-point string using stdlib Decimal and a local
+  precision of `len(left) + len(right) + 2`. Invalid inputs return a fixed local
+  error; signed zero and trailing scale follow Decimal result semantics.
+- Bind the settings cap in a native Pydantic AI tool wrapper in `run_coder`.
+  Calculation uses admitted task authorization, not filesystem or shell grants.
+  Reject manual `approve_tool` for calculation; preserve call budgets, dedup,
+  audit, pending PDF exclusion, cancellation and final output/guard limits.
+- Enforce enabled names in worker preparation, model request validation and owner
+  tool checking. Existing Coder approval rules remain in force. Present enabled
+  built-ins in the existing Textual startup screen and save the chosen settings.
+  Native tool registration supports future explicit built-ins without a plugin
+  loader, Pi integration, new dependency or a separate approval mechanism.
+
+### Location
+
+- Production changes stay in root `airlock.py`; regression checks stay in
+  `test.py`. Document the built-in boundary in `ARCHITECTURE.md`, user-facing
+  configuration in `README.md` and current executed evidence in `VALIDATION.md`.
+  Dependencies remain unchanged.
+
+### Tests and assertions
+
+- Assert exact signed/fractional results, large coefficients, differing scales,
+  trailing zeros, signed zero, and rejection of malformed, coerced and oversized
+  operands. Assert configuration round-trip and unknown/duplicate rejection.
+- Exercise actual native scripted calculator execution and disabled tools at all
+  three boundaries. Verify accounting, consumed call IDs, audit and finishing.
+  Test startup Accept/Cancel with tool selections. Run the full locked suite and
+  package-content checks, and perform a separate fresh-eyes review.
+- Preserve the incorrect signed-tax artifact. A corrected synthetic native task
+  must write a new artifact and prove the result is -15.05 before claiming the
+  arithmetic defect resolved. This does not establish scanner or PDF readiness.
+
+## Isolated native signed-tax calculator validation
+
+### Data model
+
+- Freeze the current calculator source and test digests before execution. Retain
+  all twelve old dummy files, including incorrect artifacts, by bytes, inode,
+  mode and owner. Create a new private workspace containing only a copy of the
+  already synthetic signed statement and an initially absent result artifact.
+- Measure the existing first-64 calibration/heldout corpus on the current source
+  with unchanged scanner thresholds and detector assets. Store raw findings,
+  failures and separate metrics, then a source-bound unreviewed profile. Previously
+  observed examples remain regression evidence, not fresh holdout evidence.
+- Record original global supervisor/model identities, catalog, runtime/job state,
+  prepared settings/manifests/profiles and source/test hashes before and after.
+  Native model calls must use only the already-resident pinned local model.
+
+### API contract
+
+- Use actual ScannerService/SRTLauncher for measurement, with its normal health
+  canaries. Errors are failures; a failed scanner is not a clean privacy result.
+- Supply an absolute private XDG_STATE_HOME consistently to controller, native
+  supervisor and bridge. Verify the actual installed platformdirs state path
+  before startup. Do not restart or modify the existing global supervisor.
+- Use the existing Textual startup review with automated Pilot acceptance of
+  exact synthetic test settings/profile, explicitly recorded as a test action,
+  then native control start and the unchanged three-tool bridge. Keep enforce
+  privacy, manual request/read/write/release and hidden denied shell. Enable the
+  existing built-ins including calculate; no expected calculation or tool sequence
+  is supplied in the natural task request.
+- Submit one local-only signed bookkeeping request with a new request_id, produce
+  one new artifact with decimal-string amounts and exact supporting quotes, and
+  compare against an independent Decimal oracle afterward. Ordinary native local
+  request/read/write votes may approve only this request, confined reads and the
+  exact new artifact. There is no selected-field publication in this run.
+- Require a completed fixed receipt with null response and stable retry counters.
+  Preserve the first failure; no automatic retries, calibration tuning, CPU gate,
+  arbitrary memory minimum, backend replacement or global activation. Close only
+  the exact owned test runtime/supervisor, record diagnostics before closure, and
+  independently verify owned child/job absence and original-state preservation.
+
+### Location
+
+- One owner-only runner under /private/tmp and one new private evidence/workspace/
+  state tree. HOW.md and VALIDATION.md record scope and actual results. Production,
+  dependencies, installed plugin, global settings/history and older artifacts stay
+  unchanged during execution. No Docker operations are included.
+
+### Tests and assertions
+
+- Independently review the runner before executing; offline-check the signed
+  artifact oracle with correct, wrong-sign, missing-quote and private-identity
+  examples, and the explicit isolated state path. Snapshot and enforce frozen
+  source/test/assets/corpus before measurement and task execution.
+- Verify current scanner startup and all measured outcomes without hiding false
+  blocks; verify actual worker read, calculate and write through tool audit/counters
+  plus exact final bytes/quotes, null receipt, no-work replay and cleanup. A pass
+  establishes this synthetic local-only workflow, not selected release, real tax
+  document interpretation, forged-permission containment, PDF or full readiness.

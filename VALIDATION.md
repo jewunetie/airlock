@@ -4,6 +4,37 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+**Configurable native decimal calculation is implemented; live usefulness remains a separate gate.**
+Root source `c5a5bf93` and tests `12afd8e7` add exact bounded decimal addition,
+subtraction and multiplication with strict string operands and fixed local errors.
+The enabled-tool list is enforced at worker preparation, model forwarding and owner
+execution; startup selections apply to this start, while trusted TOML supplies
+persistent defaults. File/shell approvals, disclosure checks and release governance
+remain enforced. No dependency, Pi integration or external tool loader was added.
+
+Focused scripted SDK/UI/packaging checks passed 38 cases. The full locked suite
+passed **454 tests** with local socket/process-inspection permissions. Its initial
+sandboxed run passed 441 and failed 13 on denied OS socket/process operations;
+no assertions were removed or weakened. Native scripted checks establish exact
+`-10.05 - 5.00 = -15.05`, invalid/coerced operand rejection before execution,
+disabled-tool boundaries, call accounting/deduplication/audit, and startup
+Accept/Cancel choices. Root independently inspected the complete change and found
+no actionable defect in this scope.
+
+Offline `uv sync --locked` passed. The first build used a fresh private cache and
+could not resolve uncached hatchling offline; using the existing private build
+cache succeeded. Wheel and source archive inspection confirmed exactly one root
+`airlock.py`, with no historical implementation or tests shipped. Dependencies and
+lockfile are unchanged.
+
+The earlier incorrect signed artifact remains preserved. An isolated actual-model
+task with a new artifact, fresh current-source scanner measurement/profile and
+the native startup/approval flow is still pending. These core checks do not resolve
+ordinary context-scanner false blocks, selected-field live Approve/Deny, forged
+permission containment, PDF integration or overall tax readiness. The original
+global prepared manifest/profile remains intentionally unchanged and bound to its
+older source; this checkpoint does not silently activate a new global profile.
+
 **The complete shadow comparison ran after removing the unrequested CPU gate.**
 The human rejected that limit on October 4. New runner `3edad2d4` removes CPU
 sampling, the threshold and its wait; no substitute limit was added. Full independent

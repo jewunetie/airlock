@@ -3639,3 +3639,51 @@ arithmetic or tax readiness; those live gates remain separate.
   original twelve fixtures, earlier failures and unchanged global model/supervisor.
   These synthetic local artifacts do not establish selected-field release, scanner
   field accuracy, PDF interpretation or full tax readiness.
+
+## Exact requested fields in local structured files
+
+### Data model
+
+- Preserve current missing-case failure, index and physical artifact unchanged at
+  /private/tmp/airlock-missing-ambiguous-current-40gv44nr. It correctly kept missing
+  interest null but added four unrelated source fields, failing the exact three-key
+  artifact contract. No amount was invented and no disclosure was requested.
+- Existing raw task text, Settings/Governance, native Coder arguments, LocalOutput,
+  requested JSON entities and error types remain unchanged. Do not derive a lossy
+  global field allowlist from arbitrary natural-language requests.
+
+### API contract
+
+- Add one literal worker instruction: "When creating a structured file, include
+  only the fields requested by the original task; do not copy unrelated source
+  fields." Keep the existing full-structure/provenance/self-check instructions,
+  tools, approvals, privacy/retry semantics and bounds. This improves task following;
+  it is not a deterministic schema guarantee or additional release permission.
+- Re-execute the identical two local-artifact requests and strict physical oracles
+  in a new private workspace. Freeze the new source before execution. Measure the
+  unchanged 64-case previously observed scanner corpus through this source before
+  generating a new unreviewed source-bound profile; preserve its actual failures/
+  metrics. Accept only through native startup Pilot for this isolated synthetic
+  test with unchanged governance/thresholds/tools. Do not activate global settings.
+- Retain the reviewed native approvals, immediate ownership capture, SDK closure,
+  no-work replay, first-failed-case stop and prior evidence preservation. Only the
+  approved source literal and HOW may differ from earlier immutable source maps;
+  old profile/result bindings and failed artifacts cannot be rewritten.
+
+### Location
+
+- One instruction literal in root airlock.py. Existing test.py and dependencies
+  unchanged. New owner-only /private/tmp validation runner/state/workspace/profile/
+  evidence; root HOW.md/VALIDATION.md record current executed evidence.
+
+### Tests and assertions
+
+- Run the locked core suite after the source edit and fresh-eyes review its exact
+  diff. Reuse meaningful artifact/oracle/approval/ownership assertions; do not add
+  a test that merely searches for the instruction wording or weaken exact keys.
+- Root full read and independent static review precede native validation. Require
+  all 64 real scanner measurements with no adapter failure, exact current binding
+  and honest regression metrics, exact isolated startup settings, correct new
+  missing/ambiguous artifacts, genuine native read/write approvals and positive
+  usage, local-only receipts, no-work replay and complete owned cleanup/preservation.
+  A model ignoring this instruction still fails; do not claim deterministic safety.

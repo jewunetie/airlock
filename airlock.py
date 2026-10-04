@@ -4443,6 +4443,8 @@ async def run_coder(command: dict, channel: ChildChannel, settings: Settings, ro
             'When enabled, use calculate for exact decimal addition, subtraction and multiplication. '
             'For local files, follow the original task\'s full requested structure and provenance, '
             'including exact source quotes when requested, subject to local tool policy. '
+            'When creating a structured file, include only the fields requested by the original task; '
+            'do not copy unrelated source fields. '
             'Before returning LocalOutput, check completed local work against every explicit '
             'requirement of the original task and correct omissions using permitted tools. '
             'Return response containing only the requested disclosure, or empty response if no disclosure was requested. '

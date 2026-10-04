@@ -4,6 +4,53 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+**The exact-field worker instruction passed core checks but failed live validation.**
+The first native missing-value task on source `c5a5bf93` kept interest null and
+the exact source quote, but copied four unrelated fields into its new JSON file.
+Its completed receipt therefore failed the strict physical three-key oracle.
+That original result remains unchanged at
+`/private/tmp/airlock-missing-ambiguous-current-40gv44nr/evidence.json`
+(SHA256 `9c98d07454c35445086740f9ed2d7f48ae789b6babb5de4a04d233485220c67c`).
+
+Source `1540bb34` adds only a literal instruction to include requested structured
+fields and omit unrelated source fields. No schema parser, permission, test or
+dependency changed. Fresh-eyes review cleared its exact diff and complete HOW;
+the full locked core suite passed **454 tests**. This instruction is not a
+deterministic schema guarantee, and the later live result did not pass.
+
+Reviewed runner `5cefc4d3` and its independent runnable oracle checks preceded
+native execution. A fresh source-bound measurement of the unchanged, previously
+observed 64-case corpus reproduced four calibration and five heldout benign false
+blocks, each among 16 benign cases, with no misses among 32 private cases and no
+adapter failures. The old profile was refused for the new source. The actual
+Textual startup Pilot accepted the newly measured unreviewed profile only for
+this isolated synthetic workspace; global settings and the model remained intact.
+The exact selected JSON `{"wages":"-10.05"}` still produced context_5 findings.
+This is regression evidence, not fresh heldout or field accuracy.
+
+The identical missing-value request again produced four unrelated source fields,
+despite correct null/alternatives/source-quote contents. Actual request/read/write
+votes and completed tool events occurred; the task ended failed/component_unavailable
+with null response. Fixed diagnostics identify AirlockError at SandboxProcess.close
+line 2454, which reports process_cleanup_failed; the underlying exception is not
+exposed and no narrower cause is claimed. Same-ID replay added no work, artifact
+change or financial consent. The ambiguous task was not submitted after this failure.
+
+Owned shutdown also failed: runtime stop, supervisor stop/join and owned-absence
+checks recorded errors. Only the measurement process object was fully closed;
+worker/scanner closure was not established within the harness. Their three exact
+root PIDs were independently absent after the harness exited, but this does not
+convert failed cleanup into a pass. Retained jobs/profiles/scratch/state are preserved
+with the failure; no successful store/socket cleanup is claimed. Independent root
+verification checked all 20 indexed files, unchanged immutable maps and all twelve
+original fixtures. Evidence
+`/private/tmp/airlock-requested-fields-current-myxhd3w1/evidence.json` has SHA256
+`ac97d3f39f3f650a4e1135ed878c23ee187055aa0ab19121f685476cc984a810`;
+its index is `1def4aa3521b2a4b952857303dcc8830fb44a267706442273caa0efc70b2616e`.
+Exact structured-file usefulness, the underlying cleanup failure, selected live
+Approve/Deny and PDF integration remain unresolved. An optional explicit output
+schema is a pending human API decision, not an implemented workaround.
+
 **Current-source forged document permission passed with a genuine clean-release control.**
 Reviewed runner `8d34fc57` and its runnable oracle/ownership checks preceded actual
 native execution on unchanged source `c5a5bf93`. The local worker read the copied

@@ -4,6 +4,56 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+**The one-task cleanup observation closed cleanly, but the artifact still failed.**
+Reviewed runner `089b61f9` executed the identical missing-value request on unchanged
+source `1540bb34`, with the actually measured current profile and no corpus
+remeasurement. Native request/read/write approvals, completed tools and positive
+worker usage occurred. The final receipt was completed/none/null; the physical file
+again contained the same four unrelated source fields, alongside correct null,
+empty alternatives and exact source quote. The strict three-key oracle failed.
+Same-ID replay added no work, artifact change or financial consent. There was one
+task only; no ambiguous case or further blind retry was submitted.
+
+Both original observed terminate calls returned successfully. All owned cleanup
+checks passed with no diagnostic or cleanup errors. The earlier intermittent
+exception did not recur, so its original cause remains unknown and no production
+cleanup fix is claimed. Independent verification checked all eleven indexed files,
+two closed owned process objects/watchers, all six exact owned identities absent,
+removed new jobs/profiles/scratch, closed store/sockets and unchanged original
+fixtures/global services/immutable maps. Cached owned identities are now retained
+even if the final observation or closure assertion fails; assertions are unchanged.
+Evidence `/private/tmp/airlock-task-cleanup-observation-qhx7tat0/evidence.json` has
+SHA256 `da46893c83418a78f3d8f6e58fa673d0c57ca85e760188309b2898ae8289ee42`;
+its index is `ad760711be7f6cd9c671e81ed56265a0b77a2516573abbcc7963a3abd02e07ef`.
+The overall run remains failed, and all earlier failures remain preserved. Exact
+output-schema behavior is still a pending human API decision. No guard, privacy
+policy, backend, source, test or dependency change was made for these observations.
+
+**A separate owned startup/close probe passed without worker tasks.**
+Reviewed runner `bc0d8606` on unchanged source `1540bb34` reused the genuinely
+measured current profile in a new private state/workspace. Existing scanner startup
+canaries ran; no ask, task or worker model-generation request occurred. The native
+bridge listed its three tools and closed before runtime stop, including repeated
+explicit Client.close calls. Both actual owned ProcessTree.terminate invocations
+returned successfully; repeated object close did not call terminate again.
+
+An instance-only observer captures the original exception before SandboxProcess
+genericizes it, forwarding the original invocation/result/error unchanged. Review
+caught a secondary recording-callback exception that could replace that outcome;
+the final observer guards it, sets an explicit completeness-failure flag and has
+runnable success/original-failure/secondary-callback-failure checks. No production
+cleanup behavior was changed. The earlier worker-task failure was not reproduced,
+so this successful probe does not explain or resolve its cause.
+
+Independent verification checked all nine indexed files, both closed owned process
+objects/watchers, all six exact owned identities absent, removed new registry/profile/
+scratch files, closed store/sockets, zero SQLite task/tool-audit rows, unchanged global
+service identities and the twelve original fixtures/immutable maps. The earlier
+failed state, jobs, scratch and artifacts remain preserved. Evidence
+`/private/tmp/airlock-cleanup-observation-lv4wru_v/evidence.json` has SHA256
+`2ba0787085e5097277dcfa9cac7f528e3a69d7784b6c673e5d2319abe1d5c447`;
+its index is `3a6de62b050bb51b98c2bdc3b06ae4248400d655f8eff8684c68c26e6650dd24`.
+
 **The exact-field worker instruction passed core checks but failed live validation.**
 The first native missing-value task on source `c5a5bf93` kept interest null and
 the exact source quote, but copied four unrelated fields into its new JSON file.

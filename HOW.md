@@ -3687,3 +3687,90 @@ arithmetic or tax readiness; those live gates remain separate.
   missing/ambiguous artifacts, genuine native read/write approvals and positive
   usage, local-only receipts, no-work replay and complete owned cleanup/preservation.
   A model ignoring this instruction still fails; do not claim deterministic safety.
+
+## Owned cleanup exception observation without worker tasks
+
+### Data model
+
+- Freeze source 1540bb34/tests 12afd8e7 and the final failed requested-fields
+  evidence/index unchanged. Reuse only its genuinely measured current-source
+  profile/settings in a new private workspace/state. Retain exact owned process
+  identities, SandboxProcess references, bounded known-tree states and exception
+  class/fixed code/source line records. Do not record arbitrary exception text.
+
+### API contract
+
+- Start the existing isolated Supervisor/SRT scanner/worker probes and native
+  bridge, list its three tools, then close explicitly; submit no ask or model
+  generation. Existing scanner startup canaries still execute. Wrap each actual
+  owned tree's terminate method immediately when
+  its SandboxProcess is returned by the launcher. Call the original unchanged;
+  record its returned success or actual raised exception before close replaces
+  it with process_cleanup_failed, then return or re-raise unchanged. Observation
+  errors are separate failures, not substitute cleanup success.
+- Supervisor constructs its launcher before startup probes return. A temporary
+  harness-only SRTLauncher constructor factory therefore calls the original
+  constructor unchanged, installs the observer on that returned instance's spawn
+  method and returns the identical instance. Restore the module symbol in finally;
+  do not patch class spawn, ProcessTree methods or other/global process behavior.
+- Keep native process behavior, settings/thresholds/guards and global services
+  unchanged. No recovery/deletion of earlier retained jobs, scratch or state.
+  Preserve both failed artifacts, all earlier indexes and the twelve fixtures.
+  Root exclusively executes; exact owned closure/absence remains mandatory.
+
+### Location
+
+- One new owner-only /private/tmp runner/evidence/state/workspace. HOW.md and
+  VALIDATION.md record scope/results. Production/tests/dependencies unchanged.
+
+### Tests and assertions
+
+- Meaningful fake-tree success/raised-exception forwarding and observation-error
+  checks, full root read and independent static review before native execution.
+  Pin assets/profile/source/prior indexes; assert zero submitted tasks, actual
+  bridge connection, explicit idempotent closure and final owned store/socket/
+  process/watcher/job/profile/scratch teardown. Preserve precise failures and
+  immutable/global/fixture snapshots; a successful probe cannot explain the
+  earlier intermittent error or establish model-task cleanup correctness.
+
+## Observe cleanup during one unchanged local worker task
+
+### Data model
+
+- Freeze source 1540bb34/tests 12afd8e7, both failed missing-value artifacts and
+  the successful no-task cleanup probe/index unchanged. Reuse the genuinely
+  measured current-source settings/profile. Copy only tax-missing.txt into a new
+  private workspace; tax-missing.json begins absent. Retain its exact requested
+  three-field structure, raw source/request/physical artifact and bounded native
+  approvals/tool/scan/usage/replay/termination records. Do not record arbitrary
+  exception text; record only original class, fixed code and source frames.
+
+### API contract
+
+- Submit exactly the same natural missing-value local-only request with fresh ID
+  and disclosure_request null. One task only, no blind retry or ambiguous followup.
+  Use genuine native request/source/own-artifact read/write Textual approvals;
+  other files/shell/release permission remain denied. Keep the strict physical
+  artifact, completed/none/null receipt, actual tool completion and no-work replay
+  assertions. An incorrect artifact or failed receipt remains a failed case.
+- Apply the reviewed constructor/instance spawn/terminate observation immediately
+  to actual owned sandbox processes before startup, then retain original cleanup
+  exceptions during worker closure. Forward all outcomes unchanged; observation
+  faults invalidate completeness. Reuse the actual profile rather than repeat an
+  unchanged corpus measurement. No schema API, prompt change, guard bypass, policy/
+  backend/global settings change, old-state recovery/deletion or new admission gate.
+
+### Location
+
+- One owner-only /private/tmp runner/evidence/state/workspace. Root HOW.md and
+  VALIDATION.md record evidence. Production, tests and dependencies unchanged.
+
+### Tests and assertions
+
+- Root full read, existing independent review and meaningful prior artifact/
+  native-vote/original-outcome/callback-failure checks precede execution. Pin source,
+  actual calibration and both failed/successful prior indexes; preserve original
+  fixtures/global services and immutable maps with only current HOW/VALIDATION
+  document hashes allowed to differ. Require exact owned cleanup or record failure;
+  diagnostic usefulness is not artifact correctness or tax readiness. A successful
+  close again cannot establish the cause of the earlier intermittent error.

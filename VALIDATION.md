@@ -46,9 +46,27 @@ Evidence: `/private/tmp/airlock-source-only-selection-df776-a_5f2n4i/evidence.js
 Neither emitted selection arguments nor selection-time raw/rendered scans were
 retained, so UI validation and subsequent scanner constraints cannot yet be
 distinguished. Two scanner children were observed and both were cleaned up;
-their replacement reason/generation is unrecorded. A separately bounded scanner
-diagnosis is being prepared. No failed JSON supplied proof, original arithmetic
-assertion was changed, history was cleared or privacy setting was weakened.
+their replacement reason/generation is unrecorded. No failed JSON supplied proof,
+original arithmetic assertion was changed, history was cleared or privacy setting
+was weakened.
+
+**Current-format scanner diagnosis completed and exposes a canonical-format block.**
+One healthy scanner generation with all required canaries scanned the exact scalar
+`-10.05` and `{"wages":"-10.05"}` once each, under unchanged rules and thresholds.
+The scalar has no findings. The JSON has four liquid_policy findings on the word
+`wages`: hardship rule context_1 scores 0.669/0.729 and company rule context_5
+scores 0.547/0.601, above threshold 0.5. Neither scan has technical detector failures;
+the original owned process and generation remain unchanged. These ordinary findings
+would prevent selected publication under the existing contract. They establish
+current two-format behavior, not the lost selection-time scans, original rejecting
+branch or earlier scanner replacement cause. Evidence:
+`/private/tmp/airlock-selection-scan-df776-og09qiwb/evidence.json`.
+Normal owned close, three recorded process absences, watcher termination, empty
+private jobs/profile/scratch, unchanged ten files and shared/preparation pins pass.
+Independent execution review verified the narrow diagnosis and preservation checks.
+No task, financial vote, source registration or policy mutation occurred. A targeted
+choice about revising and evaluating the two contextual rule wordings is pending;
+thresholds, enforced privacy and manual-override restrictions remain unchanged.
 
 **Current-source installed-plugin revised local task passed the complete artifact check.**
 Actual native startup retained the saved manual/enforce rules at configuration 16.

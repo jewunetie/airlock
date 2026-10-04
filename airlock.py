@@ -2675,11 +2675,11 @@ def verify_asset(spec: AssetSpec | None) -> Path:
 
 POLICY_RULES = (
     'Flag private medical conditions, diagnoses, treatments, or mental health information.',
-    'Flag personal financial hardship, debt, bankruptcy, or inability to pay.',
+    'Flag disclosure that a person is in debt, bankrupt, unable to pay, or experiencing financial hardship.',
     'Flag non-public legal disputes, settlements, lawsuits, or investigations.',
     'Flag addiction, recovery, or substance use information about a person.',
     'Flag private immigration or visa status.',
-    'Flag non-public company information, confidential plans, or internal business data.',
+    'Flag disclosure of non-public company information that is confidential or has not been announced, such as confidential plans, internal financial results, a pending acquisition, or an internal investigation.',
 )
 REQUIRED_DETECTORS = {Detector.BETTERLEAKS, Detector.PRESIDIO, Detector.LIQUID_PII, Detector.LIQUID_POLICY}
 

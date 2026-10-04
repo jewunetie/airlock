@@ -4786,3 +4786,141 @@ async def test_native_coder_local_provenance_and_outbound_instruction_delivery(t
         assert all(value not in str(result) for value in (*expected['sources'].values(),'1150.25','SYN-ACCOUNT-QZXVJKMP'))
         assert f.runtime.submit(request).completion.result()==result and channel.calls==3 and f.runtime.queue.qsize()==1
     finally: f.store.close()
+
+
+@pytest.fixture
+def contextual_policy_adapter(tmp_path, monkeypatch):
+    """Exercise production pooling with scripted logits; no model assets are loaded."""
+    import torch
+    from types import SimpleNamespace
+    rules = (
+        'Flag private medical conditions, diagnoses, treatments, or mental health information.',
+        'Flag disclosure that a person is in debt, bankrupt, unable to pay, or experiencing financial hardship.',
+        'Flag non-public legal disputes, settlements, lawsuits, or investigations.',
+        'Flag addiction, recovery, or substance use information about a person.',
+        'Flag private immigration or visa status.',
+        'Flag disclosure of non-public company information that is confidential or has not been announced, such as confidential plans, internal financial results, a pending acquisition, or an internal investigation.',
+    )
+    prefix = 'Policy:\n' + '\n'.join('- '+rule for rule in rules) + '\n\nText:\n'
+    class Tokenizer:
+        full = None
+        def __call__(self, text, **kwargs):
+            offsets = [(i, i+1) for i in range(len(text))]
+            if kwargs.get('return_tensors') == 'pt':
+                self.full = text
+                if model.mode == 'missing-rule':
+                    start = prefix.index(rules[model.rule])
+                    offsets[start:start+len(rules[model.rule])] = [(0, 0)]*len(rules[model.rule])
+                return {'input_ids': torch.zeros((1, len(text)), dtype=torch.long),
+                        'offset_mapping': torch.tensor([offsets])}
+            return {'input_ids': list(range(len(text))), 'offset_mapping': offsets}
+    tokenizer = Tokenizer()
+    class Model:
+        mode, rule, logit, calls = 'normal', 1, 0.0, 0
+        def eval(self): return self
+        def forward(self, input_ids, rule_pool):
+            self.calls += 1
+            assert tokenizer.full.startswith(prefix)
+            assert tuple(rule_pool.shape) == (1, 6, len(tokenizer.full))
+            cursor = len('Policy:\n')
+            for index, rule in enumerate(rules):
+                start, end = cursor+2, cursor+2+len(rule)
+                assert tokenizer.full[start:end] == rule
+                expected = torch.zeros(len(tokenizer.full))
+                expected[start:end] = 1.0/len(rule)
+                assert torch.equal(rule_pool[0, index], expected)
+                cursor = end+1
+            logits = torch.full((1, len(tokenizer.full), 6), -20.0, dtype=torch.float64)
+            if self.mode == 'shape': return {'logits': logits[:, :, :5]}
+            if self.mode != 'clean':
+                logits[0, len(prefix), self.rule] = float('nan') if self.mode == 'nan' else self.logit
+            return {'logits': logits}
+        __call__ = forward
+    model = Model()
+    def loader(value):
+        def load(path, **kwargs):
+            assert path == str(tmp_path.resolve())
+            assert kwargs == {'local_files_only': True, 'trust_remote_code': True}
+            return value
+        return SimpleNamespace(from_pretrained=load)
+    monkeypatch.setitem(sys.modules, 'transformers', SimpleNamespace(
+        AutoTokenizer=loader(tokenizer), AutoModel=loader(model)))
+    def build(threshold=0.5, overrides=None):
+        settings = a.Settings(policy_asset=a.AssetSpec(path=tmp_path, revision='scripted-policy',
+            sha256={'fixture': '0'*64}), policy_threshold=threshold, policy_overrides=overrides or {})
+        detector = a.LiquidPolicyDetector(settings)
+        assert detector.prefix == prefix and a.POLICY_RULES == rules
+        return detector, settings
+    return build, model, tokenizer
+
+
+@pytest.mark.parametrize('rule', [1, 5])
+@pytest.mark.parametrize('override', [False, True])
+@pytest.mark.parametrize('logit', [-1.0, 0.0, 1.0])
+def test_contextual_policy_rule_pool_thresholds_and_metadata(contextual_policy_adapter, rule, override, logit):
+    build, model, tokenizer = contextual_policy_adapter
+    model.rule, model.logit = rule, logit
+    detector, settings = build(0.75 if override else 0.5, {f'context_{rule}': 0.5} if override else {})
+    text = '{"wages":"-10.05"}'
+    findings = detector.scan(text)
+    assert model.calls == 1 and tokenizer.full == detector.prefix+text
+    assert len(findings) == (1 if logit >= 0 else 0)
+    if findings:
+        item = findings[0]
+        assert item.category == a.Category.CONTEXT and item.detector == a.Detector.LIQUID_POLICY
+        assert item.detector_version == 'scripted-policy' and item.rule_id == f'context_{rule}'
+        assert item.threshold == 0.5 and item.score == pytest.approx(1/(1+a.math.exp(-logit)))
+        assert (item.start, item.end, item.captures) == (0, 1, {'text': '{'})
+        assert item.raw_detector_finding == {'token_index': len(detector.prefix), 'rule_index': rule,
+            'rule': a.POLICY_RULES[rule], 'score': item.score, 'chunk_start': 0,
+            'offsets': [len(detector.prefix), len(detector.prefix)+1]}
+    assert settings.policy_overrides == ({f'context_{rule}': 0.5} if override else {})
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('rule', [1, 5])
+@pytest.mark.parametrize('mode,code', [('normal', None), ('shape', 'policy_model_incompatible'),
+    ('nan', 'scanner_bad_output'), ('missing-rule', 'policy_model_incompatible')])
+async def test_contextual_policy_adapter_errors_withhold_and_clean_scan_releases(
+        tmp_path, monkeypatch, contextual_policy_adapter, mode, code, rule):
+    build, model, _ = contextual_policy_adapter
+    detector, settings = build()
+    model.mode, model.rule = mode, rule
+    if code:
+        with pytest.raises(a.AirlockError, match='^'+code+'$'):
+            detector.scan('{"wages":"-10.05"}')
+    else:
+        assert len(detector.scan('{"wages":"-10.05"}')) == 1
+    scanner = a.LocalDetectors.__new__(a.LocalDetectors)
+    scanner.settings, scanner.encoder_lock = settings, asyncio.Lock()
+    scanner.detectors, scanner.unavailable = {a.Detector.LIQUID_POLICY: detector}, set()
+    async def no_credentials(text, settings): return []
+    monkeypatch.setattr(a, 'run_betterleaks', no_credentials)
+    scan = await scanner.scan('{"wages":"-10.05"}')
+    assert scan.failures == ({a.Detector.LIQUID_POLICY} if code else set())
+    assert len(scan.findings) == (0 if code else 1)
+    f = Fixture(tmp_path, scanner=scanner)
+    try:
+        attempts = []
+        original_authorize, original_commit = a.authorize, f.store.commit_release
+        async def tracked_authorize(*args, **kwargs):
+            attempts.append('authorize')
+            return await original_authorize(*args, **kwargs)
+        def tracked_commit(*args, **kwargs):
+            attempts.append('commit')
+            return original_commit(*args, **kwargs)
+        with monkeypatch.context() as blocked:
+            blocked.setattr(a, 'authorize', tracked_authorize)
+            blocked.setattr(f.store, 'commit_release', tracked_commit)
+            result = await f.release('{"wages":"-10.05"}')
+            assert result['state'] == 'withheld' and result['reason'] == 'privacy' and result['response'] is None
+            assert attempts == [] and not f.runtime.approvals.pending
+            assert f.store.db.execute('SELECT COUNT(*) FROM global_ledger').fetchone()[0] == 0
+        assert a.authorize is original_authorize and f.store.commit_release == original_commit
+        model.mode = 'clean'
+        clean = await scanner.scan('A neutral sentence about the weather.')
+        assert not clean.findings and not clean.failures
+        result = await f.release('A neutral sentence about the weather.')
+        assert result['state'] == 'completed' and result['response'] == 'A neutral sentence about the weather.'
+    finally:
+        f.store.close()

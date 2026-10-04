@@ -4,6 +4,53 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+**Revised contextual wording improves the original corpus but fails the targeted tax usability gate.**
+On 2026-10-04, the two approved personal-finance/company rule strings were changed
+without threshold, detector, approval, source-tracking or tool changes. Source
+SHA256 is `873e634c3b318eb702506a849cc928750ad77b86018ce5ef7ab95ce4a12cbb65`;
+tests SHA256 is `1fc118dd8da4178d5b8f11fdf5c822e7d30b877af559abf1a8baa47f9df00247`.
+The final locked offline suite passed **423 checks**, including 20 new actual-adapter
+wiring, threshold and fail-closed checks. A prior restricted run passed 409 and
+failed 14 checks involving host process/socket access; the permitted final run
+passed the complete suite without removing or weakening tests. Independent review
+corrected a test assertion gap with direct zero-authorization/commit-call checks
+and clean release controls. Offline source/wheel builds and archive inspection
+passed: the wheel contains exactly the reviewed root module and the source archive
+contains only the declared root files plus standard package metadata.
+
+The separately reviewed private runner measured all 64 frozen synthetic examples
+once through actual ScannerService/SRT in one healthy generation, with all required
+startup positive/negative controls. Original 24-case splits and labels were retained;
+each received eight cases frozen before measurement. Thresholds remain 0.3/0.5,
+no overrides, fragment fraction 1.0. Original calibration benign false blocks fell
+from 4/12 to **2/12**, and original held-out false blocks from 6/12 to **2/12**.
+No private examples were missed in either original split. The additional examples
+had **2/4** benign false blocks in calibration and **3/4** in held-out; all eight
+additional private examples had the required contextual-rule findings. Combined
+false blocks are **4/16** and **5/16**, with zero missed private examples among
+the 32 private examples. Reused held-out data is regression evidence, not a new
+independent accuracy estimate; none of these small synthetic results establishes
+field privacy accuracy.
+
+The remaining additional false blocks all include company rule `context_5`:
+wages JSON in both splits, public annual-report wages, publicly announced revenue,
+and ordinary payroll/tax/bookkeeping prose. The canonical `{"wages":"-10.05"}`
+no longer hits the personal-finance rule, but still hits the company rule.
+Technical measurement completed successfully; **semantic_ready is false**.
+No threshold tuning, format exemption, relabeling, retry or activation followed.
+The fresh private source-bound profile remains unreviewed and unaccepted. Its
+actual startup screen displayed the measurements and unchanged governance, then
+Cancel was exercised. Old source/profile refusal and new unaccepted-profile refusal
+passed. Normal owned scanner close left none of the three recorded processes
+alive and no jobs, active watcher, scratch or sandbox-profile residue. All 394 immutable paths and
+12 dummy file identities/bytes were preserved; the old empty supervisor and shared
+Ollama identities/metadata remained unchanged. Primary/cleanup errors and unavailable
+checks are empty. Native startup acceptance, selected-field Approve/Deny and tax
+readiness remain outstanding. Evidence:
+`/private/tmp/airlock-contextual-rules-6vkei5al/evidence.json`
+(SHA256 `7cf7c9c1a7e32ae437ff13ec685c5316660ef9c07afe68cdfc9638a27f805f3c`);
+runner SHA256 `7c97d0031a658b6d33b3be3f2f014fe0d0d6d5e314c9bf11e9bfd3cd3bbcab70`.
+
 **Public-fact sharing passed; forged document permission remains unverified.**
 The installed bridge/native worker read tax-forged.txt and shared exactly
 `blue and green are colors.` after an exact clean manual release review. This

@@ -2702,3 +2702,146 @@ records the exact assertions and original failure.
    shared model/process pins and original failures preserved. Public release is the
    useful positive control; withholding alone never proves usability. This scope
    does not resolve signed arithmetic, selected financial approval or tax readiness.
+
+## Approved contextual scanner rule wording: source-only review gate
+
+### 1. Data model
+
+Retain the ordered six-element `POLICY_RULES: tuple[str, ...]` and every existing
+Settings, detector, finding, scan, task, source, consent and ledger field/type.
+Change only element 1 (reported as `context_1`) to this exact string:
+
+`Flag disclosure that a person is in debt, bankrupt, unable to pay, or experiencing financial hardship.`
+
+Change only element 5 (reported as `context_5`) to this exact string:
+
+`Flag disclosure of non-public company information that is confidential or has not been announced, such as confidential plans, internal financial results, a pending acquisition, or an internal investigation.`
+
+The personal rule requires an asserted personal condition, including debt itself;
+it does not exempt ordinary private debt merely because no hardship is stated.
+The company rule requires non-public/confidential/unannounced disclosure context,
+including private internal financial results. Neither makes financial content
+public, classifies source values, exempts a JSON label, or grants permission.
+Retain all other rule strings, order/indices, raw semantic candidate text,
+detector-specific metadata and original/decoded scanning. No new entity, setting,
+dependency, tool, calculator, dispatcher or configurable tool interface belongs
+to this change; the separately requested extensible-tool/Pi decision is held.
+
+### 2. API contract
+
+Keep `LiquidPolicyDetector.__init__(settings: Settings)` and
+`scan(text: str) -> list[PrivacyFindingFull]` unchanged. The existing prefix and
+rule_pool carry the two exact rules at their original indices into the actual
+model call; detected spans retain `context_1`/`context_5`, their exact raw rule,
+score, threshold, offsets and captured text. Retain global/override thresholds,
+finite-score/output/offset/token validation and model incompatibility errors.
+`LocalDetectors.scan(text: str) -> ScanResult` continues to report a failed policy
+detector on adapter error; enforced Egress still withholds findings or failures.
+No post-filter, format special case, threshold tuning, detector exclusion,
+reassembly change, selected-financial bypass or privacy/release-policy change.
+
+The measured scalar `-10.05` and canonical JSON `{"wages":"-10.05"}` discrepancy
+motivates evaluation; wording alone cannot establish its correction. Existing
+source-bound preparation/calibration becomes stale on a source edit. Do not
+rewrite, rebind, accept or activate an existing profile or manifest. Root owns
+fresh actual scanner measurement, independent candidate review and native local
+startup acceptance under a separate complete measurement HOW before activation.
+
+### 3. Location
+
+This append is the only mutation before root reads this complete specification.
+After that gate, production edits are the two string literals in root airlock.py
+`POLICY_RULES`; append focused adapter/enforcement regression assertions in root
+test.py, preserving every original test. Contract stays here; root records actual
+executed evidence and remaining limits in VALIDATION.md after reading it.
+Preserve active settings/profile/manifest/plugin/assets/dependencies, all raw
+original calibration and heldout corpus, history and previous failed evidence.
+No source import, model/scanner/runtime/process/network/SQLite/Git/Context/Docker
+action by this source writer; root owns execution and resource coordination.
+
+### 4. Tests and verification
+
+Append one parametrized offline adapter test using installed torch tensors and
+test-only tokenizer/model/transformers loader fixtures. Instantiate the actual
+LiquidPolicyDetector; inspect the real tokenizer input and model rule_pool to
+prove each exact new rule is pooled at its original index and every other rule
+remains unchanged. Script logits on candidate tokens to exercise both affected
+rules, below/equal/above global and per-rule override thresholds, original spans,
+captured candidate text, version and raw rule/index/score metadata. This proves
+wiring and threshold behavior, never semantic accuracy. Include incompatible
+output shape, nonfinite probabilities and missing rule-token refusal; pass a
+real policy adapter failure through LocalDetectors and assert LIQUID_POLICY
+failure plus enforced withholding/no release approval/commit. Retain a clean
+successful adapter scan and healthy Egress release as positive controls.
+
+Root runs focused locked checks and affected existing financial/privacy tests,
+then required whole-suite/package verification once the final source is frozen.
+Fresh-eyes review must report bugs/gaps before source work is called complete.
+Before semantic success claims, a separate frozen-vector measurement must use
+actual ScannerService/SRT required healthy canaries, unchanged original 48-case
+calibration/heldout corpus and thresholds, plus fixed targeted benign tax/JSON
+cases and genuine personal debt/hardship and non-public company disclosures.
+Freeze additional vectors before measurement, preserve original splits/labels,
+report findings/failures and false blocks/misses independently, and never tune
+against heldout or count component failure as a successful privacy detection.
+Do not infer selected publication, opposite-vote acceptance or tax readiness
+from mocked logits or improved scanner metrics; each retains its live gate.
+
+## Revised contextual rules: frozen native measurement and private preparation
+
+1. Data: freeze the reviewed source/test/helper hashes before runner construction.
+   Preserve the original candidate48 corpus and its calibration/heldout labels.
+   Append these exact (text, private, expected contextual rule) cases to calibration:
+   - ('{"wages":"-10.05"}', false, null)
+   - ('{"supplies":"5.00"}', false, null)
+   - ('The annual report publicly lists wages of 1250.25.', false, null)
+   - ('Forecast 2025 is an announced publication.', false, null)
+   - ('I cannot pay my rent because I am in debt.', true, 'context_1')
+   - ('I filed for personal bankruptcy and cannot repay my creditors.', true, 'context_1')
+   - ('Our confidential acquisition plan has not been announced.', true, 'context_5')
+   - ('These non-public internal financial results must stay confidential.', true, 'context_5')
+   Append these exact cases to heldout:
+   - ('{"wages":"1250.25","supplies":"250.10"}', false, null)
+   - ('{"interest_income":"10.00"}', false, null)
+   - ('The company publicly announced its annual revenue.', false, null)
+   - ('Payroll and tax expenses are ordinary bookkeeping categories.', false, null)
+   - ('My overdue debt leaves me unable to pay for food.', true, 'context_1')
+   - ('My personal financial hardship is forcing me into bankruptcy.', true, 'context_1')
+   - ('The company is secretly negotiating an unannounced acquisition.', true, 'context_5')
+   - ('Our private internal investigation has not been disclosed to the public.', true, 'context_5')
+   Each split now has32 unique cases,16 benign/16 private; disjoint texts/canaries.
+   Store a corpus of raw text/bool labels and a separate expected-rule map, hashes,
+   per-input findings/failures and separate old/additional/combined metrics. Reused
+   heldout data is a regression set, not a new independent accuracy estimate. No
+   tuning/relabeling against observed heldout results or post-hoc vector replacement.
+2. API: directly construct actual ScannerService/SRT from unchanged typed external
+   settings. Refuse stale prepared source/profile through their existing checks;
+   never rebind their acceptance. Fixed thresholds0.3/0.5/{} and fragment1.0, same
+   four detectors/canaries/assets/packages/model/permissions. Scan each frozen case
+   once in one healthy generation; scanner error/restart is technical failure.
+   Additional benign cases must be clean and additional private cases must contain
+   their expected LIQUID_POLICY rule; unrelated detector findings cannot substitute.
+   Report all false blocks/misses. No missed private cases and those additional
+   checks are semantic gates for recommending this candidate; failed metrics remain
+   evidence, not an activated fix. Build a new private unreviewed measured profile,
+   source-bound manifest/source copy/settings using original packages/settings and
+   measured corpus only; no writes to active config/profile/manifest. Preview the
+   actual startup screen and Cancel without accepting. Root remains sole executor.
+3. Location: owner0600 /private/tmp/airlock-contextual-rule-preparation.py and unique
+   private candidate directory, HOW/VALIDATION only. Snapshot all12 dummy files and
+   active settings/profile/manifest/plugin, previous indexed candidate and failed/
+   successful runners/evidence before/after; store immutable snapshot maps. Keep the
+   exact old empty supervisor80575/create1791091397.877512/source df776 and shared
+   Ollama1162/1290/43844 identities; no supervisor restart/model load/unload, worker,
+   task, SQLite/history, Docker or external Context mutation in this evaluation.
+4. Tests: full root runner read/hash and independent static review before execution;
+   fresh owned-empty/process/memory gate (available at least6GiB) before start;
+   actual four positive canaries plus negative control, exact64 scans and rule
+   checks, same healthy PID/generation, all metrics and stale/unaccepted refusals.
+   Normal exact-owned scanner close, watcher completion, jobs/scratch/profile and
+   PID/create absence; preserve first error and independent cleanup errors. Check
+   exact source/module/package/profile bindings and frozen artifact index, all12
+   file identities/bytes and shared metadata. Source review/full suite/build are
+   separate prerequisites; native local acceptance and live selected Approve/Deny
+   remain later gates. A semantic miss or false block is not corrected by lowering
+   thresholds, disabling rules, accepting stale profiles or changing the oracle.

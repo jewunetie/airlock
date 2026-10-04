@@ -4,6 +4,26 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+**Current-source signed local task failed the unchanged usefulness gate.**
+The worker first wrote the correct net, then replaced it with `-5.05`; independent
+Decimal subtraction of wages `-10.05` minus supplies `5.00` requires `-15.05`.
+The final artifact also uses top-level source quote fields instead of the required
+nested `sources` object. Exact quotes and private identity/account omission alone
+do not satisfy that oracle. Both the failed artifact and original evidence remain
+preserved. Independent execution review confirmed the failure and found no static
+runner defect. This demonstrates that the worker's self-check instruction does
+not establish signed arithmetic or structural compliance.
+The fixed completed/null receipt and same-ID no-work replay passed. Two strict
+diagnostic captures report diagnostics_unavailable, with no diagnostic or cleanup
+errors. Normal owned stop left no runtime, jobs or recorded survivors; all nine
+preceding files, preparation pins and shared model identities were preserved.
+Startup acceptance used actual keyboard input; task votes used automated native
+Textual handlers. The first-case failure stopped the runner, so selected financial
+Verify-and-Approve and Deny were not reached. Evidence:
+`/private/tmp/airlock-signed-text-df776-ay4wbe8s/evidence.json`.
+A proposed bounded local Decimal calculator is a separate worker API extension;
+its choice remains pending. It would not establish correct document interpretation.
+
 **Current-source installed-plugin revised local task passed the complete artifact check.**
 Actual native startup retained the saved manual/enforce rules at configuration 16.
 The live worker made five model requests and four native tool calls, including

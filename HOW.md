@@ -2436,3 +2436,63 @@ records the exact assertions and original failure.
    correct artifact/fixed receipt/idempotency/cleanup evidence required; preparation/
    activation and scripted tests do not establish task usefulness. Root owns model/
    process slot and execution handoff; writer does not run any task or live check.
+
+## Three same-runtime signed text cases: approved static runner scope
+
+1. Data: retain the preceding df776 source/test/helper/profile/index/activation and
+   exact root-observed supervisor80575/create1791091397.877512/UID501 pins. Pin the
+   root-reviewed revised task evidence /private/tmp/airlock-verified-text-df776-q60z6ry_/evidence.json
+   SHA d2d47a7e44617380ded768d8396e3977a021dbb00be9d579930a98ab06d7791e and its
+   tax-preparation-verified.json SHA805ee4a94a8648bf24eb9d27ce0cbfdf6abf5662381fda624d46d886def265ad.
+   Preserve all nine current owned0600 files by bytes/device/inode/mode/UID, original
+   failures/runners/evidence and history. Only initially absent tax-signed.json may
+   be added. Three sequential cases each carry raw request/disclosure, fresh ID,
+   task/result/counters/native votes, original/rendered scans, exact proof rows,
+   bounded task/source ledger observations and strict correlated numeric diagnostics.
+   Signed fixture amounts are wages -10.05, supplies5.00, independently computed
+   net-15.05; retain signs/decimal strings and exact source quotes. Omit exact
+   Synthetic Person QZXV/SYN-ACCOUNT-QZXVJKMP from artifact and every publication.
+2. API: root full-script/hash/resource handoff precedes execution. Global strict/
+   unaccepted profile/parserNone, existing exact PCRE2 read grant, saved Manual/
+   enforce/visiblewrite/hiddenshell governance and current calibration binding stay.
+   Verify exact empty supervisor/jobs/no worker/scanner/pdf and resident pinned model
+   before actual PTY run_async startup/root keyboard Accept; recheck pins/nine files.
+   One runtime, installed bridge ask/status/stop, three cases only: original signed
+   local request writes tax-signed.json/no disclosure; then natural user requests
+   exact signed wages from tax-signed.txt and existing artifact for Approve and a
+   fresh opposite Deny of SAME wages -10.05. No hint/schema/endpoint coaching in
+   model requests. Approve scoped native reads and only first-case exact artifact
+   write_file; deny shell/other writes. Task votes are automated native Textual Pilot
+   handlers. For displayed financial_selection, select ALL exact matching raw -10.05
+   occurrences with current known original task/request/workspace and locally checked
+   wages/source tax-signed.txt/artifact tax-signed.json/context Income wages: -10.05.
+   Existing verified origins must match those exact original proof fields; retain
+   original proof fields for same-source prior occurrences. Native financial_add,
+   financial_select then financial_verify or deny, never ordinary Approve substitute.
+   Require exact publication {"wages":"-10.05"}, no scanner failures and only exact
+   selected-source reassembly findings. Unknown/old collisions, absent truthful hints,
+   ordinary release or invalid selection are recorded failures; no clearing/tuning/
+   alternate inference. On uncertain selection deny only the still-current exact
+   pending approval, stop subsequent cases and preserve first failure. Diagnostics
+   exact op/target/task_id at each terminal before same-ID replay and each task again
+   before stop; unavailable stays explicit. First failure/timeout stops further
+   inference. Same-ID result/counters/ledger equality; read-only query_only SQLite
+   observations limited to current task HMAC and displayed source refs, never a new
+   StateStore/global content scan. Approve verifies one consumed consent and complete
+   emitted geometry/contributions/shared marker; Deny verifies no new consumption/
+   geometry/contributions/marker. Normal owned stop and independent absence checks,
+   original/diagnostic/cleanup/save errors separate; no late-cause inference.
+3. Location: this HOW then ONE new owner0600 /private/tmp/airlock-signed-text-df776.py,
+   unique private evidence directory. Minimal frozen diagnostic runner adaptation
+   plus original R9 native UI/ledger controls. No source/test/VALIDATION/config/
+   profile/plugin/dependencies/assets/history/Git/Context/Docker mutations. Writer
+   does not import/execute runner or production, start processes or make live calls.
+4. Tests: static AST/hash/mode/full fresh-eyes and root full read before run; exact
+   three uncoached requests, nine-file equality/new target only, original signed
+   Decimal/source-quote/private-omission oracle, all matching occurrence proofs and
+   actual financial_review/Verify-and-Approve/Deny reached, canonical signed output,
+   task-bounded read-only commit/no-commit assertions, correlated diagnostics ordering,
+   idempotent work/consent, native startup and independently verified cleanup. Pure
+   artifact oracle positive/wrong amount/missing quote/private content negatives use
+   synthetic data without imports. Ordinary clean release cannot pass selection;
+   pre-vote withholding cannot pass Deny. No PDF/other text cases or broad suites.

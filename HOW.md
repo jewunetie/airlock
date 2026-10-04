@@ -2496,3 +2496,108 @@ records the exact assertions and original failure.
    artifact oracle positive/wrong amount/missing quote/private content negatives use
    synthetic data without imports. Ordinary clean release cannot pass selection;
    pre-vote withholding cannot pass Deny. No PDF/other text cases or broad suites.
+
+## Read-only signed-source registration assessment
+
+1. Data: the exact existing signed-source value `-10.05`, normalized by the
+   production NFKC/casefold/alphanumeric rule, and task
+   a417b61f86ef498fbe876faf8c87b11c. Read the existing owner-only ledger key only
+   to derive production source-v1/source-task HMACs; never print or persist the
+   key or raw registration rows. Output only bounded registration counts,
+   unverified-origin counts, signed-task counts and whether this stopped-runtime
+   source already has durable occurrences. Preserve all original evidence.
+2. API: stdlib-only, no Airlock import or StateStore construction. Open the key
+   without following symlinks. Verify the ledger pathname is an owned regular
+   file with unchanged device/inode/owner/mode before and after the read; stdlib
+   SQLite reopens that pathname and does not provide an atomic nofollow guarantee
+   against concurrent replacement by the same local user. SQLite URI mode=ro
+   and PRAGMA query_only, one parameterized source_registration query for this
+   exact HMAC, LIMIT20001. Refuse excess rows or malformed constrained opaque
+   fields. Read-only SQLite may use its existing shared-memory locking file;
+   no DDL/DML/migration/checkpoint/backup/history clearing or runtime/model calls.
+   Explicitly close the connection before writing the private result.
+   Missing or invalid evidence yields a fixed assessment failure, never inferred
+   absence. Any old registration after the verified runtime stop prevents claiming
+   a fresh same-value selected positive; zero rows only permits a separate future
+   selection scope and does not establish live feasibility or safety.
+3. Location: one new owner0600 /private/tmp/airlock-signed-registration-assessment.py
+   and a separate owner0600 JSON result. Source/test/configs/plugin/history and
+   prior runners/artifacts remain unchanged. Root reads the complete script before
+   executing it; the calculator proposal remains pending and unimplemented.
+4. Tests: assert exact source/test/evidence pins, private key length and ownership,
+   query_only=1, bounded rows with six exact constrained fields, same signed-task
+   counts without exposing task/source HMACs, and exclusive private result creation.
+   Fresh-eyes review of query scope and absence of mutation/execution imports;
+   errors cannot be interpreted as a clean or successful financial selection.
+
+## Independent source-only signed financial approval cases
+
+1. Data: retain all current df776/fbd754/helper/profile/index/activation and exact
+   supervisor/model pins. Preserve ten existing dummy files, including the wrong
+   tax-signed.json, and original failed three-case evidence unchanged. Pin the
+   separate read-only registration result showing zero normalized1005 rows; this
+   observation is not a release credential. Two fresh-ID requests in one runtime:
+   `Read tax-signed.txt. What are the signed wages? Do not change any files.` with
+   disclosure `Return only the exact selected signed wages amount, without private
+   identity/account.` Correct publication is exactly {"wages":"-10.05"}.
+2. API: adapt only the existing frozen signed runner's evaluation scope. Actual
+   root PTY startup acceptance, existing installed bridge ask/status/stop, native
+   Textual Pilot financial selection/Verify-and-Approve then opposite Deny. Allow
+   only request and bounded reads of tax-signed.txt (exact discovery patterns);
+   deny every write/shell, other document/artifact reads and ordinary release.
+   All matching raw -10.05 occurrences must have recoverable current task/request/
+   workspace evidence. Truthful input_ref AND artifact_ref are tax-signed.txt;
+   source context is exactly Income wages: -10.05. Existing API allows this direct
+   extraction from one file; no derived net or failed artifact supplies proof.
+   Select all matching registrations and retain prior exact origins for case two.
+   Require source-relative reassembly findings only, no scanner failures, canonical
+   selected publication, one-use consent/full geometry/contributions/shared marker;
+   Deny requires actual financial_review and no new consent/geometry/contributions/
+   marker. Unknown/legacy collisions, absent hints, ordinary release, wrong result
+   or unavailable UI fail the separate scope and prevent further inference.
+   Retain strict correlated diagnostics before replay and stop, same-ID no-work/
+   no-consent replay, fresh resource/process gates and normal owned cleanup. No
+   history deletion, hints coaching, retries, settings changes or data repair.
+3. Location: one new owner0600 /private/tmp/airlock-source-only-selection-df776.py
+   and unique private evidence directory, adapted from the preserved 485-line
+   signed runner. HOW/VALIDATION evaluation documentation only; no production/test/
+   dependency/config/profile/plugin/history mutations. Original arithmetic/structure
+   assertions remain in the unchanged failed runner and are not aggregate passes.
+4. Tests: root full script read/hash and independent static review before execution;
+   exact two natural requests, source-only proof fields/read scope, all ten-file
+   identities unchanged and no new workspace files, original evidence/profile pins,
+   actual selected positive and opposite vote reached, canonical bytes and bounded
+   read-only ledger commit/no-commit checks, fixed privacy receipts, diagnostics,
+   replay and independently verified owned cleanup. Any success is limited to
+   literal extraction/release; signed arithmetic, document interpretation and tax
+   readiness remain failed or unestablished. Calculator choice remains pending.
+
+## Bounded selection-format scanner diagnosis
+
+1. Data: pin unchanged df776/fbd754 source/test, 5cda profile, candidate353 index,
+   current prepared settings and failed source-only evidence28f714a5. Two exact
+   observed/proposed synthetic inputs only: scalar `-10.05` and canonical selected
+   publication `{"wages":"-10.05"}`. Record private full scanner results, generation,
+   required detector health, input labels, current resource/model/process pins and
+   owned cleanup. No content from real documents or new protected-source hints.
+2. API: one owned ScannerService/SRTLauncher in a new private /private/tmp state,
+   existing pinned prepared settings/assets and fresh >=6GiB/resource gate with
+   empty verified supervisor80575 and no workers/scanners/PDF. Existing model must
+   remain resident with exact shared PID/create/digest; no load/unload/Ollama model
+   request, Coder task, runtime start, source registration or financial selection.
+   Normal scanner start runs required positive/negative canaries; health failure
+   stops diagnosis. Scan each exact input once, unchanged thresholds/rules/settings;
+   first failure stops further scans, no retries. Record results as current-format
+   diagnostic evidence, never as recovered historical selection-time scans or proof
+   of the earlier error's cause. Close only owned scanner/watcher/children; verify
+   no remaining owned processes/jobs/profile/scratch and original/shared pins.
+3. Location: one new owner0600 /private/tmp/airlock-selection-scan-df776.py and
+   unique private evidence directory; minimal reuse of the existing reviewed
+   preparation runner's scanner/resource/cleanup contracts. No source/test/profile/
+   manifest/settings/plugin/history/calibration/corpus/Git/Context/Docker changes.
+4. Tests: full root read and independent static review before execution; exact two
+   input bytes, immutable source/preparation/failed evidence pins, one healthy
+   generation/scanner-only operation, no threshold/permission/model changes,
+   explicit detector findings/failures and independently checked owned cleanup.
+   A format false block or scan failure is retained evidence, never a successful
+   selection or reason to weaken privacy; calculator decision remains pending.

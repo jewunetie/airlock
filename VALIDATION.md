@@ -24,6 +24,32 @@ Verify-and-Approve and Deny were not reached. Evidence:
 A proposed bounded local Decimal calculator is a separate worker API extension;
 its choice remains pending. It would not establish correct document interpretation.
 
+A separate source-limited read-only assessment found zero durable registrations
+for the normalized signed wages value, including zero from the failed signed task.
+It used the production HMAC domains, parameterized mode=ro/query_only SQLite,
+bounded rows and private counters only; no StateStore construction or history
+mutation. Static review corrected connection closure and documented the pathname
+replacement limitation before execution. Evidence:
+`/private/tmp/airlock-signed-registration-result.json`.
+Zero rows establishes neither scanner cleanliness nor a successful selected release.
+Existing proof controls permit both input and artifact references to identify the
+same signed source file. The separate literal-source evaluation subsequently
+failed at selection. The live worker returned the correct scalar `-10.05`; the
+native screen reached financial_selection with one current matching occurrence,
+an initial reassembly-only finding and no initial scanner failures. Source-only
+proof selection returned financial_selection_invalid and did not reach
+financial_review or Verify-and-Approve. The harness denied the exact pending
+proposal, yielding a withheld/null response and no consumed consent. The opposite
+vote case was not submitted. Same-ID no-work replay, three explicit unavailable
+diagnostic captures, ten-file preservation and normal owned cleanup passed.
+Evidence: `/private/tmp/airlock-source-only-selection-df776-a_5f2n4i/evidence.json`.
+Neither emitted selection arguments nor selection-time raw/rendered scans were
+retained, so UI validation and subsequent scanner constraints cannot yet be
+distinguished. Two scanner children were observed and both were cleaned up;
+their replacement reason/generation is unrecorded. A separately bounded scanner
+diagnosis is being prepared. No failed JSON supplied proof, original arithmetic
+assertion was changed, history was cleared or privacy setting was weakened.
+
 **Current-source installed-plugin revised local task passed the complete artifact check.**
 Actual native startup retained the saved manual/enforce rules at configuration 16.
 The live worker made five model requests and four native tool calls, including

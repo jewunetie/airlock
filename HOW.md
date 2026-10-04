@@ -2601,3 +2601,69 @@ records the exact assertions and original failure.
    explicit detector findings/failures and independently checked owned cleanup.
    A format false block or scan failure is retained evidence, never a successful
    selection or reason to weaken privacy; calculator decision remains pending.
+
+## Independent local missing and ambiguous financial data
+
+1. Data: unchanged current source/test/helper/preparation/scanner/model/supervisor
+   pins and all ten existing dummy files. Two sequential fresh-ID local-only tasks
+   use existing tax-missing.txt and tax-ambiguous.txt, respectively; only initially
+   absent tax-missing.json and tax-ambiguous.json may be created. Each output is a
+   JSON object with interest_income: null (no supplied final value), alternatives:
+   list[str] (empty for missing, exactly 10.00 and20.00 for ambiguous), and
+   source_quote: str (the complete verbatim Interest income line). Preserve this
+   raw semantic source context, not just a missing/ambiguous flag; no guessed final
+   amount or private synthetic identity/account may appear.
+2. API: existing installed bridge/native Coder/startup Textual and local manual
+   approval handlers only. Natural request for each fixture: keep bookkeeping
+   local, read the named source and write the named JSON with the three stated
+   fields, no invented amounts, omit private identity/account; disclosure_request
+   is null. Exact source/own new-artifact reads and exact discovery patterns only;
+   native write_file/edit_file only to that task's new artifact, deny shell/other
+   files. No original file or earlier artifact may be overwritten. Actual root
+   PTY Accept unchanged saved rules; Pilot task votes honestly labeled automated.
+   Independent physical JSON/source-quote/privacy oracle, fixed completed/null
+   receipt, same-ID no extra model/tool/token/consent, strict exact-task diagnostics
+   before replay and before stop. First failure stops subsequent submissions with
+   original/diagnostic/cleanup faults separate and no root retry. Fresh resource/
+   exact-owned process/resident model gates, normal owned runtime stop and absence
+   assertions remain. No scanner recalibration, financial selection, history edit,
+   privacy bypass, new worker tool, model loading or PDF work.
+3. Location: one new owner0600 /private/tmp/airlock-missing-ambiguous-df776.py and
+   unique private evidence directory, minimally adapting the reviewed local runner.
+   HOW/VALIDATION evaluation docs only; production/test/configs/preparation/plugin/
+   dependencies/history and all previous runners/failures remain unchanged.
+4. Tests: full root read/hash/independent static review before execution; exact two
+   raw requests and null disclosure, missing empty alternatives and ambiguous both
+   alternatives with no final value, exact full raw quotes/private-value omission,
+   same-ID counters/consent and diagnostic ordering, all ten original file bytes/
+   identities preserved and inventory gains only the two named artifacts. Pure
+   oracle positives and invented-value/missing-quote/private-content negatives;
+   actual local useful outputs and cleanup required. A pass cannot establish signed
+   arithmetic, selected publication/opposite vote, PDF or overall tax readiness.
+   Both calculator and contextual-rule choices remain pending.
+
+## Corrected local approval display synchronization
+
+1. Data: preserve the original missing/ambiguous runner ae754298 and failed evidence
+   086e4e09, all ten existing files and every source/config/model pin. The two output
+   targets remain absent. New evaluation request IDs identify fresh bounded tasks;
+   the prior interrupted task is not replayed or claimed to have done no work.
+   Pending approval identity comprises id, task_id and current config version.
+2. API: keep the previous local missing/ambiguous requests, tools, votes, oracles,
+   counters and cleanup unchanged. Before selecting each exact pending approval,
+   wait at most 10 seconds and never beyond the existing task deadline for an
+   existing busy refresh to finish and that exact row to appear. Refresh through
+   existing handlers; recheck authoritative status for the same task/approval and
+   version. Withdrawn, terminal, changed version, failed service or timeout fails
+   the evaluation. Select only that row; require the displayed review ID/version
+   and selected task to match before applying the original vote. No direct decision
+   injection, alternate row, disabled timer, assertion removal or policy change.
+3. Location: new owner0600 /private/tmp/airlock-missing-ambiguous-renderwait-df776.py,
+   private evidence directory and HOW/VALIDATION docs only. Original runner/evidence,
+   production/tests/configs/history and previous failed artifacts remain unchanged.
+4. Tests: isolated synchronization positives for busy-then-ready/exact matching row,
+   negatives for absent/withdrawn/wrong-task/changed-version/timeout; preserve all
+   previous artifact and receipt assertions. Root full read and independent static
+   review precede execution; fresh empty-owned/resource/model gates and both local
+   output oracles remain mandatory. Record original failure separately; a corrected
+   harness pass alone is not tax readiness or selected-release acceptance.

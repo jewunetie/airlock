@@ -4,6 +4,21 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+**The missing/ambiguous local evaluation stopped at a harness synchronization gap.**
+Only the missing task's request-Allow vote was recorded before the assertion
+`Exact displayed row unavailable`. The UI refresh handler can return while another
+refresh is busy, so awaiting it did not guarantee the pending row was displayed.
+The exact recorded race remains unproven; no artifact, terminal result, usage or
+usefulness oracle was evaluated. The ambiguous task was never submitted. Independent
+review confirmed this harness finding and all ten original files remained unchanged;
+both proposed outputs remain absent. Normal owned stop left no runtime, jobs or
+recorded survivors, with no diagnostic or cleanup errors. Evidence:
+`/private/tmp/airlock-missing-ambiguous-df776-0mwf3f70/evidence.json`
+(SHA256 `086e4e094424b9935a423fb329c2fdf2158b0f3386af2d1dc3b6b97d11a33091`).
+The original runner and failure remain preserved. A separately scoped corrected
+harness must wait for and revalidate the exact approval before any fresh evaluation;
+this failure establishes no missing/ambiguous model verdict or tax readiness.
+
 **Current-source signed local task failed the unchanged usefulness gate.**
 The worker first wrote the correct net, then replaced it with `-5.05`; independent
 Decimal subtraction of wages `-10.05` minus supplies `5.00` requires `-15.05`.

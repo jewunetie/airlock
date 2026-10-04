@@ -4,6 +4,38 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+**The final example-free company wording was rejected on usability evidence.**
+Source SHA256 `71500729956f69ec2e52c8fbaac939a7720f7a06b3cd8b26b3224e1fb763330c`
+and tests SHA256 `a7417f5d85b5d9f19ded9a682bb912518b9142a8bc132539464b7923c0ca804a`
+passed independent static review, all423 locked checks and exact offline package
+checks. Actual ScannerService/SRT measured all96 frozen cases in healthy generation1,
+PID86488. The earlier80 cases and labels were retained;16 new cases were frozen
+before source edits. Original24 false blocks were3/12 benign per split; targeted64
+false blocks were2/4 calibration and3/4 heldout. Both fresh80 and fresh96 cohorts
+had4/4 benign false blocks in each split. Combined results are **13/24** calibration
+and **14/24** heldout benign false blocks. All48 private examples were detected;
+all24 targeted private examples hit their required contextual rule. Technical
+completion is true, **semantic_ready is false**. This candidate is not recommended.
+
+Removing company examples did not remove vocabulary-driven false blocks and shifted
+other rule scores: wages JSON now hits both context_1/context_5, and ordinary
+tax-form prose can hit context_4. Unchanged rules sharing the encoder input must
+be evaluated together. The vendor's current [model-card example](https://huggingface.co/LiquidAI/LFM2.5-Encoder-350M-Policy-Linter)
+uses the same Policy/Text prefix, offset-based normalized rule pooling, forward
+logits and sigmoid mapping as Airlock. Inspection of the pinned inference class
+also confirms that contract. No input-format mismatch was identified; this limited
+comparison does not constitute a complete adapter or model audit.
+
+All13 frozen artifact hashes,424 immutable paths and12 dummy file identities/bytes
+were preserved. Shared model and old empty supervisor identities/metadata remained
+unchanged. Primary/cleanup errors and unavailable checks are empty; three owned
+processes, jobs, scratch, profiles and watcher were closed/absent. The private48/48
+profile remains unreviewed/unaccepted; actual startup previewCancel and stale/new
+unaccepted refusals passed. No activation or field-accuracy claim follows.
+Evidence: `/private/tmp/airlock-company-short-mhehvjhl/evidence.json`
+(SHA256 `85c34b7d62e345f36bd6333d28cc7c5d319e7493fadb6cf02238036eb5df1567`);
+runner SHA256 `eebeadcfa7d639df88b1041711170659d20c34f39eba8fad145ee3c71ae8170d`.
+
 **A second company-only wording experiment also failed semantic acceptance.**
 Source SHA256 `736faf130c3fa8c25d3d0e8ed1f1935eaea15e06405be0ebfb68bddae382472f`
 changed one company-rule literal; test SHA256

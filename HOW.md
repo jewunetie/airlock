@@ -3025,3 +3025,25 @@ arithmetic or tax readiness; those live gates remain separate.
    selected publication or tax readiness is inferred. This is the final bounded
    example-free wording experiment; further policy/backend changes need a resolved
    contract and concrete review, rather than accepting failed semantic evidence.
+
+## Restore the first reviewed wording after rejected experiments
+
+1. Data: restore only company POLICY_RULES element5 and its fixture expectation to
+   `Flag disclosure of non-public company information that is confidential or has not been announced, such as confidential plans, internal financial results, a pending acquisition, or an internal investigation.`
+   Preserve all other source/test bytes, all423 checks and all failed evidence.
+   Root source/test must exactly match reviewed checkpointbcfb6bf hashes873e634c/
+   1fc118dd; no new model, policy field, threshold, permission or exception.
+2. API: no interface or behavior change beyond returning this classifier input
+   to the previously verified baseline. It still fails the targeted64 usability
+   gate and remains unaccepted; none of the80/96 metrics describes the restored
+   baseline's behavior on fresh inputs. Selection rejects known calibration
+   regressions, not tuning to heldout. No active profile/manifest is rebound.
+3. Location: after preserving the failed96 source/test/result in Git, replace
+   one literal in rootairlock.py and one in roottest.py. HOW/VALIDATION retain
+   actual measurements and explain restoration. No assets/runtime/config/private
+   evidence or dummy workspace mutation; root remains sole execution owner.
+4. Tests: read current files and complete exact diff; independently review the
+   restoration and verify full source/test byte hashes match the first reviewed
+   freeze. Run all423 locked checks for the restored code and verify its exact
+   root-only package source. Preserve prior failures and scanner-availability
+   limitation; no activation, changed oracle or product-readiness claim.

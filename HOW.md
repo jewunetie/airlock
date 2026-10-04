@@ -2845,3 +2845,183 @@ from mocked logits or improved scanner metrics; each retains its live gate.
    separate prerequisites; native local acceptance and live selected Approve/Deny
    remain later gates. A semantic miss or false block is not corrected by lowering
    thresholds, disabling rules, accepting stale profiles or changing the oracle.
+
+## Company contextual rule correction: source-only review gate
+
+### 1. Data model
+
+Preserve every current entity, field/type and the ordered six-string POLICY_RULES
+tuple. Replace only element5, still reported as context_5, with this exact literal:
+
+`Flag disclosure of a company's confidential or unannounced information, such as a secret acquisition, confidential financial results, or a private internal investigation.`
+
+Retain context_1's exact personal debt/hardship wording and the other four strings.
+The replacement expresses confidential/unannounced company disclosure context;
+confidential financial results remain covered. It neither grants financial data
+public status nor exempts JSON, numeric values, protected sources or selected
+consent. Preserve raw candidate/source context, all metadata and original/decoded
+views. No new field, tool, dependency, setting, classifier or authority is added.
+
+### 2. API contract
+
+LiquidPolicyDetector constructor/scan, six-index prefix/rule_pool, context_5
+finding metadata and threshold/override behavior remain unchanged. All current
+finite-score/shape/offset/token checks, LocalDetectors failed-detector reporting,
+enforced withholding before release authorization/commit and clean positive
+release controls remain. Other detectors, reassembly, source associations,
+consent, governance and release transaction are unchanged. This is one wording
+correction, never a post-filter, source exception or format-specific policy.
+
+Current source-bound preparation/profile acceptance cannot survive this source
+edit. Preserve the original failures and previous measurements unchanged. Root
+must freeze additional16 raw labelled evaluation cases before source edits and
+provide a separate complete actual measurement HOW. Fixed original48 corpus,
+existing targeted16 cases, thresholds/canaries/assets and earlier labels stay
+unchanged; reused heldout cases are regression evidence, not an independent
+accuracy estimate. No tuning/relabeling against observed heldout results. Fresh
+actual measurement and review precede any candidate recommendation; separate
+native acceptance precedes activation. No active profile/manifest rebinding.
+
+### 3. Location
+
+This HOW append is the only mutation until root reads it and gives the source
+gate. Then change one literal in root airlock.py POLICY_RULES and its one exact
+expected literal in the appended test.py contextual_policy_adapter fixture.
+Keep every other source/test byte and all423 existing behavior/assertions;
+no refactor or new tests are needed for a literal-only correction. Root owns
+VALIDATION.md evidence after verification. Active settings/profile/manifest,
+plugin/assets/dependencies/history, earlier runners/failures and workspace files
+remain unchanged. The writer performs no production import/execution or model,
+scanner, runtime, process, network, SQLite, Git, Context or Docker action.
+
+### 4. Tests and verification
+
+Retain all20 appended adapter/enforcement cases: actual constructor/tokenization/
+rule_pool/exact index and metadata, below/equal/above global/override thresholds,
+incompatible shape/nonfinite/missing-rule refusals, failed detector propagation,
+zero blocked authorization/commit attempts and clean release positive. Changing
+their expected string preserves assertion strength and tests exact new delivery,
+not real semantic accuracy. Root runs focused locked checks and final required
+suite/package verification, then the separately specified frozen actual scanner
+measurement. Positive private company context must be caught by context_5 itself;
+other detector findings cannot substitute. Preserve every error and failed
+semantic vector; no failure may be resolved by weakening oracle/privacy controls.
+Read the final exact two-literal diff and perform fresh-eyes review before handoff.
+This source work cannot establish selected Approve/Deny acceptance, financial
+arithmetic or tax readiness; those live gates remain separate.
+
+## Company-context correction: frozen 80-case native evaluation
+
+1. Data: preserve the original48 and previous targeted16 raw cases, labels,
+   split membership and expected-rule checks from candidate6vkei5al. Its full
+   evidence/index/profile and failed semantic results are immutable evidence.
+   Before source edits, freeze these additional calibration (text,private,rule) cases:
+   - ('{"salary":"3200.00"}', false, null)
+   - ('The published annual report shows revenue of 48000.00.', false, null)
+   - ("A public announcement describes the company's completed acquisition.", false, null)
+   - ('Office rent and supplies are routine expense headings.', false, null)
+   - ("The company's confidential quarterly results must not be published.", true, 'context_5')
+   - ('We are keeping the planned acquisition secret until the announcement.', true, 'context_5')
+   - ("The company's private internal investigation is not public.", true, 'context_5')
+   - ('My debts leave me unable to pay the electricity bill.', true, 'context_1')
+   Freeze these additional heldout cases:
+   - ('{"gross_pay":"725.40","office_costs":"82.10"}', false, null)
+   - ("The annual revenue is available on the company's public website.", false, null)
+   - ('The company announced its acquisition last week.', false, null)
+   - ('Income, expenses, and wages are standard tax form labels.', false, null)
+   - ("Do not disclose the company's confidential profit figures.", true, 'context_5')
+   - ('Our acquisition negotiations are secret and have not been announced.', true, 'context_5')
+   - ('The private investigation inside our company is confidential.', true, 'context_5')
+   - ('I am bankrupt and cannot repay my personal loans.', true, 'context_1')
+   Each split has40 unique/disjoint cases,20 benign/20 private; no canary overlap.
+   Store raw text/bool corpus plus expected-rule maps before execution. Report
+   original24/previous-targeted8/fresh8/combined40 metrics separately per split.
+   Previously observed heldout is regression evidence. Fresh heldout is not used
+   for wording/threshold selection; small synthetic evidence never establishes
+   field accuracy. No vector replacement, relabeling or tuning after measurement.
+2. API: same actual ScannerService/SRT/private preparation contract as the reviewed
+   64-case runner, now80 once-only scans in one healthy PID/generation. Thresholds
+   0.3/0.5/{}, fragment1.0; identical required detectors/canaries/assets/packages,
+   model and grants. Freeze reviewed source/test/helper hashes before constructing
+   the new runner. All previous/fresh targeted benign cases must be clean and
+   targeted private cases must hit their expected LIQUID_POLICY rule; no private
+   misses across80. Technical completion and semantic success are independent.
+   Retain all results before judging them. Produce a private new measured profile
+   and source-bound candidate, unreviewed/unaccepted even on semantic failure.
+   Actual startup preview displays40 heldout cases/metrics/unchanged governance,
+   then Cancel. Existing stale and candidate-unaccepted refusals remain required.
+3. Location: owner0600 /private/tmp/airlock-company-context-preparation.py and a
+   new private candidate; root HOW/VALIDATION only. Preserve all12 dummy files,
+   active settings/profile/manifest/plugin/assets, original indexed candidate,
+   previous13-file candidate index, previous runner and all failed/successful
+   evidence. Serialize complete before/after immutable and fixture maps. Retain
+   old empty supervisor80575/source df776 and shared Ollama identities exactly;
+   no model load/unload, runtime/worker/task/SQLite/Context/Docker mutation.
+4. Tests: root full read/hash and independent static review before execution;
+   fresh exclusive process/pin gate and available memory at least6GiB. Preserve
+   resolved prerequisite-unavailable reporting and exact retained startup-process
+   cleanup from runner7c97d003. Require healthy startup positive/negative controls,
+   same generation for80, all per-input findings/failures and separate metrics,
+   package/source/profile checks, private previewCancel, exact-owned close/watcher/
+   scratch/profile/registry/PID-create absence and shared/immutable preservation.
+   Record primary/cleanup errors independently. Root full suite/build/review are
+   separate gates; no activation or selected/manual tax readiness follows from
+   successful measurement. No format exception or weaker oracle is authorized.
+
+## Final example-free company wording experiment: source and 96-case contract
+
+1. Data: replace only POLICY_RULES element5 with the exact literal
+   `Flag disclosure of company information that is confidential or has not been publicly announced.`
+   This retains confidential/unannounced company information, including financial
+   results, acquisitions and internal investigations, without supplying category
+   examples as extra classifier input. It adds no public-data claim or exception.
+   Every other rule/entity/field/threshold/permission stays unchanged. Preserve all
+   previous80 cases, labels/splits/expected rules and both failed candidates/indexes.
+   Before source edits freeze these new calibration (text,private,rule) cases:
+   - ('{"revenue":"90.00","expenses":"30.00"}', false, null)
+   - ('The publicly released report lists operating costs.', false, null)
+   - ('The merger was announced in a public press release.', false, null)
+   - ('Wages and rent are headings on a blank worksheet.', false, null)
+   - ('Our company is keeping its unreleased earnings confidential.', true, 'context_5')
+   - ('The merger talks are confidential and have not been announced.', true, 'context_5')
+   - ('This internal company investigation is secret.', true, 'context_5')
+   - ('I owe debt and cannot afford my monthly bills.', true, 'context_1')
+   Freeze these new heldout cases:
+   - ('{"wages":"480.00","rent":"120.00"}', false, null)
+   - ("The published statement shows this company's profits.", false, null)
+   - ("Everyone can read the company's acquisition announcement.", false, null)
+   - ('Tax worksheets have labels for wages and office supplies.', false, null)
+   - ("The company's unpublished financial report is confidential.", true, 'context_5')
+   - ('The unannounced takeover negotiations must stay secret.', true, 'context_5')
+   - ('The company has a confidential internal investigation.', true, 'context_5')
+   - ('I am in financial hardship and unable to pay my debts.', true, 'context_1')
+   Each split now48 unique/disjoint cases,24 benign/24 private. Preserve raw text
+   and expected rules. Previously observed heldout is regression-only; new heldout
+   remains unused for selection. No tuning/relabeling/vector replacement after scans.
+2. API: existing detector/enforcement/96 once-only ScannerService/SRT contract only.
+   Rule order/pooling/validation/canaries and all other rules remain unchanged;
+   report every rule's findings since the encoder conditions on the full prefix.
+   Keep fixed0.3/0.5/{} and fragment1.0. Report five groups per split: original24,
+   targeted64's8, fresh80's8, fresh96's8, combined48. All24 targeted cases per split
+   retain their existing clean-benign/exact-private-rule gates; no private miss
+   across96. Preserve all96 raw results before semantic judgment. Technical complete
+   remains separate from semantic_ready. New unreviewed/unaccepted private profile
+   has48/48 cases; actual preview displays48 heldout examples and Cancel, even on
+   semantic failure. Existing stale/unaccepted refusals and shared gates remain.
+3. Location: one literal rootairlock.py and one expected fixture literal roottest.py;
+   preserve all423 checks/assertions. HOW/VALIDATION record contract/evidence.
+   Private owner0600 /private/tmp/airlock-company-short-preparation.py and unique
+   candidate inherit the80 runner's full immutable/12-fixture maps and add all13
+   files/index of candidate3xibwh8x and its runner/evidence unchanged. Freeze reviewed
+   source/test/helper hashes before constructing the runner. No active config,
+   profile/manifest/plugin/assets/dependency/history/Context/Docker mutation, worker,
+   supervisor restart or shared model load/unload. Root remains sole live executor.
+4. Tests: independent source/runner review and root full reads before each execution;
+   same full423 locked checks and exact build/archive checks for final source.
+   Inherit reviewed prerequisite guards/exact startup-process capture/owned cleanup,
+   exclusive memory/process/pin gate, healthy positive/negative canaries and one
+   generation for96, preserved primary/cleanup errors and all before/after maps.
+   Actual measurement/review precedes recommendation; no native acceptance,
+   selected publication or tax readiness is inferred. This is the final bounded
+   example-free wording experiment; further policy/backend changes need a resolved
+   contract and concrete review, rather than accepting failed semantic evidence.

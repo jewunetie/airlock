@@ -2679,7 +2679,7 @@ POLICY_RULES = (
     'Flag non-public legal disputes, settlements, lawsuits, or investigations.',
     'Flag addiction, recovery, or substance use information about a person.',
     'Flag private immigration or visa status.',
-    'Flag disclosure of non-public company information that is confidential or has not been announced, such as confidential plans, internal financial results, a pending acquisition, or an internal investigation.',
+    "Flag disclosure of a company's confidential or unannounced information, such as a secret acquisition, confidential financial results, or a private internal investigation.",
 )
 REQUIRED_DETECTORS = {Detector.BETTERLEAKS, Detector.PRESIDIO, Detector.LIQUID_PII, Detector.LIQUID_POLICY}
 

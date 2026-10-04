@@ -4,6 +4,38 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+**A second company-only wording experiment also failed semantic acceptance.**
+Source SHA256 `736faf130c3fa8c25d3d0e8ed1f1935eaea15e06405be0ebfb68bddae382472f`
+changed one company-rule literal; test SHA256
+`f691578a8b418bf0b9f8166addb880c027a32a3458ab9245ec3acfbf2bc9b8d6`
+changed only its exact fixture expectation. All **423 locked checks** and offline
+build/exact archive checks passed again. Independent source/runner/result review
+found no implementation or preservation defect, but did not recommend activation.
+
+The actual sandboxed scanner measured all 80 frozen cases in healthy generation1,
+PID77128. The prior64 inputs/labels were retained as regression evidence; 16 new
+inputs were frozen before source edits. Original24 false blocks remained2/12 benign
+per split, and previous targeted8 remained2/4 calibration,3/4 heldout. Fresh8
+false blocks were1/4 calibration and4/4 heldout. Combined results are **5/20** and
+**9/20** benign false blocks, with zero misses among all40 private examples and
+all16 targeted private expected-rule checks passing. Technical completion is true,
+**semantic_ready is false**. Wages JSON still trips context_5; fresh gross-pay JSON
+trips context_1, and tax labels trip context_1/context_5. Matched prior64 counts
+hide a swap: shipment prose became clean, while public product-website prose newly
+tripped context_0. The model receives all six rules together; changing company-rule
+input can affect other rule scores without changing their policy text.
+
+All13 frozen artifacts,409 immutable paths and12 dummy files were checked; shared
+model/old empty supervisor identities and metadata were preserved. Primary/cleanup
+errors and unavailable checks are empty; three owned processes, jobs, scratch,
+profiles and watcher were closed/absent. The new private profile remains unreviewed
+and unaccepted; the actual40-case startup preview was cancelled, and stale/new
+unaccepted refusals passed. No activation, threshold tuning, format exemption or
+tax readiness follows. These are small synthetic measurements, not field accuracy.
+Evidence: `/private/tmp/airlock-company-context-3xibwh8x/evidence.json`
+(SHA256 `265b5a5b11872affabe76eea52c337eeb7b09488c1c6a3c6b177a1dc3b68d206`);
+runner SHA256 `2d5852445dfa6e2995b1ffeceb2f2ade6a4eb117c00528d67e1f2e38db1cead4`.
+
 **Revised contextual wording improves the original corpus but fails the targeted tax usability gate.**
 On 2026-10-04, the two approved personal-finance/company rule strings were changed
 without threshold, detector, approval, source-tracking or tool changes. Source

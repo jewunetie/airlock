@@ -4,6 +4,455 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+**Present whole-branch I1/I2/M1 correction passed final source review and core/build checks.**
+The independent complete correction review resolved all original and interim
+findings, with no remaining concrete source findings. Root ran locked offline
+sync and the full synthetic suite against source
+`229dde3db6a9feb72a6dc5598b65519f00e937fcb6289c225d092ab3d98382ee`
+and tests `9595c45afbf853562fad921ec3f26b84f940b729c326496d68e755995b2f1b27`:
+**377 passed**. The suite's local MCP/Uvicorn loopback checks used a narrowly
+approved sandbox escalation; no real model or scanner was run.
+Offline build passed with the existing `/private/tmp/airlock-uv-cache`.
+The first build attempt using the branch cache failed because that cache lacked
+hatchling; no package download or dependency change was made. Wheel and source
+archive contents were inspected and contain the exact root module bytes;
+imports, original 328-test byte prefix and unchanged parser helper hash pass.
+These checks do not establish current live scanner/model/folder acceptance.
+The prior unaffected checkpoint had **46 focused locked offline checks passing**,
+including retained-owner lifecycle controls, ordinary unavailable-release refusal
+with actual concurrent SQLite admission faults, verified MCP cancellation and
+shutdown metadata controls, completed-error same-owner retries, stopped-audit
+SQLite denial/retry, and guarded transport recovery. An isolated installed-Uvicorn
+synthetic ASGI loopback control verifies exact canceled-server socket/listener/
+request/lifespan cleanup; its original sandbox bind denial is retained, followed
+by an authorized narrowly escalated positive. Import/name/helper checks and diffcheck pass; all
+original test bytes are retained. The human-approved model-unload lifetime hold
+now has **16 focused locked offline controls passing**, including both previously
+red ownership/first-error controls, cancellation/timeout/HTTP/error payloads,
+repeated admission refusal and actual HTTPX/inert-transport false-close refusal.
+No automatic unload retry or replacement client is introduced.
+The final affected command passes **60 checks, 317 deselected**; the unchanged
+native-Uvicorn control retains its preceding executed positive and was excluded
+from this model-only rerun. Imports/latch defaults/original prefix/helper pass.
+No new scanner measurement is claimed for this changed source.
+Exact checkpoint hashes/commands and retained
+failures are in `.superpowers/sdd/tax-final-branch-correction-report.md`.
+
+**Prior-source786 preparation candidate is measured and frozen, unaccepted.**
+Source `7869d186a7a0a712c6253ec3dbfe76e6a4ba5ada60ecb93a8d1235203f5ebc61`
+was measured through actual SRT/ScannerService at unchanged 0.3/0.5, empty
+overrides and reassembly fraction 1.0. Required confinement and positive/negative
+detector canaries passed in one generation. Original disjoint 24+24 labelled
+synthetic cases were each scanned once, with no failed detector. Calibration
+had **4/12 benign false blocks, 0/12 private misses**; held-out had **6/12 benign
+false blocks, 0/12 private misses**. All false blocks came from liquid_policy.
+These small synthetic results do not establish field accuracy; no tuning occurred.
+
+Frozen root `/private/tmp/airlock-final-candidate-x6_vdypf` retains raw corpus,
+findings/timestamps/provenance, exact source/settings/manifest, private scoped
+backups and artifact hashes. Profile SHA256
+`bc96d5a67ece0b4fb2ef1bf6db01f0e08a2223b5526fcaafb0f792c8cca535a4`
+remains reviewed=false, acceptance=None. Original prepared_settings/load_calibration
+verify its exact source/package/settings binding, while calibrated_settings
+refuses calibration_not_accepted. A fresh process importing the candidate source
+recomputed counts and verified all frozen artifact/active hashes. Actual Textual
+startup rendered those results and unchanged governance/native-parser notice;
+only Cancel was selected and returned None. No runtime or acceptance was created.
+Current pdf_parser=None was preserved; Linux PDF/Docker integration and exact
+retained-container cleanup remain separately held, with no lifecycle attempts.
+
+Read-only process/memory/cache/model gates passed before scanner loading.
+Available memory was about 16.25 GB; memory_pressure reported 47% free. Existing
+swap use was recorded without altering unrelated processes. Owned scanner PIDs
+95269/95279/95435 are absent and jobs empty; primary and cleanup error lists are
+both empty. Existing supervisor 33722 remains empty at its prior source, Ollama
+serve 1290/resident runner 43844 retain exact PID/creation identities and metadata.
+No worker-model request/load/unload, activation, supervisor replacement, native
+Accept, dependency/source/test edit, Docker command or external Context save.
+Source/test/helper and active preparation files were byte-identical during that
+prior-source measurement. Current correction changes source/test; its candidate
+binding is now prior-source evidence and cannot authorize activation. No rebind
+or new measurement was performed. Candidate/runner hashes and commands are recorded in
+`.superpowers/sdd/tax-final-preparation-report.md`. Independent frozen candidate
+review and root handoff are required before the separate activation phase;
+startup measurement alone establishes no tax/PDF readiness or live release.
+
+**Prior-source786 R9 corrective review and core/build checks passed.**
+The independent complete I1/I2/I3 rereview found no remaining scoped Critical,
+Important or Minor findings and approved both spec compliance and checkpoint
+quality. Root then ran `UV_CACHE_DIR=/private/tmp/airlock-uv-cache uv sync --locked
+--offline` successfully and the full locked offline command
+`uv run --locked --offline python -B -m pytest -q test.py`: **328 passed**, exit 0.
+This is retained source786/test061 synthetic evidence, not evidence for the new
+whole-branch correction or live tax-document readiness. Exact test SHA256 is
+`06153b32a79d892145a30460ecbf082e4644732ba3e26287f1404d33303056e9`.
+
+`uv build --offline --out-dir /private/tmp/airlock-tax-reviewed-build-7869`
+built the wheel and source archive. Executed import/top-level-name/new StateStore
+API assertions and unchanged generated PDF-helper SHA256 checks passed. Archive
+inspection verifies byte-identical root airlock.py in both artifacts, only that
+Python module, wheel metadata, and source docs/config metadata including the
+standard .gitignore; historical modules, tests and private runtime configuration
+are absent. Two controller inspection assertions initially failed because the
+helper already returns bytes and hatchling includes .gitignore in source archives.
+Corrected API/actual-content checks passed without source or test changes.
+
+Root's fresh-eyes read of the full marker source/test correction agrees with the
+independent scoped verdict for that prior snapshot. Source/test hashes below
+identify prior-source evidence; current correction hashes are in its report.
+Compatible measured preparation/native startup, real scanner/model/SRT/PDF,
+manual selected Approve/Deny, natural entry and final whole-branch review remain
+required. Exact owned-container deletion and private Context-save approval holds
+are unchanged; none was retried or inferred from the financial policy answer.
+
+**R9 complete corrective focused evidence.**
+The directly approved fully shared value contract was resolved in four-part HOW
+before I1 source/assertions. The final focused locked offline affected command
+shown below passed **176 tests, 152 deselected**, including 35 new I1 controls and
+the retained 19 I2/I3 corrections, SQLite/Coder/local Textual regressions. Exact
+selected wages1250.25 then expenses250.10 each consumed fresh local consent,
+followed by ordinary forecast2025 under current governance, while original
+geometry/contributions remained retained. Current Manual/Deny, unknown/new/signed/
+spelling/context/file/workspace/legacy/unattributed occurrences, partial geometry,
+missing/mismatched/oversized associations and unrelated identifiers remain protected.
+Ordinary full geometry cannot create a marker. Saturated counters with empty graph
+changes still record new independently verified selected contributions atomically.
+
+Real SQLite marker insert/update triggers roll back geometry/contributions,
+consumption/marker/response/audit. Actual marker read denials cover ordinary
+preview/final scan/final recompute, guard and selected APIs/final scan; guard
+snapshot denial and late-registration controls also pass. All return fixed
+storage_unavailable with runtime UNAVAILABLE or withhold on changed evidence,
+without publication. Reopen/history deletion retains opaque markers/evidence
+and cannot upgrade irrecoverable old occurrences. No live accuracy/usability or
+cross-restart useful selected workflow is established.
+
+I1 red evidence retained **1 failed, 293 deselected** for the original wages→
+expenses lockout. Early marker checks passed 20 then 26 tests. Added boundary
+checks retained 2 failed/6 passed (required guard payload fixture omission and
+selected-final fault classification), then 1 failed/7 passed. The actual denied
+marker read revealed that a generic privacy handler swallowed the already-fixed
+storage error; the narrow correction now propagates it. All eight boundary/race
+checks pass. The affected run retained 1 failed/175 passed: the previous I3
+unavailable-final assertion expected withholding; it now requires the approved
+fixed error, no completion/final/consumption. Final affected checks pass as above.
+
+Frozen corrected source/test SHA256 are
+`7869d186a7a0a712c6253ec3dbfe76e6a4ba5ada60ecb93a8d1235203f5ebc61` and
+`06153b32a79d892145a30460ecbf082e4644732ba3e26287f1404d33303056e9`.
+Fresh source/test diff review, import/name assertions, unchanged R8 helper hash
+and diffcheck passed. The independent rereview and current broad/build evidence
+are recorded above; actual same-runtime text/PDF/manual UI/natural workflow
+integration, earlier runtime failures and pending approval holds remain open.
+Evidence below records earlier checkpoints historically.
+
+**Earlier I2/I3 partial checkpoint.** Independent
+review found a confirmed history lockout, escaped raw JSON token acceptance and
+unclassified SQLite selection/verification read errors. I2/I3 are corrected;
+I1's history/geometry behavior remains unchanged. The human directly chose
+“Stop repeat blocks for fully shared values”; root is resolving the exact bounded
+contract preserving history and unknown/signed/context sibling safeguards before
+any I1 code is authorized. The previously
+reported initial checkpoint below is retained as historical fixture evidence,
+not independent approval or a completed R9 feature.
+
+The complete four-part I2/I3 corrective HOW preceded new assertions/source. A
+pre-fix focused run retained **10 failed, 4 passed, 274 deselected**: four escaped
+label/value/punctuation/sign controls accepted unsupported raw tokens, and six
+actual SQLite set_authorizer read denials escaped as private DatabaseError. After
+fixing the whole boundaries, one fixture assertion wrongly expected new admission
+to raise; existing submit instead records a fixed failed task with no queue growth.
+That run's **6 failed, 8 passed** remains recorded in the implementer report; the
+correct assertion preserves those established semantics. Initial corrected checks
+passed **14 tests** and then **140 affected tests, 152 deselected** with guard and
+actual local-socket storage-error controls.
+
+Fresh-eyes review identified an unavailable-runtime retry/publication gap within
+I3. Root explicitly authorized the narrow selected-path refusal and HOW was
+extended before code. New pre-fix assertions retained **7 failed, 10 passed,
+276 deselected**: a local retry could recover selection/verification authority,
+and an already verified proposal could publish after runtime unavailability.
+The final focused affected command below now passes **141 tests, 152 deselected**,
+including 19 corrective controls. The six real SQLite query denials preserve the
+exact pending/approval objects, no verified origin/vote/geometry/consumption/final
+response, fixed storage_unavailable and runtime UNAVAILABLE; a reset authorizer
+does not let retry recover authority. A final-scan unavailable transition also
+publishes and consumes nothing. The literal/whitespace positive and escaped key/
+amount/dot/minus negative controls retain unchanged scanner/reassembly behavior.
+
+Corrective source/test SHA256 are
+`324a83ebc229242002576d776f274100a452832a17c4e1907f16c57f6c99bd27` and
+`8a8a335e943e2964b8c51ea7b208aa3ebb7c4571de5fa9aaab8bb17fb6152209`.
+Import/name resolution, unchanged R8 helper hash and diffcheck pass. No broader
+runtime/history policy, original tests, dependencies, live assets or active
+services changed. The root-owned exact I1 contract and eventual complete-wave independent
+rereview, broad checks and actual integration remain required.
+
+R9 exact selected-financial consent has **source/fixture evidence only**. The
+resolved four-part contract was written into root HOW before source/tests. The
+final focused locked offline run was:
+
+```sh
+UV_CACHE_DIR=/private/tmp/airlock-uv-cache uv run --locked --offline python -B -m pytest -q test.py -k 'r9 or financial or manual_release_through_textual or schema_two or cap_history_deletion or shared_ledger or failed_release_commit or short_fragments' --tb=short
+```
+
+It passed **122 tests, 152 deselected**. This includes all 76 new R9 controls,
+retained financial golden/Coder fixtures and affected ordinary release/SQLite
+migration/history controls. Temporary Unix-socket tests needed permission to bind;
+the sandbox attempt failed with PermissionError, and the permitted focused run
+passed. No unchanged whole-suite/build, live scanner/model, Docker operation or
+active runtime acceptance was run in this wave. Original tests remain unchanged.
+
+Actual installed native Coder with scripted model replies reads the source and
+writes an independently checked Decimal artifact for local-only A, retains its
+truthful wages hint, then performs selected B with its own hint. Successful worker
+close precedes local review. Independently proved A/B occurrences support one
+canonical wages field on Verify-and-Approve; Deny releases nothing. Actual Textual
+and the temporary local Unix control socket exercise explicit row selection and
+plain field/value/file/context entry, review reopening, Verify-and-Approve and
+Deny. The same two controls subsequently passed at the existing 140x55 terminal
+size (**2 passed, 272 deselected**); only that test size changed after the 122-test
+checkpoint. Generic Approve cannot create financial consent. Signed/revised/derived
+golden contexts and Decimal oracles pass separately from these scanner fixtures.
+
+Negative controls retain normalized-spelling, unknown/missing-A, identical-amount
+different-context/file, cross-workspace, legacy/restart and final-scan registration
+refusals. Unsupported/prose/encoded/duplicate/sign/value/task/workspace/version/
+candidate/field/proof/context/bound/policy changes deny. Ordinary raw/rendered
+findings and scanner errors deny before review and at final release. Late
+artifact/cancellation changes deny. Real SQLite triggers prove registration,
+origin-verification, review-audit and final consumption failures publish nothing;
+the final trigger rolls back original geometry, contributions, response, audit
+and consumption together. Both exact raw and rendered JSON are independently
+scanned; only exact rendered bytes drive committed original geometry.
+
+The descriptor proof reader passes owned regular-file/deduplicated-reference
+positive controls and actual leaf/parent symlink, intermediate-directory
+replacement/outside-canary, hard-link/FIFO, changed-file/read-error and aggregate
+pre-read cap refusals. Ownership responses are simulated stat negatives; no live
+ownership or confinement guarantee is inferred. Every tracked descriptor closes
+on these outcomes. Opaque SQLite constraints, immutable registrations, bounded
+queries, partial-attribution reopen and history retention are exercised.
+
+Retained red checkpoints are documented in
+`.superpowers/sdd/tax-financial-consent-report.md`: fixture setup/name errors,
+sandbox socket-bind denial, and a deliberately retained unselected protected raw
+amount refusal. Tests/assertions were corrected or expanded, never weakened or
+deleted. Fresh-eyes review corrected review reopening/ordinary-button handling,
+verified-occurrence JSON serialization, immutable guard evidence binding,
+SQLite non-null keys, bounded commit queries, complete per-task source caps and
+review-audit failure handling. Import/name resolution and diffcheck pass. The R8
+PDF helper remains exactly
+`bdb2e1c4f044623bc375e3c35bc65a7791a110388118c45e74eb9b93741c8172`.
+Frozen R9 source/test SHA256 are
+`03187aab516fcca38caf5693dca6db8ff8a2e6c1e0509fa26ae0c0f81b7bfbfd` and
+`0be6293fd1c7a14b695906b9adb4d18f3a2369301744933defb0c6d26852b49f`.
+
+Restart remains deliberately conservative: a newly matching amount cannot
+upgrade retained opaque registrations/contributions whose exact old occurrence
+and context are no longer recoverable. Such origins remain ambiguous and selected
+release can stay withheld. History deletion cannot reset them or consumed consent.
+Same-runtime fixture positives establish neither cross-restart usefulness nor
+scanner accuracy, correct real document interpretation, SRT/OS confinement or
+interactive user acceptance. Independent frozen review, final broad checks and
+root-scheduled actual same-runtime text/PDF Approve/Deny remain required. Earlier
+live/R8 integration failures and pending approval holds below remain unresolved.
+
+The narrow R8 I5 addendum corrected local form JSON whitespace to one ordinary
+field per line using ensure_ascii=False/indent=2, retaining exact values and the
+unchanged pager. A 5000-field synthetic compact aggregate above 60000 characters
+reproduced **1 failed, 1 passed, 196 deselected** before the edit. Afterward,
+`UV_CACHE_DIR=/private/tmp/airlock-uv-cache uv run --locked --offline python -B
+-m pytest -q test.py -k 'pdf_route_form or pdf_route_correction_form or
+pdf_route_complete_text_cap or boundary_pdf' --tb=short` passed **31 tests,
+167 deselected**, clean output. First/middle/last entries are accessible through
+existing continuations; exact full UTF8 cap, Unicode/escaping/null/empty semantics
+and complete mapping remain tested. A single oversized entry remains explicitly
+unreadable at the existing line window, documented without inventing chunking.
+Only production formatter changed; I1–I4 lifecycle and separate PUBLIC financial
+compact format stayed unchanged. Final source/test/helper hashes are
+`68a6fc7e5a0d3b60bb8bacd3c76dc0e4aa25806713963e9d2b0cb2bc529920c6`,
+`7af5eb5a9aba9ddf08bb21c8dd102fa2352da475a76c7eb7af1af850ea0e589b`,
+`bdb2e1c4f044623bc375e3c35bc65a7791a110388118c45e74eb9b93741c8172`.
+Import/helper generation/diffcheck pass; fresh review found no further concrete
+issue in this narrow change. No entire lifecycle selector or actual daemon work
+was repeated. Independent corrected review and the unchanged blocked actual
+cleanup/integration gates remain required; earlier checkpoints below are retained.
+
+R8's subsequent independent checkpoint review identified four Important defects:
+silent form-field omission, Parent cycles bypassing installed-library shortcuts,
+unbounded shielded subprocess creation, and failure-path host reaping omission.
+The authorized single corrective wave updated its four-part HOW before code.
+New pre-fix form controls reproduced **3 failed, 3 passed, 183 deselected**;
+corrected form controls passed all six. New lifecycle controls first reported
+**11 passed, 1 failed, 183 deselected**, exposing incomplete cancellation delivery
+at a stalled host wait; correction passed **12, 183 deselected**. The first covering
+run passed **67, 128 deselected**. Fresh review found unread/full pipes could hold
+CPython exit waiters, added exact owned transport closure/full-pipe control, and
+the final covering command `UV_CACHE_DIR=/private/tmp/airlock-uv-cache uv run
+--locked --offline python -B -m pytest -q test.py -k 'pdf_route or ollama_budget'
+--tb=short` passed **68 tests, 128 deselected**, clean output.
+
+Current corrective source/test/helper hashes are
+`826687f448d2d2d5dae5e21851aba439bd72dd1ade07459c5b90b6bf1b317299`,
+`91c80a1fc36ca73d01d489842c4ab7e87eb87278d6c835bd52452a74fd9cbcc0`, and
+`83dfac9c12575788fe772b386df90793a8971f8a55a2c9c5201b2020e812a395`.
+Import/name/helper generation and diff check pass. Form export now requires exact
+complete expected raw mapping equality and independent bounded ancestor validation.
+Unknown CLI creation returns promptly, blocks success, and has one bounded late
+host-only reaper on appearance. Cleanup reserves its host portion within five
+seconds and proves waits/identity/terminal pipe tasks even after daemon failure,
+or retains uncertainty. Tests use fake delayed creation with real owned local
+Python children; no Docker lifecycle ran. Unknown clocks are never invented.
+Fresh review found no further concrete defect in these corrected paths; independent
+corrective review remains required. Original failed checkpoint/reviewer evidence
+and both automatic rejections remain preserved. Actual R8 is still **BLOCKED**
+pending the unchanged direct cleanup approval; no absence, route success, activation,
+full-suite/build, scanner/model or UI acceptance is inferred from these controls.
+
+On 2026-10-02, R8 implemented the explicitly configured fixed local Linux PDF
+byte route in the single production module, retaining the native default and
+R7 model profile correction. Its four-part contract is in HOW.md. Source/test
+checkpoint hashes are respectively
+`9d0cd0a3ecc679923282839bf3d16d512b7fb95f6df331c9c2088bb1adc7d279` and
+`f20da64a3d6c5de30af1bad73d58c56a76407c80c2ac7311e2c1675f3282e9d5`;
+the derived helper is
+`f3cd44726644fe8dd350d44864a87ecbc7ffdb641f33301c9c9b093d785cbbcd`.
+`UV_CACHE_DIR=/private/tmp/airlock-uv-cache uv run --locked --offline python -B
+-m pytest -q test.py -k 'pdf_route or ollama_budget' --tb=short` passed
+**55 tests, 128 deselected**, with clean output. Import/name resolution and
+`git diff --check` passed. The coordinator owns later full-suite/build checks;
+these focused results do not supersede earlier recorded full-suite counts.
+
+Focused PDF checks cover strict byte-message identity/sequence/schema bounds,
+actual installed Coder deferred/defaulted same-name read with a queued judge,
+separator-inclusive UTF-8 caps, exact AcroForm text/null export and malformed
+field refusals, real marked-child cleanup and nullable UID denial, original-pin
+recovery, bounded subprocess pipes, never-started ownership cleanup, cancellation,
+creation/removal uncertainty, complete immutable image-label equality, and worker
+closure even when parser cleanup fails. The Coder test uses a parser fixture;
+fixed CLI tests launch real subprocesses with scripted daemon replies/pinned
+inspection fixtures. They establish wiring, not Docker/syscall enforcement.
+The filled-form control independently confirmed the original page-only method
+retains ordinary page text but omits `1250.25`; current production extraction
+retains that exact field value. Field-only, empty/missing/null, duplicate/number/
+array/nameless/stream and exact-cap controls pass. Real configured SRT field
+reading remains unverified.
+
+An earlier restricted covering run reported **46 passed, 2 failed, 88 deselected**
+at denied process enumeration/localhost binding. The permitted covering run
+reported **46 passed, 90 deselected**. Lifecycle fixture setup first failed outside
+an event loop; explicit fixture completion corrected it. Subsequent strict Path
+JSON recovery failures were fixed without relaxing scalar/schema enforcement.
+Automatic review rejected a proposed mocked seccomp fixture as weakening the
+pinned-policy test; no rejected edit executed. The final fixture embeds exact
+already-read reviewed policy bytes and retains its equality/hash assertions.
+
+Actual R8 startup **failed before any parser helper started**, with no completed
+cases, at `/private/tmp/airlock-r8-dn58p055/results.json`. Docker inherited OCI
+labels from the pinned image, while the first record expected only Airlock's two
+labels. Effective hard configuration inspection succeeded, but ownership cleanup
+correctly refused unequal labels. Production now records/verifies the complete
+exact pinned-image plus owner/job label set; positive/mismatch controls pass.
+The original record and inspection are preserved. The exact created/nonrunning,
+never-started container is
+`a1cc40a0d0068fc11948801a89c46ffdae2a3e0a8a136dde1c8d78829b418f8e`,
+named `airlock-pdf-095f3995e63643c6b61c2dd60495aa66`.
+Automatic review rejected its exact verified removal because direct human
+approval of that irreversible cleanup was missing. Removal has not executed;
+absence has not been established. The human cleanup question is pending, so
+the actual phase is **BLOCKED**, not passed/completed. No new actual lifecycle
+was attempted after that hold.
+
+Actual generated-helper initialization, complete raw-pipe header/EOF/exit bounds,
+non-ASCII maximum representation, backpressure, fixed-daemon cancellation/recovery
+and configured native SRT/Coder tax-PDF workflow remain required. Earlier R6
+hard-limit/socket/write probes support feasibility only. No scanner/model load,
+inference, active preparation/profile mutation, calibration acceptance or shared
+runtime change occurred in this R8 subtask. Changed source/optional assets require
+fresh measured binding and exact startup acceptance before live activation.
+Fresh review corrected stream-valued form coercion/omission, resource-init error
+classification and worker closure on parser cleanup failure; no further concrete
+defect was found in the reviewed R8 paths. This is a focused code review, not an
+independent security audit. The full checkpoint/remaining live gates are recorded
+in `.superpowers/sdd/tax-pdf-integration-report.md`.
+
+On 2026-10-02, R7 corrected the Ollama output-budget wire field by setting
+`openai_chat_supports_max_completion_tokens=False` on the existing model profile.
+Actual installed Pydantic/OpenAI SDK requests through httpx MockTransport emitted
+`max_completion_tokens` before the change: both output-cap (4096) and remaining-
+total (17) assertions failed; six other new controls passed. After the constructor
+change, `UV_CACHE_DIR=/private/tmp/airlock-uv-cache uv run --locked --offline
+python -B -m pytest -q test.py -k ollama_budget` passed **8 tests, 128 deselected**.
+The SDK emitted bounded `max_tokens`, preserved required strict final-result
+tools and sequential calls, returned synthetic response `4`, and accounted for
+usage. Exhausted call/token budgets reached no transport. SDK stream error,
+idle timeout and entered-stream cancellation closed streams; subsequent requests
+succeeded. A queued judge shared the worker's one running slot, and judge tools
+were refused. `git diff --check` passed. Fresh review separated the test watchdog
+from the production idle timeout, so a missing production timeout cannot pass
+by reaching the watchdog. The final focused rerun passed all eight cases. No
+additional concrete defect was found in the changed constructor/tests; an initial
+test-client import issue and the SDK's wrapped error type were corrected before
+baseline/final measurement. Independent R7 review identified that the read_file
+name-only assertion did not prove schema preservation. The test now supplies
+required path and optional offset/limit fields and asserts the exact generated
+wire schema. This verifies the supplied synthetic schema, not Coder's native
+schema. A narrow pytest.warns assertion captures only the installed exact legacy
+httpx deprecation class/message during construction; unrelated warnings remain
+visible. The correction rerun reported **8 passed, 128 deselected**, with no
+warning summary. Production hash stayed
+`8a9fac517043a9bfd2b42c2cff1715ce5afc5bd2a2d6a8f3731d3ac8f661338a`;
+manifest, prepared settings and profile hashes matched before/after. No asset
+writes occurred; this correction did not rehash all underlying runtime assets.
+Fresh review and diff check found no additional concrete issue in the correction.
+
+These are offline wire/lifecycle checks, not inference or provider enforcement.
+The SDK's existing httpx client deprecation remains a compatibility debt, now
+explicitly asserted by these focused tests; dependencies were unchanged.
+No reasoning switch, profile/manifest activation, scanner rerun or
+runtime start occurred. The source edit invalidates the previous prepared source
+and calibration bindings; old activation evidence below applies to its recorded
+checkpoint. A compatible measured profile and explicit activation are required
+before live workflows. Successful live arithmetic/release behavior, Ollama token-
+cap enforcement and reasoning reliability remain unverified by this repair.
+
+On 2026-10-02, authorized resume R1 activated the exact measured Task 5 candidate
+for synthetic testing. Source remains
+`c639cd39d2ad63411ccf3120fc81b8efe909770092a08f41ccf113c4d96b761a`;
+active profile SHA-256 is
+`223d90c8c74a24876267e5789803ce86221938399526fbace00c878d237b22ee`,
+with binding `d226d348db0bb56f309f685cb710fea31c9f3132c2b97652f3da0a777719882d`.
+Original findings/labels independently reproduce 4/12 calibration benign false
+blocks, 6/12 held-out benign false blocks, zero private misses and zero detector
+failures. Thresholds remain `0.3` / `0.5`, no overrides, reassembly `1.0`; all
+packages/assets and other prepared fields are unchanged. The profile stays
+globally unreviewed and preparation contains no acceptance.
+
+Actual Textual Accept returned that exact digest twice for the existing synthetic
+dummy folder, with manual request/read/release, enforced privacy and hidden
+workspace writes. Normal startup reached READY with empty scanner failures,
+real scanner canaries and SRT startup probes, and saved configuration version 9.
+Only that runtime started and it stopped cleanly; no tasks or inference ran.
+Read-only SQLite verification found zero new interactions and the exact saved
+governance/profile reference. Unaccepted settings still refuse
+`calibration_not_accepted`. The old empty supervisor PID 34879 exited through
+its owned control lifecycle; current-source PID 33722 remains empty. Its owned
+scanner/worker processes and job records are gone. Ollama residency had aged out
+before this run; actual empty lists before/after are preserved without preload.
+
+The dummy directory alone changed mode from 0755 to 0700 after exact ownership
+and device/inode verification. Its documents, file modes and identities are
+unchanged. Active preparation before/after bytes and exact results remain
+owner-only under `/private/tmp/airlock-tax-activation-d1xuv8ve`. A prior read-only
+preflight's stale resident-model assertion failure is preserved separately at
+`/private/tmp/airlock-tax-activation-krer3dqd`; it changed no active bindings.
+Activation and a separate fresh-process verification both exited zero. Fresh
+review found no additional concrete defect in this bounded path. This startup
+acceptance establishes no new live financial release or PDF-readiness evidence.
+Detailed commands/current paths are in
+`.superpowers/sdd/tax-resume-activation-report.md`.
+
 Task 5 prepared a private measured candidate for the current source, without
 activation or acceptance. Actual SRTLauncher/ScannerService required startup
 probes passed; one scanner generation measured every original calibration and
@@ -28,8 +477,8 @@ started. Active manifest/profile/settings and all existing top-level preparation
 artifacts remain byte-identical. Owned scanner processes/jobs are gone; the
 existing empty old-source supervisor and shared resident model are retained.
 Detailed commands/evidence are in `.superpowers/sdd/tax-task-5-report.md`.
-Activation and exact per-workspace local acceptance require separate approval;
-the old installed bindings and supervisor remain stale by design.
+At Task 5's completion, activation and exact per-workspace local acceptance still
+required separate approval. Authorized R1 above subsequently completed those gates.
 
 Task 4's authorized bounded cleanup/PDF changes passed **23 focused locked
 checks, zero skips/failures, 105 deselected**. Corrected regressions against the
@@ -74,7 +523,7 @@ changes were introduced. Detailed evidence is in
 Production source changed from SHA-256
 `fe055275b0deb74d9dd3f1da7dcafb57879ecdcc7668b1a0a94237c384b3b145` to
 `c639cd39d2ad63411ccf3120fc81b8efe909770092a08f41ccf113c4d96b761a`.
-Existing runtime manifest/calibration bindings remain untouched and stale:
+At Task 4's completion, runtime manifest/calibration bindings remained untouched and stale:
 current `prepared_settings()` correctly refuses `asset_hash_mismatch`. The SRT
 diagnostic used previously captured trusted settings privately, never a rebound
 live profile or acceptance. New enforced live startup requires honest preparation,
@@ -251,4 +700,4 @@ Fresh review found and corrected a history-deletion reference to the removed `na
 - Diagnose selected-wages withholding, arithmetic component failures and original intermittent cleanup failures; complete actual release Deny. Correct live net and public-fact manual releases have actual synthetic workflow evidence. Task 4 identifies PDF initialization refusal at required hard-limit installation and returns its exact safe error; usable sandboxed PDF parsing remains unavailable on this host. Field privacy accuracy, image/scanned-PDF behavior, general process escape resistance and combined memory use remain unmeasured.
 - Exercise interactive history flows and native disconnect/cancellation recovery. Actual startup, manual admission/read/denial and net/public-fact release Approve handlers were exercised; actual release Deny and complete client-recovery behavior remain open.
 
-The referenced preparation/calibration tools and corpus are absent from committed source; temporary local preparation and an explicitly accepted dummy-only profile were used above. Source tracking remains fallible and reconnects old evidence only when sources are declared again after restart. Current core hardening checks pass. Selected-wages/arithmetic usability, original cleanup causation, actual release Deny and usable sandboxed PDF parsing remain open. The newly measured private candidate requires separate activation approval and exact local workspace acceptance; it grants no new approval evidence.
+The referenced preparation/calibration tools and corpus are absent from committed source; temporary local preparation and an explicitly accepted dummy-only profile were used above. Source tracking remains fallible and reconnects old evidence only when sources are declared again after restart. Current core hardening checks pass. Selected-wages/arithmetic usability, original cleanup causation, actual release Deny and usable sandboxed PDF parsing remain open. Authorized R1 activated the newly measured candidate and completed exact dummy startup acceptance; it grants no new live request/tool/release approval evidence.

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>airlock</title>
+<title>airlock historical console (unsupported)</title>
 <style>
 :root{
   --paper:#FBFBF9; --card:#FFFFFF; --ink:#1B1B18; --muted:#75756D;
@@ -256,6 +256,8 @@ span.ws{cursor:default}
 </style>
 </head>
 <body>
+<p class="wrap" role="note">Historical, unsupported web console. Its former API routes are retired;
+  the active Airlock interface is native Textual in root airlock.py.</p>
 
 <header>
   <div class="wrap bar">
@@ -501,7 +503,7 @@ let PENDING=null;
 function renderAsk(p){
   PENDING=p;
   $('#ask').hidden=!p;
-  document.title=(p?'\u25cf ':'')+'airlock';
+  document.title=(p?'\u25cf ':'')+'airlock historical console (unsupported)';
   if (!p) return;
   const label={request:'Allow this request?',write:'Allow this exact file change?',response:'Release this response?'};
   const detail={request:'Work starts only if you allow this request.',write:'Only this file change will be allowed.',response:'Work has finished. This response stays local until you allow it.'};

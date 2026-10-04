@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Copy ui/index.html into airlock.py's CONSOLE_HTML literal.
+"""Historical, unsupported helper for the retired web console.
 
-ui/index.html is the editing copy; the literal is what ships, so that
-`uv run --script airlock.py` works from any directory. test.test_console()
-fails when they differ, and this is the one-line way to make them agree.
+The former ui/index.html editing copy, CONSOLE_HTML literal and test_console
+check no longer describe shipped Airlock. The active interface is native Textual
+in root airlock.py. This retained illustration cannot sync the current product.
 """
 
 import re

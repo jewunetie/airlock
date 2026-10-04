@@ -475,3 +475,1195 @@ None/starts no runtime. Verify owned scanner/job processes gone and shared model
 supervisor retained. Record failed measurements honestly, fresh review and
 diffcheck. No broad suite repetition for documentation-only work. Explicit
 operator acceptance/activation remains required.
+
+## Authorized measured candidate activation and dummy startup (resume R1)
+
+Data model: retain existing Settings, PreparedRuntime, CalibrationProfile and
+workspace configuration records. Activate the exact measured candidate profile
+223d90c8c74a24876267e5789803ce86221938399526fbace00c878d237b22ee,
+bound to source c639cd39d2ad63411ccf3120fc81b8efe909770092a08f41ccf113c4d96b761a.
+Keep pii_threshold=0.3, policy_threshold=0.5, policy_overrides={},
+reassembly_fraction=1.0 and reviewed=false. Exact per-workspace acceptance is
+returned by the native startup screen. Preserve original active bytes privately,
+dummy file bytes/identity, process PID/create-time and shared model identities.
+
+API/errors: verify measured candidate, original validators, packages and asset
+digests before mutation. Atomically install identical profile bytes at the
+existing private asset path and update only source/profile preparation references.
+Retain all other settings/packages/assets. Stop only the currently verified empty
+old owned supervisor through its control API, then ensure the current supervisor.
+Use make_startup_tui's actual Accept handler for the existing owner-only synthetic
+dummy folder, strict manual request/read/release and enforced privacy with hidden
+workspace writes. Start through normal local control, inspect preferences and
+health, make no inference/task request, and stop only the created dummy runtime.
+Any mismatch or uncertain mutation fails closed without silent retry. Keep the
+current empty supervisor and shared resident Ollama model.
+
+Location: root HOW.md and VALIDATION.md document authorized contract/evidence;
+one owner-only /private/tmp runner, unique private backups/results; existing
+ignored runtime.manifest.json and Application Support prepared settings/profile.
+Report .superpowers/sdd/tax-resume-activation-report.md. No source, test, dependency,
+plugin, unrelated workspace, commit or publication changes.
+
+Tests: recompute candidate split metrics from preserved actual findings and labels,
+verify exact source/profile/binding/package/assets and all unchanged configuration;
+assert unaccepted refusal, native exact acceptance and global reviewed=false.
+Verify original supervisor empty before stopping, PID/create-time exit, new source
+ping, dummy-only READY with actual scanner/SRT startup probes and saved governance.
+Repeat native acceptance without globally reviewing the profile. Verify no task
+or model calls, stop the created runtime, no owned scanner/job survivors, unchanged
+dummy contents and shared resident model identities. Preserve exact failures and
+backups; fresh review and diff check precede handoff to controller review.
+
+Preflight correction: the existing verified synthetic dummy directory is owned
+by the user but mode 0755. The controller authorizes chmod of that exact canonical,
+identity-checked directory to 0700 before startup, retaining device/inode and all
+file bytes/modes. No recursive chmod or document edit. Record original and final
+directory modes privately; startup requires owner-only directory access.
+
+Current-state correction: live read-only preflight found Ollama's resident list
+empty; the previously observed model has aged out. Preserve the actual empty
+list before/after and require installed-model digest/capability metadata health
+through existing tags/show. ollama_exclusive remains false, with no preload or
+inference. Keep the original failed resident-assumption preflight evidence.
+
+## Ollama output budget compatibility repair
+
+Data model: retain Settings token/call/deadline fields, Task counters and Pydantic
+request/response schemas. Set the OpenAIChatModel profile field
+openai_chat_supports_max_completion_tokens=False. No new setting or entity;
+max_output_tokens remains 4096 by default and each request uses the lesser of
+that cap and its remaining total budget. Strict tools and reasoning stay unchanged.
+
+API/errors: ModelService.__init__ selects the installed SDK profile field so its
+wire sends max_tokens instead of max_completion_tokens. Preserve streaming,
+required tool choice, sequential calls, local client restrictions, cancellation,
+idle/wall deadlines, shared worker/judge limiter, role checks and budget errors.
+Do not set reasoning_effort=none. Source changes invalidate prepared bindings;
+do not update profiles/manifests or bypass their validators in this repair.
+
+Location: constructor in root airlock.py; actual SDK/httpx.MockTransport streaming
+regressions in root test.py; offline evidence and live limits in VALIDATION.md.
+No new production module/dependency. Private report lives at
+.superpowers/sdd/tax-ollama-budget-report.md.
+
+Tests: assert actual SDK strict final_result response 4, max_tokens bounded by
+output/remaining total, absent max_completion_tokens, required strict tool schemas
+and parallel_tool_calls=False. Verify usage and exhausted token/call refusal before
+transport. Exercise SDK error, idle timeout and entered-stream cancellation;
+a subsequent success proves the slot is released. Worker/judge share one slot,
+queued judge reaches no transport before worker completes, and judge tools fail.
+Use only synthetic messages and no real network/inference. Run focused locked
+offline ollama_budget tests, fresh review and git diff --check; controller owns
+the final full suite. Wire compatibility alone proves neither Ollama enforcement
+nor successful live workflows, reasoning reliability or scanner accuracy.
+
+### R7 focused test correction
+
+Data model: retain production source/hash and all schemas/settings. The synthetic
+test read_file arguments contain required path:string and optional offset/limit
+integers with defaults. This is a supplied test schema, not Coder's native schema.
+
+API/errors: assert the exact supplied schema reaches the actual SDK wire.
+Construct ModelService under pytest.warns for the installed exact
+PydanticAIDeprecationWarning message about legacy httpx.AsyncClient support.
+Require that warning; unrelated warnings remain visible. No filter suppression,
+client migration or dependency change.
+
+Location: only test.py helpers/assertions, this HOW entry and VALIDATION.md
+evidence; append the private R7 report. Production airlock.py stays byte-identical
+at 8a9fac517043a9bfd2b42c2cff1715ce5afc5bd2a2d6a8f3731d3ac8f661338a.
+Private preparation/assets are read-only and no live runtime/inference starts.
+
+Tests: rerun the eight locked offline ollama_budget cases and preserve clean
+output; verify exact generated read_file schema and exact expected warning;
+git diff --check, source hash verification and fresh review. Controller owns
+the final full core run and private preparation activation/preservation gates.
+
+
+## Authorized R8 fixed supervisor PDF byte parser
+
+The human authorized tax-document workflow completion. The coordinator treats the minimum explicitly configured fixed local Linux parser on the existing backend as within that authority; the changed trusted daemon/VM promise and exact local startup acceptance remain distinct. The following contract supersedes the proposal's design-only status; explicit asset preparation and measured activation remain separate. No native fallback, Docker installation/start/pull/build, generic container runner, new dependency or release exemption is authorized.
+
+## 1. Data model
+
+Add one optional `Settings.pdf_parser: PdfParserSpec | None = None`. Absence keeps
+the existing native SRT-inherited parser, including hard-limit refusal. Presence
+selects the fixed supervisor parser explicitly, with no automatic fallback or
+daemon discovery. `PdfParserSpec` is frozen, strict, extra-forbid, and contains:
+
+- `format: Literal[1]`; `daemon_endpoint: str`, restricted to one absolute
+  owner-owned local Unix socket; `daemon_id: str`, nonblank bounded identity;
+  `daemon_version: str` and `kernel_version: str`, bounded exact preparation pins;
+  `platform: Literal['linux/arm64']` for this candidate.
+- `cli: Path` and `cli_sha256: str` (64 lowercase hex); `image_id: str` matching
+  `sha256:` plus 64 lowercase hex; `python_path: str` fixed within that image and
+  `python_sha256: str`; `pypdf_version: str`.
+- `bundle: AssetSpec`, reusing complete relative-path hashes for the generated
+  helper and every locked pypdf source; `seccomp: AssetSpec`, a separate fixed
+  one-file syscall policy. Exact package/bundle file sets, not just version tags,
+  are checked. Helper hash is source-bound and changes when its root definitions
+  change. All assets remain outside source, selected workspace and runtime state.
+
+The retained candidate evidence supplies an image ID
+`sha256:d1e005e6f5aac724b7554db95f1c128a77d8d35b59ebe70e188852b4bdad3a3d`,
+CLI `/usr/local/bin/docker` hash
+`1ab15b88db480318cc18a8b9def555e21b3c6afae1543bfa28191ec9b4fc8ce0`,
+Linux Python executable hash
+`037790041b8d9793336e9c1884b85cf3252bd3f41e06b040e222f52fedcae65c`,
+pypdf 6.16.1 and seccomp hash
+`e8a4daad44feb37626d50eee92d6c0adb1722eab0a1a48b10a88a2e8b730cf85`.
+These are retained measurements, not refreshed installation claims. Preparation
+must verify them, pin the daemon identity and actual executable path, and compute
+the new helper/bundle hashes before enabling the route. It must not copy diagnostic
+helper hashes or silently rebind a changed daemon/image. The local endpoint tested
+was `unix:///Users/jewunetie/.docker/run/docker.sock`.
+
+Reuse existing PDF Settings limits, imposing candidate ceilings rather than
+allowing its route to exceed verified geometry: input 16,777,216 bytes, extracted
+UTF-8 text 524,288 bytes, 100 pages, 15-second parse deadline and 512 MiB AS.
+Reject prepared values exceeding these ceilings; smaller limits apply exactly.
+Cgroup memory equals AS and memory-swap equals memory; PID ceiling 32, CPU quota
+0.5, FSIZE zero. Do not replace AS with cgroups or RSS sampling. Require >=25%
+host free memory and at least twice the configured cap available before starting
+one job; this admission gate is distinct from enforcement. One supervisor-wide
+parser slot bounds concurrent containers and host byte buffers.
+
+`Task.pdf_read: PdfRead | None` holds only one active read: `call_id: str`, exact
+validated `args_fingerprint: str`, `config_version: int`, `grant: str` (random
+opaque nonce), `phase: Literal['granted','streaming','finished']`, `next_seq: int`,
+`expected_bytes: int`, `received_bytes: int`, `deadline: float`, `job_id: str | None`.
+It is created only by an allowed exact PDF `read_file` tool_check on the configured
+route (the validated path suffix selects the adapter), and invalidated by
+policy/configuration change, task cancellation or matching tool completion.
+The existing approval is consumed once; the PDF grant permits one parse sequence,
+never another file read. Original read arguments stay private, with raw intent
+retained in the existing task/request and approval records.
+
+An owner-only `state/pdf-jobs/<job_id>.json` durable record contains strict typed
+`format`, random `job_id`, installation owner token, task ID, call ID, configuration
+version, exact name/labels and the complete original `PdfParserSpec` pins,
+`container_id: str | None`, `phase: Literal['creating','created','running','dead','uncertain']`
+and owned CLI PID/create-time identities. It contains no bytes, text, private
+filename or tool arguments. Write it atomically before creation, update at each
+observed transition, and retain it on any uncertain cleanup. Recovery uses the
+recorded pins, including when newer runtime configuration differs.
+
+## 2. API contract
+
+### Authorization and private byte transport
+
+Keep Coder's same-name `read_file`, validated arguments, deferred local approval,
+one-use fingerprint, SRT `read_media_bytes`, line paging and six-tool interface.
+An allowed PDF `tool_check` returns a private `pdf_grant`; a denied/manual-pending
+call returns none. Bind the grant to the authoritative handler's worker process,
+runtime, task, exact call and current configuration. A payload's claimed role or
+task is never identity evidence. Only the worker transaction handler admits PDF
+operations; scanner/judge/model handlers admit none. Judge model requests never
+receive read grants. An arbitrary malicious worker already has its SRT grants;
+the byte interface cannot independently prove where its bytes originated and
+must not claim to introduce a syscall-level approval boundary.
+
+`read_pdf_in_worker(data, settings, *, channel=None, call_id=None, grant=None) -> str`
+keeps the native path when no parser is configured. The configured route requires
+the existing private ChildChannel and authorized call/grant; it invokes no Docker
+executable or socket from the worker. The supervisor never receives a filesystem
+path to open, command, image, mount, environment or daemon selector from this
+exchange. It parses only already-read bounded bytes.
+
+Add strict worker-only `pdf_begin`, `pdf_chunk`, `pdf_end` payload schemas:
+
+- Common fields: `task_id: str`, `call_id: str`, `config_version: int`, `grant: str`.
+  Enforce exact keys, strict types, bounded strings and authoritative identity.
+- begin adds `size: int`; chunk adds `seq: int` and `data: str` (strict base64);
+  end adds `seq: int`. Begin consumes the grant into streaming state. Each chunk
+  must match the next sequence and decode to 1..65,536 bytes without exceeding
+  the declared size. End requires exact total bytes and next sequence, and closes
+  the grant permanently. Repeated begin/end/chunk or stale IDs fail closed.
+- Begin/chunk replies contain only fixed acknowledgement/next sequence. Successful
+  end returns `text: str` within the UTF-8 cap only after verified cleanup. Failure
+  replies use one fixed allowlisted PDF code; no raw exception or stderr escapes.
+
+Reject encoded chunks above `4*ceil(65536/3)` before decoding, and raw PDF frames
+above 90 KiB before JSON allocation; the ordinary MAX_FRAME cap alone is too large.
+Extend `read_frame(reader, *, max_bytes=MAX_FRAME)` and
+`SandboxProcess.transact(..., frame_limit: Callable[[], int] | None = None)`
+minimally to obtain the limit before each frame read: 90 KiB
+while the read grant is active, restoring the normal limit after the
+matching tool_finished, and reject intervening non-PDF calls other than cancellation
+or matching completion. Small tool completion still fits that bound. Bound the
+end reply separately: existing bounded JSON framing can carry the at-most-512 KiB
+text with worst-case escaping; validate text's UTF-8 bytes, not character count.
+Do not create one base64 JSON representation of the whole PDF.
+
+`tool_finished` on this route must match the active call, not merely clear the
+current tool unconditionally. On an unfinished sequence it closes the grant and
+cleans the job. Configuration changes and cancellation abort active parse state;
+validate policy/version before every chunk and again before text delivery.
+
+### Fixed parser and supervisor lifecycle
+
+Add one small `PdfParser` owned/shared by Supervisor, passed explicitly to
+WorkspaceRuntime, with `start() -> None`, `begin(task, read, size) -> None`,
+`chunk(task, read, seq, data) -> None`, `finish(task, read) -> str`,
+`abort(task) -> None`, `close() -> None`, and `recover(state) -> None`.
+Methods accept validated internal state only. The slot is acquired before the
+begin acknowledgement and held until exact cleanup. Preparation/startup validates
+pins, actual daemon identity, effective caps and fixed positive/negative canaries;
+configured absence or mismatch fails readiness. Revalidate pins before each job.
+Recovery happens before READY, using retained records without scanning containers.
+
+Derive a helper during explicit offline preparation from an AST allowlist of root
+`extract_pdf_bytes`, `AirlockError` and a new stdlib-only `pdf_parser_main` function.
+Their fixed imports are stdlib plus the locked pypdf files. Reject unexpected
+definitions/dependencies and assert parser AST equality. Generate one helper asset,
+not another maintained production source. Do not import the full app in Linux.
+Preparation uses installed locked package bytes and the cached image; no runtime
+downloads, builds, pulls or package installation. Its root function sets only the
+fixed bundle library path after manifest verification. Supervisor-generated strict
+numeric argv supplies the configured smaller page/text/memory/CPU limits; no model
+value supplies argv and no executable/entrypoint is selectable. The helper validates
+these values against the fixed candidate ceilings. The fixed helper installs/readbacks
+AS/CPU/FSIZE before accepting input, verifies its executable and pypdf files, then
+uses a four-byte big-endian length plus raw bytes input. EOF at any 0..3-byte header
+or partial body yields fixed truncated-input failure, not struct.error disclosure.
+
+The helper emits a one-byte success/error tag plus four-byte length and bounded
+UTF-8 text or allowlisted ASCII error code. Raw binary framing avoids JSON overhead
+rejecting legitimate maximum-sized non-ASCII text. A bounded initialization message
+precedes the input acknowledgement. Helpers reject surplus input, bad signatures,
+oversize, page/text excess, encryption and blank text, retaining current extraction
+and page markers. MemoryError has fixed pdf_memory_limit; unexpected parser errors
+have pdf_unavailable. Local ToolFailed wording remains fixed; public receipts,
+errors and cloud release behavior are unchanged.
+
+Use the pinned absolute CLI with explicit `--host` endpoint, fixed subcommands
+and argv, no shell, `DOCKER_CONFIG` pointing to an owner-only empty supervisor
+directory and a filtered environment without contexts, proxy/plugin/credential
+overrides. Read/hash the CLI before running it. Fixed create options: no pulls,
+user 65534:65534, all capabilities dropped, no-new-privileges, read-only root,
+ipc/network none, pinned seccomp, no devices/privilege, private namespaces,
+restart/healthcheck disabled, logging none, memory/swap/PID/CPU/FSIZE caps above.
+Only the prepared read-only bundle is mounted, at one fixed path; no workspace,
+state, home, venv or daemon socket mount. Fixed Python entrypoint `-I -B` selects
+only the generated helper. Explicitly validate effective special mounts, including
+the 64 MiB /dev ceiling from the candidate, rather than claim every special file
+obeys ordinary file semantics. No writable parser scratch is added.
+
+Create returns an exact ID; independently inspect ID/name/owner labels/image and
+all effective settings before start. Created-but-never-started jobs require exact
+`docker container remove ID`, not kill/wait or reliance on auto-removal. Start/attach
+only after validation. Disable auto-removal for this production contract so every
+job has one explicit removal/absence path. Removal is an owned ephemeral lifecycle
+operation after requested parsing, never user-data deletion or broad pruning.
+
+Input pumping, stdout and stderr draining run concurrently with bounded queues;
+each pipe operation and create/start/inspect/API/CLI wait uses the same remaining
+monotonic 15-second work deadline, also bounded by the parent tool/task deadline.
+Include slot waiting and backpressure, never synchronously write 16 MiB before
+starting cancellation/deadline handling. Stream chunks to attached stdin, rather
+than buffer another full PDF in the supervisor. Cap queues at 16*4096 bytes,
+stdout at text cap plus fixed framing/initialization overhead <=1 KiB, stderr at
+32 KiB, and control command output at 64 KiB. Drain and discard bounded stderr;
+any overflow/malformed/partial/trailing response fails closed. Host storage is
+bounded independently of the container cgroup. StreamReader/kernel/CLI buffering
+is finite and accounted for, not included in the parser AS ceiling.
+
+After success, failure, timeout or cancellation, stop the exact verified running
+ID, explicitly remove it, reap exact owned host CLI processes, then independently
+inspect that ID for daemon-confirmed not-found. Name inspection also prevents a
+creation identity from being lost. Use a separate fixed five-second shielded
+cleanup budget after the work deadline; no content returns during cleanup. Start,
+attach, API or CLI ambiguous outcomes retain their record and withhold text.
+Never equate CLI death with container death. Ownership/image mismatch permits no
+termination and makes the route unavailable. A create timeout can leave a daemon
+operation in flight: an immediate missing name does not prove it cannot appear
+later. Mark uncertain and retain the record, block new parser jobs, and require
+reconciliation of that exact record; do not manufacture success from one absence
+probe. Restart recovery removes exact verified owned objects and records absence;
+an unresolved in-flight/daemon outcome remains blocked for explicit local review.
+No listing, stopping or cleanup of unrelated containers, daemon or services.
+
+Cancellation/controller disconnect and supervisor shutdown invoke the same abort
+path. Crash recovery reads only owner-only registered names/IDs with original
+pins; image/daemon mismatch or cleanup failure retains records, starts no task
+replay, and prevents configured parser readiness. No bytes/text are durably logged.
+Removing the container is not secure erasure: attached data traverses Docker
+Desktop's VM and daemon buffers; host/VM swap, crash dumps and physical retention
+are outside these guarantees. No content log driver, filesystem document staging
+or broader mount is introduced.
+
+## 3. Location and architectural decision
+
+Production changes stay in root `airlock.py`: Settings/
+prepared_settings validation; PdfParserSpec/PdfRead and strict byte schemas;
+Task read binding; parser helper/main; existing frame limit plumbing;
+run_coder/read_pdf_in_worker; WorkspaceRuntime worker_message/execute/stop;
+Supervisor startup/shared cleanup/orphan recovery. Tests stay in root `test.py`.
+No ModelService constructor change belongs to this route. Generated assets stay
+in the existing prepared asset location, outside selected workspaces and source;
+no second shipped module, Docker SDK or new dependency. Preparation binds the
+helper/package/seccomp/image pins; calibration_binding includes `pdf_parser` so
+changed parser assets cannot reuse an old accepted binding. Source changes invalidate the existing scanner
+profile binding and require the existing measured preparation/acceptance procedure,
+without tuning thresholds or silently accepting calibration.
+
+Root HOW.md records this concrete contract; ARCHITECTURE.md sections
+2/3/4/7 describe the new trusted component and exception to SRT-inherited PDF parsing,
+README.md describes the explicit optional daemon prerequisite, and VALIDATION.md
+separates tested wiring from actual integration. This is the current authorized
+source contract; actual route acceptance is recorded separately.
+
+
+### Resolved concrete interfaces and review corrections
+
+Data: PdfParserSpec uses strict scalar fields, frozen/extra-forbid validation and
+existing AssetSpec values for bundle/seccomp. Paths are absolute. Endpoint must
+be unix:// followed by an absolute owned socket path. Hashes are lowercase SHA256,
+image_id is sha256: plus SHA256. Task.pdf_read is PdfRead or None. PdfRead is an
+in-memory dataclass with the proposal's exact fields; job_id refers only to an
+owned record. Strict PDF payload validators reject extra keys and bool integers.
+PdfJob is a frozen/extra-forbid Pydantic record with the proposal's format, job_id,
+owner, task_id, call_id, config_version, name, labels, spec, container_id, phase
+and exact cli_processes:[{pid:int,create_time:float}]. No document data persists.
+
+API: PdfParser(settings:Settings,state:Path,owner:str) owns one asyncio.Lock
+slot and one active owned job. start()->None verifies all fixed pins and calls
+recover()->None before admission. begin(task:Task,read:PdfRead,size:int)->None,
+chunk(task:Task,read:PdfRead,seq:int,data:bytes)->None,
+finish(task:Task,read:PdfRead)->str, abort(task:Task)->None and close()->None
+are asynchronous. One remaining monotonic work deadline covers slot wait,
+commands, initialization, chunks/drains, EOF and exit. Each subprocess pipe is
+bounded; stderr drains concurrently, rejects >32768 bytes and never escapes.
+Control command output is <=65536 bytes. Cleanup uses its own shielded five
+second deadline, exact original pins and owned IDs/names only. Creation outcome
+uncertainty remains recorded/unavailable even after one missing-name response.
+Never-started created containers are explicitly removed. No text returns before
+full bounded stdout EOF, successful attach/helper exit and exact owned removal/
+independent daemon-confirmed absence. Unexpected errors become pdf_unavailable.
+
+read_pdf_in_worker(data:bytes,settings:Settings,*,channel:ChildChannel|None=None,
+call_id:str|None=None,grant:str|None=None,task_id:str|None=None,
+config_version:int|None=None)->str retains native behavior when unconfigured.
+Configured reads hold channel.lock over begin/chunk/end using extracted
+ChildChannel._exchange(op:str,payload:dict)->dict with the unchanged shield/drain
+cancellation contract; ordinary call takes the same lock. After successful end
+and cleanup PdfRead.phase becomes finished, ordinary judge/model requests are
+permitted and frame cap returns to MAX_FRAME. The exact read remains until
+matching tool_finished. Another tool grant cannot replace it. Before finished
+only bound PDF traffic or exact completion is admitted; completion aborts any
+unfinished job. Version/policy/cancellation are checked on every frame and
+again immediately before returning text. Abort runs on task cleanup/shutdown.
+
+read_frame(reader:asyncio.StreamReader,*,max_bytes:int=MAX_FRAME)->dict and
+SandboxProcess.transact(command:dict,handler=None,timeout:float|None=None,*,
+frame_limit:Callable[[],int]|None=None)->dict minimally expose the dynamic limit.
+Worker PDFs use <=90KiB request frames and <=65536 decoded chunk bytes. End
+response remains bounded by ordinary framing plus final UTF8 validation.
+
+pdf_parser_main()->None is stdlib-only apart from importing locked pypdf through
+the exact fixed /airlock bundle. Its numeric argv is pages,text_bytes,memory_mb,
+cpu_seconds,python_sha256,pypdf_version, followed by the complete source hashes.
+Arguments come only from trusted supervisor configuration. It installs/readbacks
+AS/CPU/FSIZE before one initialization frame and before document bytes. Input
+is big-endian uint32 length then exact raw body then EOF; surplus/truncated
+input fails. Output is tag byte plus uint32 length plus bounded UTF8 payload;
+initialization precedes input, final frame precedes EOF. Exact binary framing
+avoids JSON expansion of legitimate maximum non-ASCII text. Root AST-allowlisted
+AirlockError/extract_pdf_bytes/pdf_parser_main definitions generate helper bytes
+during explicit preparation only; no maintained second parser source.
+
+The complete extract_pdf_bytes return cap includes one UTF8 page separator
+between pieces and preserves existing formatting. The independent supervisor
+UTF8 cap remains mandatory. No parser leniency is introduced.
+
+Nullable UID cleanup correction data/API: cleanup_orphan_jobs retains exact
+registered job markers and ProcessTree identities. A process_iter uids=None
+means unknown ownership; skip it without reading environ. Existing same-user
+marked children still terminate through ProcessTree and uncertain cleanup stays
+a failure. Location: airlock.py cleanup_orphan_jobs, test.py targeted controls.
+Tests require an actual marked child plus actual unavailable-UID denial. This
+addresses a reproduced nullable metadata defect, not the unexplained R3 symptom.
+
+Locations: all production code stays in airlock.py, tests in test.py. This HOW
+precedes source/tests. ARCHITECTURE.md/README.md explain changed trusted component,
+explicit optional availability and VM persistence limits. VALIDATION.md and the
+R8 private report separate focused fixture evidence from actual owned synthetic
+route evidence and from installed-model/UI/scanner acceptance. Prepared manifest,
+scanner profile and acceptance remain unchanged.
+
+Tests: retain all R7/earlier checks. Cover actual installed Coder same-name
+deferred/defaulted read and a concurrent judge queued behind sequence lock;
+strict stale/denied/replayed/wrong-role/call/task/version/sequence/base64/bool/
+extra-field denials, cap restoration after finished, matching completion only,
+configuration tightening and cancelled streams. Real owned pipe helper checks
+cover header lengths0..3, exact/truncated/surplus input, initialization, full
+terminal EOF/exit, non-ASCII exact cap, multi-page exact/one-over separators,
+backpressure and cancellation. Scripted fixed CLI fixtures test wiring only:
+create/inspect/start/attach/wait/remove ambiguity, created-state removal, record
+retention, daemon replacement, original-pin recovery and no text on uncertainty.
+Actual cached fixed daemon/image/SRT route testing requires its own private HOW
+before harness creation; no inference or activation in this subtask.
+
+R8 durable lifecycle field resolution: PdfJob additionally stores memory_mb:int,
+cpu_seconds:int, text_bytes:int and pages:int for exact original effective-policy
+verification during recovery. CLI identities are strict PdfCliIdentity(pid:int
+>0,create_time:float>0) and persisted before each command wait; record input is
+bounded to65536 bytes. Owner is the installation-key-derived opaque SHA256 token.
+Only these original pins/identities can authorize recovery.
+
+R8 Coder lock-window correction: a judge queued behind tool_check must not run
+between an allowed configured PDF grant and pdf_begin. The configured PDF hook
+acquires the existing channel.lock before tool_check, uses _exchange, and holds
+through byte read and full begin/chunk/end. Pending/denied checks release before
+framework deferral. Adapter adds private sequence_locked:bool=False; only this
+hook passes True while holding the lock. Standalone adapter calls still acquire
+that lock themselves. The hook keeps the lock through matching tool_finished, then releases queued
+callers. Finished phase permits ordinary judge/model traffic, but unfinished
+errors still require exact completion before a queued judge may proceed.
+Matching completion aborts unfinished parsing and the lock releases in finally. Assert
+a judge already queued during tool_check cannot enter before successful end.
+
+R8 uncertain-record refinement: PdfJob.creation_uncertain:bool=False distinguishes
+ambiguous creation from a later cleanup failure with an already verified known
+ID. Set it on create timeout/nonzero/malformed ID before any reconciliation;
+once True it never becomes False. Such records remain unavailable even after
+observed removal/absence because daemon creation may still be in flight. A
+known-ID cleanup failure may recover with original pins, exact ownership and
+independent ID/name absence, retaining the record until that proof succeeds.
+
+## R8 bounded AcroForm text-field fidelity
+
+Data: existing PDF/page/text/input/memory/time limits remain. Exact qualified
+AcroForm /Tx labels and raw text /V values (string, explicit PDF null or missing
+None) remain private document text. No money/entity inference, extra source
+classifications, OCR, dependency or release exemption. Nonempty form text also
+qualifies the document as text; empty/null-only fields with blank pages retain
+pdf_no_text. The existing UTF8 cap includes the complete form JSON, marker,
+page pieces and every separator.
+
+API: extract_pdf_bytes(data,max_pages,max_text_bytes)->str retains page formatting,
+then appends one [Form text fields] section containing an exact JSON object of
+qualified field labels and raw string/null values (ensure_ascii=False, indent=2,
+one ordinary field per line). Use installed get_form_text_fields(full_qualified_name=True), after a
+bounded validation walk of the actual AcroForm /Fields and /Kids to reject
+cycles, duplicate qualified names, malformed nodes/labels/values and unsupported
+XFA forms. Node work is bounded by the existing max_text_bytes integer (no new
+setting). Ordinary widgets without their own name are not invented fields.
+Validation refuses malformed/unrepresentable input with fixed pdf_unavailable;
+size excess is pdf_output_limit. Native errors stay private fixed tool errors.
+
+Location: extract_pdf_bytes and derived helper imports in airlock.py, synthetic
+PDF fixtures/assertions in test.py, R8 actual route harness/report/VALIDATION.md.
+The generated helper remains AST-identical to current root extraction and must
+be regenerated after this change; no active prepared assets/profile mutation.
+
+Tests: capture original actual page extraction missing a filled /Tx /V amount
+while retaining ordinary page text, then require exact qualified label/amount
+through production extraction and configured native Coder/SRT route. Include
+page-plus-field, field-only, empty/missing/null values, duplicate/malformed/nontext
+values, page cap, complete UTF8 cap exact success and one-byte-over failure.
+Do not count page-only extraction or a plaintext sidecar as form-field success.
+
+R8 fixed image-label fidelity correction: Docker inherits OCI metadata labels
+from the immutable pinned image. PdfParser.pins retains the exact image Config
+Labels after ID/platform validation, rejecting reserved Airlock owner/job keys
+already present in that image. PdfJob.labels is the complete image-default plus
+exact owned Airlock labels, not merely the two added labels. Creation keeps
+fixed own labels; inspect/recovery requires complete expected equality against
+both the original record and freshly inspected pinned image metadata. This
+expands no authority or image configuration. Test inherited-label positive
+control and changed/missing/foreign owner label refusal. The first actual R8
+created-never-started failure stays preserved; exact recorded ID/name/image/own
+labels plus independently pinned image-default equality is the narrow ownership
+precondition for removal of that newly created synthetic object only, followed
+by independent ID/name absence. The first rejected object's removal is held
+pending the human's direct cleanup approval; this contract does not bypass it.
+
+R8 form self-review correction: validate the original /Tx /V PDF object before
+calling the installed API, which can decode stream values and omit inherited-only
+values. Non-string/null raw values, invalid /FT values and inherited-only /V that
+the library cannot export faithfully are fixed format refusals. No decoded
+substitute or silent omission is accepted. Assert a stream-valued field refusal.
+
+## R8 corrective checkpoint I1 through I4
+
+Data: retain exact existing fields/grants/pins and one parser. Form validation
+collects expected qualified /Tx name to raw string/null mapping and bounds all
+child/parent traversal work by max_text_bytes. Independently walk every complete
+Parent chain, validating dictionary/type/name ancestors and cycles even with
+explicit /FT or /TM. Nameless nodes carrying independent text values refuse;
+ordinary nameless child widgets without independent values remain supported.
+Expected mapping must equal installed export completely, not just its subset.
+
+Transient subprocess state: pending_spawns is a set of shielded creation Tasks,
+bounded to one unresolved creation (new spawn refuses while present). A done
+callback starts one late_reapers Task only when a process actually returns;
+it records every observed real PID/create_time and retains unknown clocks as
+unknown, never invented. CLI handles retain exact Process object plus psutil
+handle or None if ownership-clock observation fails. pipe_tasks tracks bounded
+drain/wait Tasks until terminal. No document data enters these structures.
+Unresolved creation/late reaping prevents admission/recovery/close success;
+durable uncertain-create/job records remain unavailable and never get removed
+merely because a late host process was killed.
+
+API: spawn_cli(args,deadline,record=True) awaits shielded creation only until
+deadline/cancellation, then marks unavailable/creation uncertainty and returns
+promptly. It does not cancel unknown creation or loop awaiting it. On late return,
+one bounded one-second host-only reaper records actual identity, kills/waits and
+closes pipes; it never issues daemon commands or publishes text. Failed identity
+observation remains uncertain, but known exact asyncio child is still reaped.
+record_cli(process,record)->None records the identity; reap_cli(deadline)->None
+kills exact owned known handles, closes stdin, waits under remaining deadline,
+verifies psutil identity absence and cancels/collects pipe tasks boundedly.
+After killing the exact asyncio child, close its owned subprocess transport to
+disconnect paused/full pipes before waiting; installed CPython waits can otherwise
+retain disconnected-exit waiters behind unread pipe buffers. No shared transport
+is accessed. Include a full-output-pipe positive control.
+command keeps its existing API and no longer adds an extra one-second wait after
+its deadline; incomplete local reaping is carried into cleanup.
+
+cleanup keeps a total independent five seconds: at most four for daemon/pin/
+removal/absence, reserving the final one for host/pipes even if daemon fails.
+Host exit/identity or pipe terminal uncertainty retains record/unavailability.
+Never report success while pending creation/late reaping remains. No extended
+cleanup deadline, generic scheduler, new settings or ChildChannel changes.
+One late reaper's deadline starts only when its previously unknown child appears;
+that cannot retroactively turn initial uncertain cleanup into success.
+
+Location: exact extract_pdf_bytes/PdfParser methods in airlock.py, focused tests
+in test.py, evidence appended to original R8 report/VALIDATION. Helper derives
+changed extraction; actual rejected container/active assets remain untouched.
+
+Tests: preserve reviewer I1 omitted-map and I2 explicit-FT/TM cycle repros; add
+omission/renaming/substitution refusal, self/multi-parent and malformed ancestor
+refusal, qualified parent-child and unnamed widget positives. Fake delayed spawn
+tests bound work/cleanup/cancellation callers, then release a real owned local
+pipe child and prove actual recorded identity/reaping with uncertainty retained.
+Unknown-clock control never invents identity. Daemon/pin failure still waits/
+verifies all known host children and terminal pipe tasks; stalled wait refuses
+within reserved cap. Retain existing PDF/R7 controls; no actual daemon lifecycle.
+
+## R8 I5 local form formatting and unchanged paging
+
+Data: same exact qualified raw string/null map; preserve Unicode/escaping and
+page text. Only local form whitespace changes. API: extract_pdf_bytes serializes
+with json.dumps(ensure_ascii=False,indent=2,allow_nan=False), counting the full
+pretty representation in existing UTF8 cap. page_document_text remains unchanged.
+An individually oversized escaped entry remains explicitly unreadable at the
+existing 60000-character line ceiling; ordinary short fields must not share one
+aggregate oversized line. The PUBLIC financial compact JSON contract is separate.
+Location: root extraction formatter, root focused test.py and this HOW/evidence
+docs; derived helper changes, lifecycle methods do not. Tests: many short fields
+with compact aggregate >60000 and full pretty output <512KiB, first/middle/last
+exact field recovery through existing offset/limit/continuations, complete mapping,
+Unicode/null/escaping, exact UTF8 cap and one-byte-over refusal, and a lone oversized
+field's explicit existing pager refusal. Reproduce original failure before source
+format change; run covering form/paging checks only, no daemon/full selector.
+
+## R9 exact selected financial consent
+
+### 1. Data model
+
+The resolved R9 contract in `.superpowers/sdd/tax-financial-consent-brief.md`
+is incorporated here in full below. Public AskRequest/LocalOutput/status/stop
+shapes stay unchanged. SourceEvidence retains registration_ref/source_ref,
+original task/workspace, exact raw_text and original request, and an optional
+FinancialOrigin. FinancialProof is a strict frozen local proposal containing
+registration_ref, original task/workspace, field_name/value_text/raw_context,
+input_ref/artifact_ref. FinancialOrigin adds descriptor-verified workspace/file
+identities and SHA256 digests. SelectedFinancialField contains a unique label,
+exact decimal string and explicit supporting registration_refs. PendingFinancial
+holds the immutable original candidate, original scan, version/policy snapshot,
+original complete occurrence/geometry fingerprint (including unattributed sources),
+separate rendered candidate/scans/proofs/fields, review fingerprint, random
+consent ID, and one-use verification state. Successful worker close is required.
+
+All durable references use installation-key HMACs. Keep schema version 3 with
+additive idempotent tables: source_registration has source_ref, primary-key
+registration_ref, workspace_ref, task_ref, evidence_ref and nullable origin_ref;
+each reference is CHECK-constrained lowercase 64-hex, source/registration pair
+is UNIQUE. Index source_ref. source_contribution has primary-key source/ref and
+a composite foreign key to that exact registration/source pair.
+financial_consumption has primary-key consent_ref, task_ref and review_ref.
+Initialization inserts a permanent unknown legacy marker for ledger geometry
+without contributions or with partially missing/orphan attribution, including
+partially migrated databases. Missing/incomplete
+history also denies eligibility at final checks. Registration batches persist
+atomically before memory mutation, including local-only work; only exact same
+task/workspace/raw registrations deduplicate. A recoverable current-session
+occurrence may gain an origin only through the explicit local verification action;
+unknown siblings, historic and legacy markers never inherit it. No raw source,
+context, path or digest persists in these association tables. History deletion
+retains them. Existing max_sources bounds transient registrations and indexed
+queries; max_protected_sources bounds batches/fields, source/context/request and
+candidate bounds remain, no eviction/new setting.
+
+### 2. API contract
+
+`register_sources(output, task)` validates the complete batch, durably inserts
+opaque associations, then updates the existing normalized source map and separate
+occurrence map. Failure marks the runtime unavailable and denies publication.
+The original finite fragment graph and normalization remain unchanged.
+`financial_values(candidate, settings)` accepts one exact decimal or strict flat
+JSON decimal-string object, rejecting duplicate keys, prose and decoded forms.
+`render_financial(fields, settings)` requires 1..max_protected_sources unique
+ASCII labels `[a-z][a-z0-9_]{0,47}`, exact values
+`-?(0|[1-9][0-9]{0,11})\.[0-9]{2}`, and bounded distinct registration references.
+It returns sorted ensure_ascii canonical compact JSON under max_candidate_chars.
+
+The supervisor-only proof reader anchors traversal at an absolute root descriptor,
+walks every canonical workspace component with dir_fd/O_DIRECTORY/O_NOFOLLOW/
+O_CLOEXEC, then walks normalized relative selected paths from that exact anchor.
+Owned workspace/descendant directories and regular owned single-link files are
+required; absolute/dot/dot-dot/empty/NUL paths and symlinks/nonregular/unowned/
+hard-linked files refuse. All unique input/artifact descriptors are opened and
+aggregate fstat sizes admitted against max_pdf_bytes before any byte read. Bounded
+reads require unchanged device/inode/size/mtime/ctime and parent/workspace identity
+before/after. Every descriptor closes on success/error. Final checks repeat this
+same bounded synchronous primitive. Missing features/change/error uses fixed
+financial_evidence_unavailable. No general broker, automatic inventory or PDF
+text inference is introduced.
+
+`select_financial(task_id, original_candidate, selected_fields,
+registration_proofs, version)` is trusted local control only. It requires a closed
+worker and pending ENFORCE task, validates exact current registration identities,
+exact raw decimal and retained raw context/request, and independently reads each
+proof. Referenced IDs equal proof IDs exactly; no registration twice. One field
+may reference A and B only with equal original workspace/input device/inode/digest,
+source context/label/signed value; original tasks and artifact proofs stay distinct.
+Unknown, unrelated, cross-workspace, different-file/context and legacy siblings
+deny. Every selected value occurs directly in the supported immutable raw candidate.
+Selection errors are financial_selection_invalid, financial_source_ambiguous or
+financial_evidence_unavailable; storage failure is storage_unavailable.
+
+The internal guard returns review_financial only for supported raw candidates
+blocked exclusively by reassembly with no scanner failure/ordinary finding.
+Coder accepts that typed result without releasing bytes or automatic revision;
+other retry/block behavior remains. Local-only work never waits. After worker
+close Egress creates financial_selection review using existing ApprovalBroker.
+Local UI displays supporting occurrences, original request/purpose/context,
+policy/version/full findings, source/artifact identities/digests and exact JSON;
+plain controls construct the strict payload, no HMAC/SQL/protocol typing required.
+Generic Approve cannot verify; separate Verify-and-Approve persists only exact
+proposed origins atomically and binds one private consent ID. Deny/cancel cleans
+private task state. Allow/auto still require this manual action; release deny
+dominates. Effective ENFORCE only; OFF/WARN refuse. Governance evaluates ordinary
+unsafe findings separately while retaining selected reassembly in review/audit.
+
+Original raw and rendered JSON each receive full unchanged scanner/reassembly
+checks before review and again under global release_lock. Bind both complete
+canonical findings/failures, candidates, proofs, occurrence/history/configuration
+and policy fingerprints. After all scanner awaits, synchronously re-read proof
+files and complete bounded associations, recompute reassembly and fingerprints,
+check cancellation/version/one-use state, and commit with no intervening await.
+One SQLite transaction commits original rendered-byte geometry, all source
+contributions, exact response, safe audit and opaque one-use consumption. Failure
+rolls back everything and publishes nothing. Raw candidate geometry is never
+recorded as released. Replay uses committed result; restart interrupts uncommitted
+selections. Omitted/late undiscovered origins and postcommit filesystem mutation
+remain limitations, not atomic filesystem/SQLite guarantees.
+
+### 3. Location
+
+All production remains in airlock.py: narrow evidence types/reader/renderer,
+StateStore associations/commit, Reassembly occurrence map, Egress/guard/handoff,
+trusted local control and existing Textual UI. Tests remain in test.py, current
+contract and honest evidence in HOW/ARCHITECTURE/README/VALIDATION and private R9
+report. No dependency, threshold, PDF lifecycle/helper, runtime asset/profile,
+public schema or historical test removal is authorized.
+
+### 4. Tests
+
+Use real SQLite and scripted actual Coder with successful close, exact Decimal
+artifacts, truthful A local-only and B release hints, independent same-source
+proofs yielding one wages field and one consumed consent; signed/revised/derived
+context, opposite vote and local-only content-free receipt. Check only-B proof,
+normalized/identical spelling collisions, distinct file/context/workspace,
+legacy/partial migration/reopen/history, reverse/late registrations (including
+during final scan), wrong task/version/context/candidate/policy, one-use/replay,
+ordinary approval, duplicate fields/prose/sign/spelling/encoding/unselected amount,
+ordinary scanner finding/error and rendered-label finding. Assert exact emitted
+JSON scanner/geometry accounting, real SQLite rollback/association storage bounds,
+proof aggregate cap and safe opener symlink/parent replacement/outside canary/
+FIFO/hardlink/unowned/change/descriptor cleanup. Exercise actual local socket and
+Textual selection/Verify-and-Approve and Deny. Run focused locked offline tests;
+controller owns final broad checks/live scanner/model/SRT/UI acceptance. Preserve
+red/green failures and report fresh-eyes findings before claiming this source
+feature complete. Fixtures never establish final tax readiness.
+
+## R9 independent-review correction wave, I2 and I3
+
+### 1. Data model
+
+Keep R9 source occurrences, proof/origin/selection/pending fields, opaque
+associations/consumption and original finite fragment geometry unchanged. A
+supported raw proposal is one literal ASCII exact signed decimal or flat JSON
+whose actual key/value tokens contain direct ASCII labels/exact decimals.
+Structural JSON whitespace is allowed; any backslash escape in a key or value
+is unsupported, including Unicode escapes that decode to an otherwise valid
+label/decimal. No decoded representation can acquire special eligibility.
+SQLite read failure leaves prior pending selection, approval, verified flag,
+origin references, geometry and consumption unchanged.
+
+I1 remains a confirmed, unresolved policy conflict: an approved full wages graph
+can block a later expenses-only proposal or benign numeric prose that touches
+it. Human policy choice is pending. This correction grants no permission to
+clear/ignore/subtract geometry, change thresholds, add exemptions or reuse prior
+consent; preserve the failure and all existing history policy until root forwards
+the direct human choice and exact four-part contract.
+
+### 2. API contract
+
+financial_values rejects backslash-containing raw JSON tokens with fixed
+financial_selection_invalid before decoding/projection; literal standalone
+decimals, direct flat JSON and its structural whitespace stay supported. Retain
+duplicate-key, label/sign/decimal/candidate bounds and unchanged raw/rendered
+scanner/reassembly checks and other guard retry/block behavior.
+
+select_financial catches sqlite3.Error across its entire staged inspection and
+snapshot work, including original Reassembly graph and association/history
+queries; restore the exact prior pending object, mark runtime UNAVAILABLE, and
+raise fixed storage_unavailable without private database text. verify_financial
+places its complete snapshot read/fingerprint plus origin transaction inside the
+same SQLite error boundary. A failed read creates no verified origin, approval
+vote, graph/consumption or published response. Invalid proof/context errors retain
+their existing fixed errors. No error is swallowed and transaction ordering stays
+unchanged. I1 policy-dependent behavior is held.
+
+### 3. Location
+
+Production edits only root airlock.py financial_values/select_financial/
+verify_financial. Regression assertions only root test.py. Append current
+correction evidence to the original implementer report and relevant root
+VALIDATION; update contract wording in HOW/README/ARCHITECTURE where useful.
+Preserve all existing tests, R8 helper/lifecycle, public schemas and dependencies.
+No runtime assets, models/scanners, Docker, Context, publishing or other module.
+
+### 4. Tests
+
+Before I2 source fix, assert Unicode-escaped amount and label tokens are rejected,
+so the existing acceptance yields a retained red checkpoint. Add escaped decimal
+punctuation/minus/digit controls, native literal/direct flat-JSON/structural
+whitespace positives, and guard refusal of lexical encoding. Existing decoded/
+prose/exponent/sign/duplicate-key tests and full scans remain.
+
+Before I3 source fix, use real temporary SQLite set_authorizer SQLITE_DENY for
+bounded reads of global_ledger (selection inspect), source_registration and
+source_contribution (selection/verification snapshots). Reset the authorizer
+after each observation. Assert storage_unavailable, runtime UNAVAILABLE, exact
+old pending/approval/future unchanged, no verified origin/vote, no graph,
+consumption or final response, and new admission refused. Retain storage-update/
+audit/commit rollback controls. Run focused locked offline corrected/affected
+checks only; fresh-eyes review, import/helper/hash and diffcheck follow. If I1
+remains unanswered, report only partial corrective completion and frozen hashes;
+final independent rereview is root-owned after all authorized findings are fixed.
+
+I3 follow-on resolved by root: an UNAVAILABLE runtime cannot regain selected-path
+authority through a later local retry after a transient query fault. Selection
+and verification explicitly refuse with storage_unavailable before creating any
+new proof/consent; final financial_snapshot refuses the same state before the
+atomic selected publication. Keep the original pending/approval/rollback intact
+on the initial read error. Add retries to each actual SQLite read-failure control
+after resetting its authorizer, still expecting refusal/no vote/no mutation, and
+an already-verified proposal whose runtime becomes UNAVAILABLE during final scan
+must publish/consume nothing. Only the selected path changes; ordinary runtime,
+history/geometry and held I1 policy remain untouched.
+
+## R9 I1 resolved fully shared financial values
+
+### 1. Data model
+
+The human directly chose stopping repeat blocks for fully shared values. Root's
+independently design-approved shared-value contract resolves I1 here in the same
+correction wave. Keep all original source strings, finite geometry, independent
+occurrences/origins, raw/rendered proposals and existing tables unchanged. Add
+schema-3 shared_financial(source_ref TEXT NOT NULL PRIMARY KEY,
+registrations_ref TEXT NOT NULL, consent_ref TEXT NOT NULL), each constrained
+lowercase64hex; consent_ref references financial_consumption(consent_ref).
+registrations_ref is installation-key HMAC, fixed namespace shared-financial-v1,
+of complete canonical sorted six-column source_registration rows including exact
+verified origin_ref. No raw amount/context/path/file/digest or approval credential
+is persisted. No markers inferred for old geometry/migration. Existing cap applies
+and history deletion retains marker/geometry/consumption.
+
+A marker describes an already committed selected publication's complete verified
+registration baseline. New/unknown/legacy/orphan/partial/null-origin/unattributed,
+different raw sign/spelling/context/file/workspace occurrences invalidate it.
+Retain every original registration/contribution and full graph. A marker neither
+classifies financial values nor grants admission/tool/release authority.
+
+### 2. API contract
+
+StateStore shared eligibility performs indexed source_ref queries bounded by
+max_sources+1, requires nonempty complete six-column registrations with every
+origin_ref nonnull, source_contribution IDs exactly equal their registration IDs,
+the exact shared-financial-v1 baseline HMAC, and existing consumed consent.
+Missing/changed/oversized/legacy associations are ineligible. sqlite3.Error is
+never converted to ineligible/clean. In-memory unattributed sources also deny.
+
+Reassembly.check still extracts every original fragment, constructs/bounds graphs,
+and records every normal change. Omit only the repeat cumulative_fragment_path
+finding when PREVIOUS committed graph coverage equals the full source length AND
+the stored marker currently matches all complete registration/contribution
+evidence. First crossings, partial/threshold coverage, other sources and ordinary
+scanner findings/failures remain protected. Eligible repeats keep original graph
+changes and contribution accounting on each authorized publication.
+
+Final selected release derives a bounded selected-source-to-baseline mapping only
+after its complete existing proof/raw/rendered/policy/one-use/fingerprint checks.
+Pass it with this release's consent_ref to commit_release. In the SAME existing
+synchronous no-await SQLite transaction, merge emitted geometry/contributions,
+insert fresh financial_consumption, and insert/update markers only when resulting
+coverage equals source length, then finish exact response and safe audit. Validate
+the baseline against current complete verified registrations/contributions in
+the transaction. Ordinary release cannot create a marker. Failure rolls back all
+and sets owning runtime UNAVAILABLE/fixed storage_unavailable, publishing nothing.
+Declined/preview/failed release creates none; marker updates require independent
+current origins and fresh consumed consent.
+
+Current governance still authorizes each new answer. New private selected values
+need new exact local Verify-and-Approve, including allow/auto; release Deny/manual
+remain binding. A newly declared same value changes the baseline until complete
+independent verification and a fresh selected commit. Restart cannot upgrade
+irrecoverable old origins. No public API/UI setting or inherited consent.
+
+Literal SQLite boundaries: Egress.inspect covers ordinary previews/final and
+native guard scans; ordinary final standalone Reassembly.check; guard handoff
+evidence_snapshot; and selected inspection/verification/final snapshot/commit.
+Any sqlite3.Error marks owning runtime UNAVAILABLE and raises fixed
+storage_unavailable without private details. Preserve staged state/origin/vote/
+consumption rollback; no clean/ineligible fallback or later unavailable retry.
+Only these named related boundaries change, no general runtime refactor.
+
+### 3. Location
+
+Production only airlock.py additive StateStore marker schema/eligibility/atomic
+commit, Reassembly repeat-finding decision, selected marker arguments and named
+storage boundaries. Test assertions only test.py. Update HOW/ARCHITECTURE/README/
+VALIDATION and append original report, retaining I2/I3 checkpoint/failures.
+No dependencies, model/scanner/assets/profiles/PDF lifecycle/protocol changes.
+
+### 4. Tests
+
+Retain a red wages1250.25 -> expenses250.10 -> forecast2025 sequence; then assert
+both exact selected positives with separate fresh consumed consents/current
+independent proof, followed by ordinary numeric prose under current governance.
+Assert full wages history retained/monotonically accounted; Deny/manual still
+govern new answers and first crossing waits. Unknown identifier stays protected.
+New same-value/sign/spelling/context/workspace/legacy/unattributed occurrences
+invalidate markers; no inherited origins. Missing/mismatched marker/consent,
+partial/threshold geometry, null origin, missing/extra contributions and bounded
+overflow are ineligible. Ordinary nonfinancial full geometry cannot create marker.
+Reopen/history deletion retain opaque marker/geometry/consumption and cannot
+upgrade old/new origins. Real marker insert/update triggers and eligibility read
+faults prove full transaction rollback/fixed unavailable/no publication. Cover
+guard scan/snapshot, ordinary preview/final recompute and selected read faults,
+late registration/scanner races, unchanged scanner failures/findings and emitted
+byte accounting. Focused locked offline checks only; fresh-eyes/import/helper/
+hash/diff review, then freeze complete correction for root's independent rereview.
+
+Atomic accounting clarification: selected source registrations must all gain
+contribution rows in the same transaction even when original counters are already
+saturated and Reassembly.check returns changes == {}. Before baseline comparison/
+marker update, account selected sources absent from the changed-graph loop too.
+Add a bounded repeated-publication control reaching saturation, then a new exact
+independently verified registration; retain the graph and consume fresh consent
+while complete contributions and the updated marker match the new baseline.
+
+## Final frozen-source measured candidate (candidate phase only)
+
+### 1. Data model
+
+Reuse final Settings, PreparedRuntime and CalibrationProfile; source SHA256
+7869d186a7a0a712c6253ec3dbfe76e6a4ba5ada60ecb93a8d1235203f5ebc61,
+test SHA256 06153b32a79d892145a30460ecbf082e4644732ba3e26287f1404d33303056e9
+and unchanged generated helper SHA256
+bdb2e1c4f044623bc375e3c35bc65a7791a110388118c45e74eb9b93741c8172
+remain frozen. Raw original calibration/heldout corpus is 24+24 unique labelled
+texts, 12 benign/12 private per split, disjoint from each other and canaries.
+Keep sensitivity 0.3/0.5, overrides {}, reassembly fraction 1.0, governance and
+hard caps unchanged; current prepared pdf_parser is absent and resolves None,
+preserved exactly. No helper regeneration or PDF container operation is needed.
+New profile reviewed=false and acceptance=None. Owner-only unique private
+evidence retains raw findings, labels, measured timestamps, exact binding and
+digests, original errors separately from cleanup errors, scoped active-byte
+backups, process identities, memory/model/cache gate and final artifact hashes.
+
+### 2. API contract
+
+Read/validate trusted existing prepared Settings directly without claiming its
+stale source/calibration binding is current. Fresh read-only supervisor ping/ps,
+same-user process metadata, memory pressure and Ollama GET metadata precede
+scanner loading; occupied runtime/scanner or insufficient memory prevents work.
+Preserve shared model/services; ordinary model expiry is recorded, never repaired
+with loading/inference. Verify pinned existing assets/packages and current helper.
+Actual SRTLauncher/ScannerService must pass required initialization and positive/
+negative canaries, then scan each original labelled case once at fixed settings.
+No tuning, worker model calls, live admission, Docker/lifecycle or external save.
+Compute errors from actual findings and independent labels; any failed detector
+or cleanup prevents a valid candidate. Build fresh calibration_binding/time/corpus
+profile and private exact current-source/manifest/settings copy. Original
+prepared_settings/load_calibration must verify it; calibrated_settings must refuse
+unaccepted enforce settings. Render actual make_startup_tui, verify measured
+summary and unchanged native-parser notice/governance, click only Cancel and
+assert None/no started runtime. Capture primary error before independently
+attempting owned cleanup and absence checks; cleanup errors never replace it.
+Freeze candidate/runner digests before independent gate and root handoff.
+
+### 3. Location
+
+Only HOW.md, VALIDATION.md and .superpowers/sdd/tax-final-preparation-report.md;
+new owner-only /private/tmp runner and unique candidate/evidence/backups.
+Production/test/dependencies and installed active manifest/profile/settings/
+plugin/SQLite acceptance remain read-only. Preserve prior evidence and exact
+container/Context-save approval holds; no alternate-surface retries. Root owns
+future activation, supervisor replacement, native Accept/runtime/inference and
+final reviews. No delegation, commit, push or maintained provisioning module.
+
+### 4. Tests
+
+Assert frozen source/test/helper and package/asset/settings binding, raw disjoint
+corpus/digest/label counts and actual fixed-threshold errors, healthy canaries/
+one scanner generation/no failed detectors; candidate unreviewed/unaccepted
+refusal and real startup Cancel with no work. Preserve all existing active
+byte hashes and scope backups; identity-aware owned process/job absence and
+unchanged supervisor/Ollama service identities. Model expiry is not failure or
+permission to reload; unknown metadata remains explicit. Self-review/diffcheck
+and frozen independent candidate gate precede any activation. No repeated broad
+core/build suites or tax/PDF readiness claim from text/scanner preparation.
+## Whole-branch I1/I2/M1 resolved correction
+
+### 1. Data model
+
+Retain exact existing scanner process, component handles, runtime registration,
+worker identity and shared settings/reassembly. Add only
+Supervisor.shared_closing: bool = False, set before shared teardown and cleared
+only when every component closes successfully. Existing scanner failures mark a
+retained generation unhealthy; runtime closing=True/state=UNAVAILABLE marks an
+unresolved runtime stop. No database/schema or privacy geometry change.
+
+### 2. API contract
+
+Scanner discard marks unhealthy before close, clears its handle only after close,
+and reconciles that same unhealthy handle before any replacement spawn. Shared
+cleanup attempts scanner/model/parser independently, clears verified components
+only, preserves the first error and shared configuration/geometry until all close.
+Start reconciles prior shared teardown before allocation and refuses new workspace
+admission while any registered runtime is closing. Failed stop retains its runtime
+registration and worker, unavailable and closing; later local stop retries it.
+Startup unwind preserves its primary error and retained ownership if stop fails.
+stop_all attempts every runtime and shared cleanup where safe, retains failed
+registrations, returns stopped:false with existing fixed warnings and leaves
+shutdown unset on failure; verified success retains stopped:true behavior.
+Ordinary release raises fixed storage_unavailable on UNAVAILABLE at entry, after
+preview/approval/final awaits and immediately before its no-await commit; later
+SQL success cannot restore publication authority. Cancellation keeps precedence
+where already checked. Historical helper/UI labels describe unsupported former
+console artifacts; no new console or deletion.
+
+### 3. Location
+
+Production only airlock.py owning scanner/runtime/supervisor paths and ordinary
+Egress.release; assertions only test.py; historical labels tools/sync_console.py
+and ui/index.html. HOW/ARCHITECTURE/README/VALIDATION and the private correction
+report record exact contracts/evidence. No assets/dependencies/profile activation.
+
+### 4. Tests
+
+Inert owned closers and launch counters reproduce failed scanner/shared/runtime
+close, no replacement/overlap admission, independent all-close attempts, primary
+error preservation, startup unwind/stop_all and successful same-owner retries.
+Real temporary SQLite ordinary release controls poison admission while preview,
+manual approval or final scan awaits, then reset only the fault; assert no final,
+completion, geometry, consent or release audit and healthy-release positives.
+Keep original tests unchanged; focused locked offline checks/import/helper hash
+and fresh-eyes review only. Root owns broad/build/independent/live gates.
+
+I1 named completion-latch follow-on: ModelService.closed remains bool=False until
+the existing same shared-endpoint client.aclose succeeds; aclose failure retains
+that exact client and owned evidence, and a later local close retries it. No new
+client/inference/unload is authorized. Optional owned-model unload failure policy
+is held for the direct human answer. Supervisor.run must inspect stop_all and
+raise fixed process_cleanup_failed on false/raised cleanup before store/socket/
+metadata removal. Preserve original owned-job durable records; external termination
+can still end this process, so no in-process survival/new recovery service is
+promised. Locations are these existing methods; tests use actual methods with
+inert clients/server and successful/failed synthetic stop_all, asserting retained
+metadata/store on failure and normal cleanup on verified success.
+
+Runtime stop preserves the earliest cancel/consumer/worker/transport error while
+attempting every owned cleanup. Existing MCP runner gets its fixed five-second
+wait, then cancellation and a fixed five-second termination verification; a still
+pending exact runner remains registered/UNAVAILABLE, never STOPPED. Later same-owner
+stop reconciles that runner; no signal/service/recovery policy change. Inert runner
+controls cover completed cancellation, unresolved cancellation and first consumer
+error preservation. Existing worker/cancellation controls remain intact.
+
+### I1 completion and shutdown follow-on: resolved four-part contract
+
+1. Data: reuse ModelService.client/owned/closed and Supervisor owned registrations,
+   store/socket/supervisor.json. No extra field. Shared-client closed stays False
+   on aclose failure, becomes True only after verified close; owned is not erased
+   on failed close. Optional exclusive owned unload behavior remains held.
+2. API: same shared-endpoint client close retries retain exact identity; no new
+   client/unload/inference. run rejects stop_all false or exception with fixed
+   process_cleanup_failed before durable metadata/store clearing. Runtime stop
+   keeps first cancel/consumer/worker/MCP error, attempts every owner, verifies
+   MCP task termination through existing fixed five-second waits and retains
+   unavailable registration on uncertainty. External termination may still end
+   the supervisor; durable uncertainty does not promise in-process survival.
+3. Location: only existing ModelService.close, WorkspaceRuntime.stop,
+   Supervisor.run in airlock.py, assertions test.py and contract/evidence docs.
+4. Tests: actual close method/inert exact-client failing aclose then success;
+   actual run/inert server and false/raised/successful stop_all with metadata and
+   database-open assertions; consumer secondary error cannot replace first cancel
+   error; exact MCP runner pending/cancelled and same-owner retry. Locked focused
+   offline checks and import/helper/hash/diff review only. Owned exclusive unload
+   needs a direct human contract before dependent source changes.
+
+## Interim I1-A/I1-B same-wave correction
+
+### 1. Data model
+
+Reuse runtime consumer/mcp_runner/mcp_server and exact owned transport resources,
+registration/closing/state/tasks/token and StateStore.audit. A completed consumer
+whose original error is reported is retired only when done. Completed runner
+retirement additionally requires verified same-owner listener/connection/task
+cleanup; new transport field proposal remains held until root resolves it.
+
+### 2. API contract
+
+First stop reports its first task/cleanup error while attempting every owner;
+later local stop can succeed after exact owned resources have terminated, without
+new consumer/runner/service. Pending cancellation retains unavailable registration
+and denies admission. Stopped-audit SQLite failure returns fixed
+process_cleanup_failed, marks UNAVAILABLE/closing and retains registration/tasks/
+token. Only a successful required audit permits STOPPED and task/token reset.
+Retry after removing the synthetic storage fault uses that same runtime. Optional
+exclusive owned unload branch and both red controls remain unchanged/policy-held.
+
+### 3. Location
+
+Only WorkspaceRuntime.stop and its narrow existing owning transport path in
+airlock.py; append regression assertions test.py and contract/evidence to HOW,
+VALIDATION and original correction report. No dependencies or service replacement.
+
+### 4. Tests
+
+Retain red done-consumer/done-MCP-error first-failure then same-owner stop success
+without spawn; unresolved pending cancellation/owned listener/client/task controls
+retain ownership and block admission. Actual temporary SQLite INSERT audit denial
+proves unavailable/no stopped record/registration+task+token retention; remove
+only authorizer fault and same local stop succeeds. All original tests remain;
+focused locked checks/import/helper/prefix/hash/diffcheck/fresh-eyes only.
+
+### I1-A exact transport ownership: resolved four-part contract
+
+1. Data: existing LocalServer owns owned_socket: socket.socket, assigned the exact
+   pre-bound socket at init and retained until fileno<0; owned_lifespan:
+   asyncio.Task|None=None captures the original installed LifespanOn.main task;
+   owned_cleanup: asyncio.Task|None=None retains one same-server native shutdown
+   attempt. Pending originals remain reachable; done handles/errors retire only
+   after verified corresponding resource termination. No new runtime/config field.
+2. API: config.load precedes the narrow native lifespan main override, since load
+   overwrites lifespan_class. Stop first waits/cancels the original runner using
+   existing five-second intervals. Once it ends, reconcile exact server shutdown
+   with original socket list/native two-second grace; retain pending cleanup.
+   Verify socket/listeners closed, connection set empty, native request tasks and
+   captured lifespan/cleanup tasks done before clearing runner/server ownership.
+   Report earliest error once, retain UNAVAILABLE/registration on pending/error,
+   allow later exact-owner stop after resources verified, no replacement server.
+   Cancellation never becomes success; uncertainty returns process_cleanup_failed.
+3. Location: only WorkspaceRuntime.stop and existing start_mcp/LocalServer hook in
+   airlock.py; appended test.py assertions and HOW/VALIDATION/original report.
+4. Tests: completed consumer/MCP errors and real SQLite audit denial red controls;
+   faithful exact server socket/listener/connections/tasks/hidden-lifespan fixtures
+   assert identity retention/no stopped audit, verified later same-owner retry,
+   primary-error preservation. One isolated installed-Uvicorn synthetic ASGI
+   localhost socket positive may verify canceled serve plus exact cleanup; no
+   Airlock work/model/scanner/process or shared assets. Existing pending cancellation
+  and all prior tests remain. Focused locked offline checks/import/helper/hash only.
+
+### I1-A transport caller consequence: resolved four-part contract
+
+1. Data: same three LocalServer fields and original runtime runner/server; no new
+   runtime/config field. Completed cleanup task result/error retires after verified
+   task termination; resource owner remains while socket/clients/lifespan unresolved.
+2. API: close_transport(self)->None is the exact-owner cleanup shared by stop and
+   before start_mcp allocation. No closing/tasks/token/governance mutation and no
+   replacement allocation in this helper. It reports first original error once
+   after verified retirement, retains pending owners with process_cleanup_failed.
+   start_mcp cannot overwrite existing owners before verified cleanup. Existing
+   recover_transport catch/backoff and active task/idempotency behavior remain;
+   later retry may replace only after originals are reconciled.
+3. Location: one WorkspaceRuntime.close_transport method factored from approved
+   stop transport body, called only by stop/start_mcp; assertions test.py and docs.
+4. Tests: actual recovery refuses replacement while owned listener/lifespan/cleanup
+   pending (allocation counter stays zero), later exact-owner resolution permits
+   normal native-start fixture; existing active tasks/cancellation/first error and
+   nine inert plus isolated installed-Uvicorn controls retained. No live Airlock
+   work, model/scanner/dependency/service action or optional unload change.
+
+Recovery guard clarification: closing/backoff remain binding; a non-done runner
+still prevents replacement. Absent runner with no established endpoint is pre-start
+and cannot recover; existing endpoint plus reconciled absent transport permits the
+existing normal start_mcp retry. Preserve all active tasks, identity and policies.
+Test completed-error/retired-handle/later recovery and pending-resource/no allocation
+under that exact condition; no new server before the ownership guard succeeds.
+
+During synchronous pre-server setup, stdlib ExitStack owns the new socket until
+the exact LocalServer is attached; any bind/app/config-construction error closes
+that socket. After transfer, config.load errors retain server/socket for same-owner
+cleanup. Add inert socket setup-failure control with original error/closed descriptor;
+no real bind or extra model field. This is the same original-socket ownership rule.
+
+### I1-A independent verified-task retirement: clarified four-part contract
+
+1. Data: no fourth marker. Retire the exact mcp_runner independently once verified
+   done and its result/error observed. Keep original server/socket/listener/client/
+   request/lifespan/cleanup ownership until each is verified. This supersedes the
+   earlier overly atomic runner-plus-server retirement wording, like shared cleanup.
+2. API: first original completed-runner error reports once, while a pending server
+   remains unavailable/fixed cleanup failure. start_mcp guards retained server even
+   with runner=None, permits no allocation until exact resources reconcile; existing
+   endpoint/backoff permits later guarded recovery. Done cleanup task also retires
+   independently of unresolved server resources. No ownership inference or new flag.
+3. Location: close_transport's done-runner retirement only; callers already guarded.
+4. Tests: completed runner error with pending original server first fails/reports,
+   retires only done runner, retains server; later exact-resource resolution permits
+   same-owner stop/recovery without duplicate old error or new unverified allocation.
+
+## I1 owned-model lifetime hold: approved four-part contract
+
+1. Data: ModelService adds unload_error: BaseException|None=None and
+   client_close_error: BaseException|None=None, private in-memory original failures.
+   First failed/canceled owned unload permanently sets unload_error for this service
+   lifetime, retains owned=True/closed=False and exact client/settings. Independent
+   client-close uncertainty sets client_close_error. Verified owned unload alone
+   changes owned=False; verified relevant client close alone permits closed=True.
+   A successful exact-open-client close retry clears client_close_error. No durable
+   restart guarantee, reset API, new client, private transport mutation or new policy.
+2. API: close()->None first attempts authorized owned unload once and independent
+   original client cleanup even on unload failure, preserving the original first
+   error/cancellation. Subsequent unload-held close refuses process_cleanup_failed
+   from that original error without another POST/aclose. health/request similarly
+   refuse fixed process_cleanup_failed before network/inference. Existing
+   shared_closing/start guard retains shared configuration and refuses allocation.
+   After a client-close failure, a closed or state-unknown client cannot verify cleanup by its
+   no-op aclose: refuse fixed process_cleanup_failed and retain ownership. An exact
+   still-open client can retry cleanup; successful prior unload cannot be repeated.
+   Timeout/HTTP/error payload failures grant no unload completion. Errors remain
+   private causes; outward refusal is fixed. Existing task cancellation precedes
+   request refusal. No automatic unload retry/replacement/health/preload probing.
+3. Location: only ModelService fields/health/request/close in airlock.py; append
+   assertions test.py; HOW/ARCHITECTURE/README/VALIDATION/original correction report.
+   Existing shared cleanup/admission uses this corrected method unchanged.
+4. Tests: retain both original red controls and exact-open-client retry unchanged.
+   Add failed unload with successful/failed client cleanup, repeated close/shared
+   cleanup/start refusals (POST1, original owner/settings/client, closedFalse,
+   ownedTrue, allocation0); successful owned unload and later open-client cleanup
+   positive; actual AsyncClient with inert failing AsyncBaseTransport demonstrates
+   early CLOSED then no-op refusal. Cancellation/timeout/HTTP/error payload controls
+   preserve first error and ownership. Locked offline focused/import/helper/prefix/
+   diffcheck/fresh-eyes checks only; no live model/scanner/Docker actions.

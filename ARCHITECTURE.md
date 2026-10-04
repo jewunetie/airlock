@@ -21,6 +21,7 @@ Airlock runs on one user's macOS or Linux computer. Production application logic
 | PydanticAI | Agent execution, tool schemas, approvals, bounded retries, usage limits, cancellation, and instrumentation |
 | Anthropic Sandbox Runtime (SRT) | Operating-system filesystem and network restrictions for workers and their children |
 | Ollama | Local model serving, model residency, inference, and transient model caches |
+| Optional fixed Linux PDF parser | Supervisor-owned bounded byte parsing through an explicitly pinned local Docker daemon/image; one job at a time |
 | Betterleaks, Presidio, Liquid PII, Liquid Policy Linter | Independent offline disclosure checks |
 | Reassembly controller | Cumulative, source-relative fragment matching |
 | SQLite | Boundary interaction logs, opaque disclosure state, and safe operating metadata |
@@ -44,6 +45,7 @@ Airlock supervisor <------ authenticated loopback MCP ------ Cloud assistant
          |      Betterleaks / Presidio / Liquid PII / Liquid Policy
          |
          +-- Global disclosure ledger and release lock
+         +-- Optional fixed PDF slot -- owned short-lived Linux parser
          +-- Local SQLite interaction history
 ```
 
@@ -54,6 +56,8 @@ There is no custom filesystem broker. The complete Coder worker and its subproce
 ## 4. Trust and security limits
 
 The local operator, host operating system, installed Airlock code, pinned dependencies, scanner implementations, and local model-serving service are trusted components.
+
+An explicitly configured `pdf_parser` additionally trusts the pinned local Docker daemon, immutable Linux image, generated helper/package bundle and fixed syscall policy. This parser runs outside the worker's inherited SRT boundary. The worker retains its original SRT grants and receives no Docker socket or lifecycle authority. The supervisor parses only bounded already-read bytes associated with an exact authorized Coder read; bytes do not prove their filesystem origin against a malicious worker with existing read capabilities. Docker VM/daemon buffers, swap and crash dumps can retain transient data; container removal is not secure erasure.
 
 Cloud requests, workspace documents, model decisions, tool proposals, candidate responses, and model-supplied protected sources are untrusted inputs. A model cannot authorize its own actions or override a release decision.
 
@@ -169,7 +173,11 @@ Text uses Coder's native reader. A small same-name adapter supports bounded PDF 
 
 PNG, JPEG, and WebP inputs require an image-capable configured local model. Image bytes travel to that model, not to the cloud. Unsupported models or formats produce a bounded tool error rather than fabricated image understanding.
 
-PDFs are parsed in a short-lived, resource-limited subprocess that inherits SRT. Input is chunked over pipes. Extracted text uses the same zero-based line offset/limit interface as the text reader, with bounded windows and explicit continuation. Byte, page, extracted-text, time, and memory limits are separate. Text extraction is not visual document understanding; scanned/image-only or encrypted PDFs can be rejected. No hidden OCR service, remote parser, or external media URL fetch is used.
+By default PDFs are parsed in a short-lived, resource-limited subprocess that inherits SRT and refuses unavailable hard limits. An explicitly prepared `pdf_parser` selects the fixed supervisor-owned Linux byte route, with no native fallback or automatic Docker start/install/pull. Its exact CLI/daemon/image/helper/package/policy pins, effective settings and positive/negative parser canaries must pass before readiness. Every job retains hard AS up to512MiB, CPU up to15seconds, FSIZE0, finite cgroup/PID/CPU/swap and pipe bounds, no networking, non-root identity and a read-only narrow bundle. Smaller configured limits remain binding.
+
+Input is chunked over private read-bound pipes under the existing channel lock. Exact grants, sequence/size/configuration checks and matching completion prevent replay or replacement. No text returns before input EOF, full bounded terminal stdout EOF, successful exit and verified exact owned container removal/independent absence. Owner-only `pdf-jobs` records retain original pins/IDs/complete image-plus-owner labels for recovery; uncertain creation or cleanup withholds text and disables the configured route. Recovery never enumerates unrelated daemon objects.
+
+Extracted page text and exact qualified AcroForm text-field labels/raw string or null values use the same zero-based line offset/limit interface, with bounded windows and continuation. The complete UTF-8 representation, including page/form markers and separators, obeys the text cap. Duplicate/malformed/unrepresentable forms and XFA are refused. Byte, page, extracted-text, time, and memory limits are separate. Text extraction is not visual document understanding; scanned/image-only or encrypted PDFs can be rejected. No hidden OCR service, remote parser, or external media URL fetch is used.
 
 ## 8. Agent health and shared inference
 
@@ -198,7 +206,7 @@ response: string
 protected_sources: list[string]
 ```
 
-Protected sources are minimal, preferably verbatim private values or facts whose cumulative reconstruction matters. They can include identifiers, credentials, and sensitive contextual facts without a category field. They remain local. Model omission or inconsistent wording can reduce coverage; this side channel is not a trusted completeness assertion.
+Protected sources are minimal, preferably verbatim private values or facts whose cumulative reconstruction matters. They can include identifiers, credentials, private financial amounts, and sensitive contextual facts without a category field. They remain local. Model omission or inconsistent wording can reduce coverage; this side channel is not a trusted completeness assertion.
 
 Only candidate disclosure text is evaluated by the outbound scanner pipeline:
 
@@ -236,7 +244,15 @@ Request admission, read/write/shell execution, and final release use `deny / man
 
 `auto` is a configured local predicate, not an ordinal between manual and allow. Automatic release also requires a clean candidate. A pending task retains the intersection of the policies encountered during its lifetime: tightening applies at the next boundary, and loosening never grants a pending capability retroactively.
 
-In enforce mode, required scanner failure or an unsafe finding blocks release; a human vote cannot override it. Warn mode allows explicitly authorized overrides. Off mode deliberately bypasses privacy/reassembly checks but not release authorization.
+In enforce mode, required scanner failure or an ordinary unsafe finding blocks release; a human vote cannot override it. The exact selected financial path below permits only explicitly verified source-relative reassembly findings. Warn mode allows explicitly authorized overrides. Off mode deliberately bypasses privacy/reassembly checks but not release authorization; neither mode creates selected financial consent.
+
+The ENFORCE-only selected financial path retains independent task/workspace/raw-spelling source occurrences and immutable raw decimal/flat-JSON proposals. A supported candidate blocked exclusively by reassembly has a private Coder guard handoff, then successful worker close before local selection. The operator explicitly selects occurrences and plain field/value/source/artifact/context controls, reviews the full raw and canonical-publication findings and evidence, and invokes Verify-and-Approve. A generic vote, document or model proposal cannot create this credential. One field may reference separately proved same-runtime A/B occurrences only when their physical input identity/digest, exact context, label and signed value agree. Unknown, unrelated, normalized-spelling, different-context/file, cross-workspace and legacy collisions deny. Release deny and ordinary scanner findings/failures always dominate.
+
+Proof hashing uses one bounded descriptor-anchored nofollow reader for explicitly selected owned regular files inside the exact owned workspace. It rejects symlinks, nonregular/hard-linked files, unsafe paths, ownership/identity/change errors and aggregate unique sizes above max_pdf_bytes before reads; every descriptor closes. Both immutable raw and sorted compact ASCII JSON publication candidates pass full original scanner/reassembly checks before review and again under the release lock. After final scanner awaits, synchronous proof/evidence/geometry/configuration/cancellation checks must match the complete consent fingerprint, with no await before the SQLite transaction. Original rendered-byte geometry, all contribution associations, exact response, safe audit and one-use consumption commit together; no raw candidate geometry is recorded as released. Filesystem mutation after commit cannot retract committed bytes.
+
+Raw JSON keys/values must contain literal ASCII label/decimal tokens; lexical escapes are unsupported even when decoding would produce a valid value. Structural JSON whitespace remains allowed. Complete selection/verification SQLite-read boundaries restore the previous pending state on error, create no origin/vote, mark the runtime UNAVAILABLE and return fixed storage_unavailable. Local retries and final selected publication refuse that state. Ordinary/guard scans, guard evidence snapshots and final reassembly recomputation classify SQLite lookup failures the same way.
+
+Only trusted selected publication can atomically record an opaque shared_financial marker with fresh consumed consent, original geometry/contributions, exact response and audit. The marker binds the complete sorted six-column verified registration HMAC and exact contribution set. Reassembly still builds and bounds every original graph and records its changes; only the repeat finding is omitted when the previous committed graph already covers the full source and this complete baseline still matches. Partial geometry, ordinary releases, unknown/legacy/unattributed occurrences and other protected sources gain no exemption. New registrations invalidate the baseline until independently verified in a fresh selected publication, including when counters are saturated and graph changes are empty. Current governance and scanner findings/failures still govern every answer. Markers/geometry/consumption survive history deletion; restart cannot upgrade irrecoverable old occurrences.
 
 Full findings are available only to the trusted local reviewer. Audit records use a separate opaque representation. A manual vote binds the original request, disclosure purpose, workspace, effective governance/configuration version, exact candidate, scanner failures, and canonical decision-relevant findings. Reordering or duplicate findings do not invalidate it; materially changed context, spans, rules, scores, or other decision metadata do. Accepted request fields are immutable and the candidate text is captured before any approval wait.
 
@@ -259,6 +275,8 @@ The state directory is owner-only and outside the workspace. On macOS its normal
 ```
 
 SQLite contains workspace/configuration metadata, task identity mappings, safe audit events, the global opaque disclosure ledger, and the intentional boundary interaction log.
+
+Additive source_registration/source_contribution/financial_consumption tables retain only constrained opaque HMAC references under the existing database cap; no raw proof/context/path/digest is stored in them. Source batches persist atomically before transient registration acceptance, including local-only work. Indexed association queries are bounded by max_sources. Current-session verified origins apply only to their exact recoverable registrations; siblings never inherit authority. Existing geometry without complete attribution gains a permanent opaque legacy marker. These associations and consumed consent survive history deletion. Restart interrupts uncommitted selections, and a matching amount cannot upgrade irrecoverable old occurrences; conservative ambiguity can continue to withhold selected release.
 
 The interaction log retains the exact accepted `request`, `disclosure_request`, and committed final cloud response, including fixed denied/withheld/cancelled/failed outcomes. It is kept indefinitely until explicit local deletion. Rejected candidates, internal tool results, raw source declarations, and judge explanations are not added to this log.
 
@@ -286,6 +304,23 @@ Capacity or other persistence failure stops admission/publication rather than by
 Control operations have finite connection, write, response, and close deadlines. A timed-out mutation has an uncertain outcome and is not automatically retried. Local approvals remain independent long-lived task state, not an indefinitely blocked control request.
 
 When the last runtime stops, shared scanner/model clients are closed and the shared configuration is reset. Ollama unloading is limited to an explicitly dedicated endpoint and a model Airlock positively preloaded after confirming it was not resident. A preexisting or ambiguously shared model is not treated as owned. Airlock never shuts down an unrelated Ollama service.
+
+Unverified teardown retains the exact unresolved component handles, runtime
+registration and shared configuration/geometry. Scanner health is invalidated
+before close and replacements wait for verified cleanup of the original owner.
+A failed local stop leaves the runtime unavailable and closing for status and
+same-owner stop retry; it cannot release overlap ownership. Shared cleanup attempts
+each component independently and preserves its first error. Incomplete stop-all
+returns stopped:false with fixed warnings and does not request orderly shutdown.
+Startup unwind retains ownership and preserves the primary startup failure.
+Failed owned-model unload retains the exact service/client/ownership and blocks
+new work for that service/supervisor lifetime; no automatic unload retry or
+replacement client is authorized. Independent client cleanup still runs on the
+first failure without masking it. A failed HTTPX client close followed by its
+CLOSED no-op cannot establish transport cleanup. Only an exact still-open client
+may retry client cleanup. This hold promises no durable restart reconciliation.
+Ordinary disclosure checks the unavailable-storage latch after every scanner or
+approval wait and before committing; later SQL success cannot restore authority.
 
 ## 14. Configuration, provisioning, and calibration
 

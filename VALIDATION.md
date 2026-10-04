@@ -4,6 +4,76 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+**The fresh shadow comparison stopped on a recorded CPU gate; the candidate is not accepted.**
+Runner `be13a1e4` passed independent static review and all offline assertions with
+the original corpus, prompt, schema, options and limits unchanged. It completed
+19 native calls: one schema probe, seven health probes and eleven calibration
+cases. Before the twelfth corpus case (`cal-2-b2`), the resident runner measured
+5.9% CPU over two seconds, above the fixed 5% limit. The recorded `gate_cpu`
+failure prevented that request; its calls list is empty. No retry or limit change
+followed. This new measured failure does not establish the earlier unknown cause.
+
+All six positive health probes matched their required category and meaningful
+anchor, and the neutral probe was clear. The legal probe also produced unnecessary
+company-rule uncertainty, so only six of seven health cases met the complete
+criterion. Of eleven completed corpus cases, all six private cases matched their
+required rule; two also had uncertainty and only four counted fully correct.
+Four of five benign cases were clear; public educational bipolar-disorder text
+was incorrectly matched as private medical information. A settlement obligation
+also attracted a financial-hardship match without explicit hardship, and one
+health explanation contradicted its clear verdict. These limited observations
+do not establish overall accuracy or a production Liquid comparison: heldout and
+all four historical regression cases were never run, and aggregate metrics are
+absent. Backend replacement, calibration acceptance and tax readiness remain open.
+
+Evidence `/private/tmp/airlock-shadow-comparison-z7k8iv9m/evidence.json` has SHA256
+`5ba83a1ff688d42334cbdf6235f2d0aea1b562ed792b8d629b6d7c7d8893befa`;
+the 36-file index is
+`a98c22497d432ef52d29656b8434a4b4382f87a045d42c1fa97e11311ecd2c29`.
+All indexed files, 480 before/after immutable snapshots and twelve dummy files
+were verified unchanged. Final preservation checks passed, with CPU 0.0%,
+original shared identities/model digest/catalog, no active runtimes/jobs and no
+cleanup errors. Residency allocation/expiration metadata may change after calls;
+no complete metadata-equality claim is made. Production source/tests/settings and
+all earlier evidence remain intact.
+
+**The follow-up diagnostics passed without identifying the original gate failure.**
+The reviewed gate-only runner `a80edaf1` passed offline checks and made zero
+generation requests. All twelve recorded checks passed: CPU was 0.0% over two
+seconds and available memory was 23,684,349,952 bytes. Evidence `f4e0622c` and
+seven-file index `44c7f5e3` were independently verified, with 454 unchanged file
+snapshots and twelve unchanged dummy files.
+
+The separately specified one-request transition runner `d245bc70` also passed
+offline and native checks. It made one exact frozen medical health request,
+received a valid anchored reply, and passed all 36 recorded stages across
+preflight, post-completion and final checks. CPU samples were 0.0%, 0.1% and 0.0%.
+Evidence `337baefe` and fifteen-file index `92279356` were independently verified,
+with 463 unchanged snapshots and twelve unchanged fixtures. There were no primary
+or cleanup errors. This attempt did not reproduce the original failure; no cause
+or idle-wait correction is inferred. Neither diagnostic ran the 48-case corpus.
+
+**The first resident-model shadow comparison stopped at a pre-generation gate.**
+The independently reviewed temporary runner `facb48da` passed its offline assertions.
+The pinned resident `gemma4:12b-mlx` returned a valid basic schema reply and a valid
+six-rule medical health reply with a quote containing the expected epilepsy anchor.
+Before the second health request, a gate raised an unspecified assertion; there
+were only two completed calls and **zero of the 48 fresh corpus cases ran**.
+This is neither a classifier accuracy result nor a complete scanner health pass.
+No automatic retry, detector replacement or calibration acceptance followed.
+
+Private evidence `/private/tmp/airlock-shadow-44a66a1t/evidence.json` has SHA256
+`d6632ba4cde2d96c6cbe883c010de724c01e6bdabd24f3d2f1fe3857f630142e`;
+its ten-file index is
+`c4f0a160f69bc1a5e20b54f221066e4b2cc7c3606540696ef13ded624befddaa`.
+Root and independent review verified every indexed file, equal before/after maps
+for 441 immutable files and all twelve dummy files, unchanged shared process
+identities/model digest/catalog and no cleanup errors. Resident allocation and its
+indefinite expiration timestamp changed after inference; complete residency metadata
+is not claimed unchanged. The original gate did not record the failing stage or
+measurement, so its cause remains unknown. A separate read-only gate
+diagnostic is specified; it does not weaken limits or supply missing accuracy data.
+
 **Current working source restores the first reviewed contextual wording.**
 After saving the rejected 96-case experiment in Git at `8a674c0`, only the company-rule
 literal and its fixture expectation were restored. Full source/test byte hashes

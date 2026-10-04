@@ -3047,3 +3047,232 @@ arithmetic or tax readiness; those live gates remain separate.
    freeze. Run all423 locked checks for the restored code and verify its exact
    root-only package source. Preserve prior failures and scanner-availability
    limitation; no activation, changed oracle or product-readiness claim.
+
+## Resident-model shadow evaluation of contextual privacy
+
+### Data model
+
+- The independent data-only corpus `/private/tmp/airlock-shadow-corpus.json` is
+  reviewed and hashed before prompt or runner code is written. Each split has
+  24 distinct synthetic cases: two positive and two matched benign examples for
+  each of the six current `POLICY_RULES`. Cases retain raw text, ID, matched-pair
+  ID, target rule, contextual-private label and required positive rule IDs.
+  Positive IDs are not exhaustive; overlapping protected meanings may match.
+  A contextual benign label grants no financial sharing or release authority.
+  Frozen corpus SHA256:
+  `b7ac73c4f1c5a52668f54ade9328ea467dbe0e1d02b7993557263435c3ece5a4`.
+- Preserve exact raw rules and input/view provenance. A classifier response has
+  exactly six rule IDs, each with verdict `clear`, `match` or `uncertain`, up to
+  three exact evidence quotes of at most 400 characters each, and a private
+  explanation of at most 600 characters. A match needs at least one nonempty
+  quote present verbatim in the input; clear has no evidence. No invented score.
+- Record exact source, corpus, prompt, schema and runner hashes, model name and
+  digest, request options, bounded raw replies, validated decisions, elapsed time,
+  token counts, technical errors, uncertainty, health and per-rule outcomes.
+  Evidence remains owner-only in a new temporary directory. No acceptance profile.
+
+### API contract
+
+- The temporary runner calls only literal loopback Ollama `/api/chat` with the
+  existing resident `gemma4:12b-mlx`, digest
+  `117d0d84cf2ab865feb59afc2cd30ff5d55f0035e05eb8d1b814f9688e3f3671`.
+  Requests are stateless, tool-free, temperature zero, `think=false`, JSON-schema
+  format, and `keep_alive=-1` to retain existing indefinite residency. No new
+  model load, download, unload, interruption, worker or runtime startup is allowed.
+- Pin root source `873e634c` and tests `1fc118dd`. Before any generation and between
+  cases verify resident model/digest and original process identities, no active
+  Airlock runtimes/jobs/worker/scanner/PDF, at least 6 GiB available memory, and
+  a two-second resident runner CPU sample at or below 5%. Sampling is not a
+  global Ollama queue lock.
+  Detected contention stops evaluation; never terminate an unrelated process.
+- A basic schema probe precedes seven classifier health probes (six categories
+  and a negative). Report health misses separately. Evaluation may measure cases
+  after a semantic health miss, but cannot call that classifier healthy or ready.
+  Unsupported schema stops the native comparison without alternate-format fallback.
+- Bound original and existing decoded views using production `scan_views`,
+  4000-character chunks with 1024-character overlap, 120 seconds per complete
+  case including queue waits, at most 4096 generated tokens per call, 32 KiB HTTP
+  reply and 24 KiB content, existing 2048-finding limit, and 200 total calls.
+  Refuse excess input/views/output; never silently truncate. Missing/extra/duplicate
+  keys, invalid evidence, refusal, incomplete replies and limit failures produce
+  fixed local errors. `match` and `uncertain` would withhold; errors are not clean.
+  A timed-out or ambiguous generation ends the run; no retry or shared-model kill.
+- Freeze one prompt before inference; no tuning on either split. Measure 48 fresh
+  cases and four exact historical benign regressions: wages JSON, wages/supplies
+  JSON, public annual revenue and ordinary payroll prose. Compare those four only
+  with stored first-64 Liquid records, without loading Liquid. Fresh-corpus results
+  are not a matched Liquid comparison. Errors/uncertainty never count as correct
+  detection; record required-rule hits, false negatives and benign matches apart.
+- Shadow results cannot clear Liquid findings, create permission, commit responses,
+  change policy/settings/thresholds or activate a calibration. The classifier is
+  fallible and shares a model with the worker; correlated mistakes remain a risk.
+
+### Location
+
+- Contract and honest results: root `HOW.md` and `VALIDATION.md`. Data and runner:
+  new owner-only `/private/tmp/airlock-shadow-corpus.json` and
+  `/private/tmp/airlock-shadow-evaluation.py`; detailed evidence in a new private
+  temporary directory. Production `airlock.py`, `test.py`, dependencies, assets,
+  manifests, installed plugin, saved configuration and all dummy files stay intact.
+- Root is sole native execution owner. Preserve previous indexed artifacts and
+  process identities before/after; preserve failed replies and evidence. No cleanup
+  deletes shared models, files, containers or earlier evidence. No new subprocess
+  is needed. Backend integration, SRT forwarding and calibration migration require
+  a separate human decision and resolved contract.
+
+### Tests and assertions
+
+- Before native execution, root reads the whole runner; independently review
+  corpus labels, full contract and runner. Offline assertions cover all-clear and
+  real-match positives, duplicate/missing/extra keys, unknown verdicts, fake quotes,
+  clear-with-evidence, oversize evidence/replies, uncertainty and encoded views.
+- Native probes record actual schema support and six matching rule/evidence health
+  positives plus a negative. Freeze identical prompt/schema across calibration and
+  heldout. Preserve every reply before scoring. Report per-category counts, extra
+  matches, unknowns/failures, latency/token use and four historical comparisons.
+  Independently review executed evidence, not just the implementation.
+- Verify unchanged source/test/dependencies/settings/assets and all 12 dummy files,
+  prior evidence indexes, original model/supervisor identities and empty runtime/job
+  state afterward. A successful synthetic classifier result establishes neither
+  full privacy accuracy, OS confinement, selected publication nor tax readiness.
+
+## Identify the stopped shadow-evaluation gate
+
+### Data model
+
+- Preserve v1 runner `facb48da`, corpus `b7ac73c4`, original HOW `cf630959`,
+  failed evidence `d6632ba4` and ten-file index `c4f0a160`. The original HOW bytes
+  are saved owner-only as `/private/tmp/airlock-shadow-v1-HOW.md` before this
+  appendix; the controlled documentation update does not rewrite old evidence.
+- A gate observation contains purpose, fixed stage, expected/observed values,
+  pass/fail and monotonic time. Capture each measurement before enforcing it,
+  including separate CPU and runner-identity checks. Record only operational
+  metadata; fixed stage/error codes exclude exception strings and document text.
+- Preserve exact classifier prompt/schema/options, six health anchors, source/test
+  hashes and all labels. The original unclassified assertion is never relabeled
+  from later observations. Residency allocation/expiration changes after inference
+  remain recorded and are not model-identity changes.
+
+### API contract
+
+- New private v2 runner supports offline `--check-only` and one bounded
+  `--gate-only` observation with no model generation. Gate-only performs metadata
+  and local control queries, records every attempted gate and stops on failure.
+  It changes no permission or resource limit, including the existing two-second
+  CPU sample at or below 5% and at least 6 GiB available memory.
+- No automatic retry, idle-wait protocol or native inference is introduced by
+  this diagnostic correction. Future native continuation requires root and
+  independent review of the observations and a concrete resolved explanation or
+  separately specified diagnostic reproduction. Do not guess the earlier cause.
+- Preserve old indexed files and snapshot metadata, the original corpus/runner/HOW
+  bytes, all twelve dummy files, assets/settings and process identities. Only the
+  deliberate live HOW appendix is an expected documentation change.
+
+### Location
+
+- Contract stays in root `HOW.md`; honest stopped-run evidence in `VALIDATION.md`.
+  Create only `/private/tmp/airlock-shadow-evaluation-v2.py`, owner-only private
+  snapshots and new evidence directories. Never edit v1 or its indexed results.
+  Production `airlock.py`, `test.py`, manifests, dependencies and runtime stay intact.
+
+### Tests and assertions
+
+- Assert observation persistence precedes failure, with distinct CPU, identity,
+  memory, residency and active-runtime failures. Assert gate-only makes zero POSTs
+  and generations, has no retry, and preserves original prompt/schema/options.
+  Attempt fixture, immutable-file, shared metadata and permission checks separately.
+- Root reads the whole runner and independently reviews it before offline checks
+  and gate-only execution. Independently inspect executed observations and old
+  indexes afterward. Neither partial health success nor a later passing gate
+  supplies the missing 48-case accuracy result or proves the earlier failure cause.
+
+## Observe a completed synthetic request and the following resource checks
+
+### Data model
+
+- Preserve the stopped v1 and successful gate-only v2 artifacts and their indexes.
+  Use the exact v1 medical health text, prompt, schema, options, model digest and
+  meaningful epilepsy anchor. Record a single bounded raw native reply, completion
+  and validated decisions, followed by operational gate/CPU observations.
+- Every check records its stage, expected/observed values and monotonic time before
+  enforcement. A later reproduced failure describes this new attempt only; do not
+  relabel the original unrecorded assertion or infer unrelated-client ownership.
+
+### API contract
+
+- One temporary reproduction makes **at most one** tool-free `/api/chat` request
+  to the same already resident pinned Gemma model. All unchanged gates must pass
+  immediately before it, including the two-second CPU sample at or below 5%,
+  6 GiB available memory, exact identities/digest and empty runtimes/jobs.
+- Preserve exact v1 prompt/schema/options and its 32 KiB reply, 24 KiB content,
+  4096-token and 120-second complete-request bounds. Missing completion or timeout
+  ends the run without further inference, restart, unload or kill.
+- After known native completion, make up to five two-second CPU observations
+  while verifying unchanged identity and memory. These are read-only observations;
+  activity above 5% authorizes no new generation and is reported as a failed quiet
+  condition. Record the final complete gate separately. No idle-wait scheduling
+  change or corpus continuation is introduced. Stop if another identity/runtime
+  appears or any protected invariant fails.
+
+### Location
+
+- Add only owner-only `/private/tmp/airlock-shadow-transition.py` and a new private
+  evidence directory; contract/results remain in root `HOW.md`/`VALIDATION.md`.
+  Keep previous runner files and indexed results intact. The explicit live HOW
+  appendix is the only expected snapshot update. No production/dependency/config
+  change and no new model or child process.
+
+### Tests and assertions
+
+- Root reads and independently reviews the complete harness before executing.
+  Offline assertions cover observation-before-failure, refusal to generate when
+  initial gates fail, exactly one allowed POST, known-completion-only observation,
+  and no second generation or retry. Keep genuine anchored health validation.
+- Independently review actual pre/post observations, response completion, costs,
+  preserved indexes/files/processes and separate cleanup checks. A quiet transition
+  or reproduced CPU failure supplies no 48-case accuracy result or backend adoption.
+
+## Complete the frozen shadow comparison with recorded gates
+
+### Data model
+
+- Retain the original 48-case corpus `b7ac73c4`, four exact historical regressions,
+  six rule meanings, health anchors, prompt `243e2538`, schema `afaee792` and
+  options `2d0fb3f7` from v1. No tuning or relabeling after inference.
+- Add the diagnostic's fixed gate stage, expected/observed value, pass/fail and
+  monotonic time to every generation's private evidence, before enforcing it.
+  Preserve the stopped v1, passing gate-only observation and passing one-request
+  transition; neither later passing run supplies the original missing cause.
+
+### API contract
+
+- Make one fresh full comparison after reviewed passing diagnostics. All original
+  stateless schema/quote validation, input/view/output/token/call/time bounds and
+  exact resident identity requirements remain in force. CPU stays at or below 5%
+  over two seconds, memory stays at least 6 GiB, and no runtime/job may be active.
+  A failed gate stops generation immediately with its exact recorded stage.
+- There is no automatic inference retry, idle-wait protocol, threshold change,
+  alternate response format, finding bypass or production integration. Split CPU
+  and identity assertions; do not change classifier decisions to pass the run.
+  Frozen calibration/heldout metrics remain separate; errors and uncertainty are
+  distinct from correct detection. Only the four historical cases compare with
+  stored Liquid records. Original failure and all partial outcomes remain visible.
+
+### Location
+
+- Create owner-only `/private/tmp/airlock-shadow-comparison.py` and a new private
+  evidence directory. Contract/results remain in root `HOW.md`/`VALIDATION.md`.
+  Preserve all prior indexed artifacts, exact old contract bytes, twelve fixtures,
+  source/test/assets/settings and identities. Only the explicit live HOW appendix
+  is an expected snapshot update. Production and dependencies remain unchanged.
+
+### Tests and assertions
+
+- Root reads and independently reviews the whole runner before offline/native
+  execution. Retain v1 validator/positive-control checks; assert stage persistence
+  before gate failure, failure prevents generation, no retry, and unchanged prompt,
+  schema/options/corpus pins. Verify uncertainty across decoded views remains visible.
+- Independently review every actual reply, metrics, health, original/historical
+  record association and all preservation channels. Completion supplies synthetic
+  contextual-classifier evidence only, with no calibration acceptance, financial
+  publication approval, full pipeline accuracy or tax-readiness claim.

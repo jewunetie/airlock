@@ -4,6 +4,51 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+**The installed model produced the correct signed artifact; the test exposed an SDK-client lifecycle mistake.**
+Reviewed private runner `a1c8a376` and its independent stdlib oracle checks preceded
+actual execution on the frozen calculator source. The local model performed
+`read_file`, `calculate` and `write_file` through the actual SRT/native tool pipeline.
+The new artifact contains wages `-10.05`, supplies `5.00`, net `-15.05` and exact
+source quotes, with no private identity/account. The bridge returned a completed
+fixed receipt with null response. Reusing the request ID produced no new tool/model
+work or artifact changes. The old incorrect artifact and all twelve original dummy
+files were preserved.
+
+The current-source 64-case scanner measurement reproduced four false blocks among
+16 calibration benign cases and five among 16 heldout benign cases, with zero
+misses among 32 private cases. These are previously observed regression examples;
+the native startup Pilot accepted this measured profile only for the isolated
+synthetic test. Neither these metrics nor the correct calculation establishes
+real-document accuracy or global operator acceptance.
+
+The run's complete flag remains **false**: its final owned-process assertion found
+the bridge still alive after the Client context exited. The installed FastMCP
+StdioTransport defaults to `keep_alive=True`, intentionally retaining its process
+between connections. This is a test-client lifecycle error, not evidence that
+the calculation failed. All nine exact recorded
+owned identities were subsequently inspected and absent; jobs, profiles, scratch,
+owned supervisor instance and original-state preservation checks passed. A separate
+no-inference probe of explicit SDK closure passed; the original failed result
+is retained and is not relabeled passing.
+
+The separate probe connected the real three-tool bridge with `keep_alive=False`.
+Context exit removed its exact live process before runtime shutdown; calling
+`Client.close()` twice also succeeded. The actual owned Supervisor/runtime, scanner
+and worker probes then closed their store, sockets, processes and scratch files.
+No task, ask or model-generation request occurred. Independent verification checked
+all eight indexed files, all six owned process identities absent, the unchanged
+original failure evidence, and all twelve original fixture snapshots. Fresh-eyes
+review found no actionable defect in this scoped client-lifecycle correction.
+Evidence `/private/tmp/airlock-calculator-bridge-close-ttbsfvcw/evidence.json` has
+SHA256 `8d26028e9b32cd0d737978fd18b9df848715672621554b7d15da31d15c95a619`;
+its index is `670089fbc409981f7af2f051d922b6a4c2663733ee8f0c8e1eca4d12f0b66558`.
+
+Evidence `/private/tmp/airlock-calculator-native-v2rk9x2i/evidence.json` has SHA256
+`c620a2165550e23b725bc63ec0c831ddbdeec9a647f5c6f53aede333f4043c53`;
+its index is `c3c77f34882d97408994ba3e6a900cc6a20fdc8ca086220da8ebc801b23fbfa6`.
+The arithmetic defect is resolved in this synthetic local-only workflow. Selected
+live release/opposite vote, forged-permission containment and PDF still remain.
+
 **Configurable native decimal calculation is implemented; live usefulness remains a separate gate.**
 Root source `c5a5bf93` and tests `12afd8e7` add exact bounded decimal addition,
 subtraction and multiplication with strict string operands and fixed local errors.
@@ -27,9 +72,8 @@ cache succeeded. Wheel and source archive inspection confirmed exactly one root
 `airlock.py`, with no historical implementation or tests shipped. Dependencies and
 lockfile are unchanged.
 
-The earlier incorrect signed artifact remains preserved. An isolated actual-model
-task with a new artifact, fresh current-source scanner measurement/profile and
-the native startup/approval flow is still pending. These core checks do not resolve
+At this checkpoint the isolated actual-model task was pending; its later executed
+result and cleanup limitation are recorded above. These core checks do not resolve
 ordinary context-scanner false blocks, selected-field live Approve/Deny, forged
 permission containment, PDF integration or overall tax readiness. The original
 global prepared manifest/profile remains intentionally unchanged and bound to its

@@ -3386,7 +3386,14 @@ arithmetic or tax readiness; those live gates remain separate.
   canaries. Errors are failures; a failed scanner is not a clean privacy result.
 - Supply an absolute private XDG_STATE_HOME consistently to controller, native
   supervisor and bridge. Verify the actual installed platformdirs state path
-  before startup. Do not restart or modify the existing global supervisor.
+  before startup. Run the actual Supervisor instance in the private harness's
+  event loop, with its normal control socket/MCP and real SRT worker children;
+  record this test-process topology explicitly. Do not restart or modify the
+  existing global supervisor. A test-only observer may wrap only the created
+  instance's worker_message method, forwarding the identical task/message/result
+  unchanged and recording calculator tool_check/tool_finished names/IDs/decisions
+  locally. It cannot grant permission, modify a model reply, swallow an error or
+  bypass any guard. Correct arithmetic alone does not prove calculator execution.
 - Use the existing Textual startup review with automated Pilot acceptance of
   exact synthetic test settings/profile, explicitly recorded as a test action,
   then native control start and the unchanged three-tool bridge. Keep enforce
@@ -3422,3 +3429,47 @@ arithmetic or tax readiness; those live gates remain separate.
   plus exact final bytes/quotes, null receipt, no-work replay and cleanup. A pass
   establishes this synthetic local-only workflow, not selected release, real tax
   document interpretation, forged-permission containment, PDF or full readiness.
+
+## Explicit SDK bridge closure without repeated model work
+
+### Data model
+
+- Preserve the complete first native run, its false complete flag, cleanup failure,
+  correct signed artifact, scanner measurements, accepted synthetic settings and
+  indexed files. Source/tests/assets are unchanged. Read the installed FastMCP
+  StdioTransport contract: keep_alive defaults true and context exit intentionally
+  retains the subprocess; explicit close or keep_alive=false tears it down.
+- Record a separate owner-only probe with exact old/new owned process identities,
+  private state/jobs/profiles, and original global model/supervisor/catalog and
+  dummy-file snapshots. Independently record the old identities' current absence.
+
+### API contract
+
+- Reuse the verified, current-source measured profile and exact accepted synthetic
+  settings from the first run. Start an actual Supervisor/runtime with ordinary
+  scanner canaries and SRT worker probes in new isolated XDG state/workspace.
+  This is a lifecycle probe: submit no ask, create no task and generate no model
+  response. ModelService.health may read existing pinned model metadata only;
+  ollama_exclusive stays false and ModelService.request must never be invoked.
+- Connect the actual native three-tool bridge using StdioTransport keep_alive=false.
+  Prove its owned live identity, list exactly ask/status/stop, then close via native
+  context exit and explicit idempotent client.close. Independently prove absence
+  before stopping the owned runtime/supervisor and verifying all their resources.
+- Preserve first failure evidence. No inference retry, scanner/profile tuning,
+  process adoption, global activation, Docker operation or privacy-policy change.
+  Closure success does not relabel the original run as passing.
+
+### Location
+
+- One new owner-only /private/tmp runner and evidence/state/workspace tree. Root
+  HOW.md/VALIDATION.md record actual evidence; original runners/files stay intact.
+  Production, dependencies, installed plugin and global state remain unchanged.
+
+### Tests and assertions
+
+- Read/review the whole probe before execution. Assert original evidence index,
+  measured rows/profile binding/settings/source/test/asset pins; enforce no tasks
+  or interaction rows, no calculator execution or inference request.
+- Verify genuine bridge connection and exact ID/create-time exit, idempotent close,
+  owned instance/server/store/job/scratch/profile teardown, and separate immutable/
+  global/model/fixture preservation. Keep any operational or cleanup failure visible.

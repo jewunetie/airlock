@@ -4,6 +4,45 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+**Current-source installed-plugin revised local task passed the complete artifact check.**
+Actual native startup retained the saved manual/enforce rules at configuration 16.
+The live worker made five model requests and four native tool calls, including
+reading the source, writing the separate tax-preparation-verified.json and reading
+it back. The artifact contains decimal strings 1150.25 wages, 250.10 supplies and
+900.15 net, with source substrings for both inputs and no synthetic identity/account.
+Independent Decimal subtraction and the original unchanged source-quote oracle pass.
+The public result is only the fixed completed receipt with null response. Same-ID
+replay did no extra work. Both private diagnostic captures correctly report
+diagnostics_unavailable; primary, diagnostic and cleanup error lists are empty.
+Normal owned stop left no runtime, jobs or recorded survivors. All eight preceding
+files, active preparation and shared model identities remain unchanged. Task votes
+use automated Textual approval handlers; startup acceptance used actual keyboard
+input. Evidence: `/private/tmp/airlock-verified-text-df776-q60z6ry_/evidence.json`.
+Independent execution review approved this narrow gate. This synthetic local success supplies
+no selected financial Approve/Deny, PDF or general tax-readiness evidence; the
+earlier missing-provenance artifact and scanner false blocks remain recorded.
+
+**Source df776 fresh scanner measurement and native startup passed.**
+The reviewed runner completed 48 fresh fixed-threshold scans, with healthy canaries
+and no detector failures. Calibration had 4/12 benign false blocks and held-out
+6/12; both splits had 0/12 private misses. The new profile remains reviewed=false
+and unaccepted. These synthetic results establish no field accuracy or tax readiness.
+The actual startup preview Cancel returned None, stale source/profile and unaccepted
+refusals passed, owned cleanup left no recorded survivors or jobs, and all eight
+dummy files—including the incomplete artifact—were preserved. Root verified all
+353 indexed hashes and recomputed raw-row counts; independent candidate review
+approved the narrow measurement gate. Evidence:
+`/private/tmp/airlock-final-df776-hnapkjol/evidence.json`.
+Root activated three backed-up preparation files, normally replaced the verified
+empty supervisor, and accepted the actual native settings screen for the dummy
+folder. READY configuration 15 retained manual approvals, enforced privacy,
+visible workspace writes and hidden shell, with healthy scanners and no tasks.
+One normal owned stop left no jobs or recorded survivors. Independent activation
+review verified all 353 candidate files, 339 preserved paths and eight dummy files.
+The global profile remains unaccepted; acceptance applies to the exact displayed
+profile for this workspace. No model task or tax/PDF readiness follows from startup.
+Activation evidence: `/private/tmp/airlock-activation-df776-vgywdqbt/evidence.json`.
+
 **Local artifact and outbound-format prompt clarification passed review and core checks.**
 Only worker instructions changed: preserve the complete requested local artifact
 structure and source quotes, check the original requirements before finishing, and

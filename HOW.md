@@ -2263,3 +2263,176 @@ records the exact assertions and original failure.
    original-test-prefix/hash/helper/import/diff checks and full fresh-eyes review.
    Scripted tool replies prove delivery/native behavior, not real-model compliance.
    No live task/rerun/inference/measurement or broader checks by writer.
+
+## Source df776 fresh measured candidate: static-only preparation
+
+1. Data: reviewed frozen source df77626fc1042a1f66e22b786b26ac3a7dad1a8c4b4797f01a0f793e516abcdd,
+   test fbd754ff54eff0266520e1d0f57772a5eaa05cc28e57b305095e9c4275b71c02,
+   helperbdb2 unchanged. Original48 labelled texts: disjoint calibration/heldout24,
+   each12 benign/12 private, distinct from production canaries. Thresholds remain
+   .3/.5/overrides{}/fraction1; global strict governance/parserNone/unaccepted and
+   unreviewed profile. Raw new rows carry split/index/text/bool label/typed findings/
+   failures/timestamp; metrics and profile binding are computed from this run.
+   Exactly eight retained workspace files: original seven identities/bytes/modes
+   from candidate9ujbxgiw plus failed tax-preparation.json SHA5542ac99e43b8bd7ba43b1f12fedbee098e97a257ed6e1c2b301e2507303f614,
+   identity/mode from immutable repair evidence35e509. Missing source quotes remain
+   a preserved failure; no overwrite, deletion or correction during measurement.
+   Exact PCRE2 10.49 file grant and bytes1c0890a01bd446b5174e4ce7c35e1e14f39d2e88b7b5160572198ec26647d2da
+   remain in both effective manifest and external prepared-settings lists without
+   changing any prior grant/package/asset. Evidence retains memory/jobs/process/
+   shared metadata, separate primary/cleanup errors and all prior artifact hashes.
+2. API: this wave creates code and checks AST/hashes only; no imports/execution,
+   sockets/scanners/runtime/models/config writes. Future root-reviewed execution
+   reads prepared Settings JSON directly while old source manifests are stale;
+   no load_settings. Original prepared_settings refuses stale source and
+   load_calibration refuses old binding. Fresh gates require supervisor71140,
+   UID=current user/create1791089676.423161/actual repo sourcepath/source3bceb,
+   no runtimes/job markers/worker/scanner/pdf processes, available>=6GiB, pinned
+   shared Ollama serve1290/create1790953712.354191 and metadata. No inference,
+   preload/unload, resident assumption or lifecycle mutation; normal expiry allowed.
+   Asset/package/current source/test/helper checks and a second immediate gate
+   precede actual ScannerService/SRT canaries and exactly one scan per48 original
+   texts. Healthy generation1/no failed detector required. New private source/
+   manifest/settings/profile use actual current binding/metrics/timestamp; original
+   prepared_settings/load_calibration validate them and calibrated_settings refuses
+   unaccepted profile. Actual startup renders new counts/unchanged governance and
+   parser then Cancel only, returning None. Independent scanner.close/owned PID+
+   creation/watcher/child/jobs absence and shared/prior/eight-file preservation
+   checks retain original failures separately; any fault invalidates candidate.
+   Final-write faults require exit/index/evidence reconciliation, never blind retry.
+3. Location: ONE new owner0600 /private/tmp/airlock-final-preparation-df776.py,
+   later unique airlock-final-df776-* evidence/candidate/backups. Append HOW before
+   code, existing preparation report static section only. Preserve original30a1,
+   candidate9uj/all prior measurements/indices/assets, repair480/evidence8ej,
+   failed diagnostics/probes/activation/scanner attempts and current active files.
+   No source/tests/VALIDATION, active settings/manifests/profile/plugin/history/
+   dependencies/assets, Git/Context/Docker edits; no activation or native Accept.
+4. Tests: static AST/mode/exact source/test/runner hashes, one scan-loop and
+   original disjoint/canary/count guards, recomputed metrics/current binding,
+   fixed thresholds/strict/parser/unaccepted/Cancel, exact eight-file and PCRE2
+   preservation, exact empty old supervisor/shared-serve pin and repeated resource
+   gate, separately handled cleanup/final-write faults. Full fresh-eyes script
+   review and root full read/hash gate before execution. Root's403 locked tests/
+   build/source review are attributed, not rerun or scanner/readiness proof.
+   Later actual48 raw results and independent measured-candidate gate precede
+   separate activation handoff. Never copy/rebind prior calibration counts.
+
+## Source df776 native activation: resolved static-only HOW
+
+1. Data: approved candidate /private/tmp/airlock-final-df776-hnapkjol, source
+   df77626fc1042a1f66e22b786b26ac3a7dad1a8c4b4797f01a0f793e516abcdd and test
+   fbd754ff54eff0266520e1d0f57772a5eaa05cc28e57b305095e9c4275b71c02,
+   profile5cda6d6a03faf9a8910f5e6015ce5cf29342d28b2ba8f839ab043a11e0da97b4,
+   indexaf34d3083fb670967a03987a703ae7f211a0bf73e4dad834e48c430e5becbe1b.
+   Recompute48 raw labels/findings/errors from frozen records, not older metrics.
+   Preserve all eight file identities/hash/0600 bytes from candidate fixtures_after,
+   including failed artifact5542, all prior candidates/runners/repair8ej/failures
+   and history. Fixed .3/.5/{}/fraction1, globalSTRICT/parserNone/acceptanceNone and
+   reviewedFalse remain; exact existing PCRE2 grant/packages/assets/hard caps stay.
+   Separate original preferences Governance remains manual/enforce/writeVISIBLE/
+   shellHIDDEN with all other strict flags intact. Evidence retains exact old/current
+   supervisor and shared-service PID/creation/source, original errors and separate
+   cleanup, exact three active backups/written bytes/readback and native settings.
+2. API: static-only creation/AST/hash/full review now, no production/runner import
+   or execution. Later root-gated native operator PTY execution verifies all frozen
+   source/test/candidate/index/profile/settings/assets/packages and raw counts.
+   Require old supervisor71140/UID/create1791089676.423161/source3bceb/repo path,
+   empty runtime/jobs/no _scanner/_worker/_pdf and available>=6GiB before mutations.
+   GET tags/ps only observes pinned shared serve1290/create1790953712.354191 and
+   model metadata; no inference/load/unload/interruption, normal expiry allowed.
+   Read exact saved governance before writes, revalidate after replacement.
+   Back up and atomically write/read back ONLY three active files, changing global
+   profile bytes/calibration path+digest/manifest source; retain original dictionary
+   distinctions/defaults and every grant. Global original load_settings and
+   load_calibration must pass with unaccepted calibrated_settings refusal.
+   Immediately recheck exact empty old identity before one normal stop_all, wait
+   for identity/socket absence, normal ensure_supervisor/current-source ping.
+   Native settings model_copy uses the saved workspace policy without changing
+   global strict settings. Original make_startup_tui.run_async displays actual
+   measured24/6/0 and exact saved fields. Root observes PTY and sends normal keys
+   to existing Accept; no Pilot/handler injection/SQL/force or new flow. Chosen
+   settings must differ only by exact profile acceptance. Original start must
+   return READY/healthy scanners/no tasks/approvals and config-versioned unchanged
+   saved governance; one owned normal stop verifies empty runtime/jobs/identities.
+   Cancel starts no runtime. Original errors and independent cleanup stay distinct;
+   unknown mutation outcome never auto-retries or blindly cleans up. Evidence save
+   failures retain private errors but emit only fixed PRIVATE_EVIDENCE_SAVE_ERROR.
+3. Location: ONE new owner0600 /private/tmp/airlock-activation-df776.py and later
+   unique private airlock-activation-df776-* evidence/backups. Only active targets
+   are repo/runtime.manifest.json and existing runtime prepared-settings.json and
+   calibration-profile.json. This static wave appends HOW before code and existing
+   preparation report after candidate REVIEW; no active write or runtime action.
+   Preserve candidate index bijection/all prior paths/eight files/history. No source/
+   tests/VALIDATION/plugin/grants/assets/dependencies/Git/Context/Docker/task edits.
+   Future tax-preparation-verified.json belongs to separately authorized task scope.
+4. Tests: static AST/mode/exact pins/hash, three-target whitelist, full eight-file
+   baseline, preserved grant and strict global/separate saved workspace settings,
+   native TTY/run_async/no Pilot/handlers/SQL/inference, no-resource tuples including
+   _pdf, exact empty old pin before stop, known first-stop/uncertain-start guards,
+   independent cleanup and fixed evidence-save fault output. Full fresh-eyes and
+   root full-script read/hash gate before external permissions/execution. No broad
+   tests or original API execution now. Candidate approval supplies no activation,
+   native acceptance, task usefulness or tax readiness; all prior limits remain.
+
+## One verified-target local task on activated sourcedf776: static runner handoff
+
+1. Data: source df77626fc1042a1f66e22b786b26ac3a7dad1a8c4b4797f01a0f793e516abcdd,
+   test fbd754ff54eff0266520e1d0f57772a5eaa05cc28e57b305095e9c4275b71c02,
+   helperbdb2, measured profile5cda6d6a03faf9a8910f5e6015ce5cf29342d28b2ba8f839ab043a11e0da97b4,
+   candidate /private/tmp/airlock-final-df776-hnapkjol index
+   af34d3083fb670967a03987a703ae7f211a0bf73e4dad834e48c430e5becbe1b.
+   Approved activation /private/tmp/airlock-activation-df776-vgywdqbt/evidence.json
+   SHA df513c4569e087952d10f9c18b58c5a4658b0dfca66a81527879bba4c5eec8a1,
+   root-read independent activation review SHA8900757ce88c1d65ffaba97890f1a14a867ae43b7d363a362ee72cecbe3ddf1d.
+   Root separately observed post-activation supervisor80575/create1791091397.877512/
+   UID501, exact .venv Python -I -B repo airlock.py _supervisor1073741824. This
+   identity is root observation, not retroactively part of activation evidence.
+   Active manifest9101f649a40284be9f853d39bb31d0f3f4badeab67874057b9cfb2c842b1c94a,
+   external preparede4c5109aa90ffe46bdedab65d99e62a521587c502fa64cba195cf3fd4457d14d,
+   profile unchanged. Preserve exact eight candidate fixtures_after identities/modes/
+   UID/bytes including failed tax-preparation.json5542, all old evidence/runners/history.
+   Only new tax-preparation-verified.json initially absent may be created. Raw request
+   is identical to original except that filename, fresh UUID request_id/no disclosure.
+   Same Decimal1150.25/250.10/900.15, exact source-quote and raw synthetic identity/
+   account omission oracle. Private evidence records votes/result/counters, strict
+   correlated numeric diagnostics and separate primary/diagnostic/cleanup errors.
+2. API: writer static-only; root full runner read/hash/resource/execution handoff first.
+   Later require exact approved activation, source/test/helper/profile/index/bridge/
+   active hashes and calibration binding, global STRICT/acceptanceNone/parserNone/
+   profile reviewedFalse, exact PCRE2 10.49 file grant retained, saved manual request/
+   read/write/shell/release/enforce/visiblewrite/hiddenshell governance unchanged.
+   Verify root's exact supervisor PID/create/UID/cmdline/source, empty ps/jobs/no
+   _worker/_scanner/_pdf, >=6GiB available and exact pinned already-resident cached
+   model/shared process identities; never load/unload. Recheck exact supervisor and
+   eight-file identities/new-target absence immediately before startup. Native
+   startup is actual run_async on root operator PTY with normal root keyboard Accept.
+   Cancel starts no runtime/task. Task votes use existing Textual run_test Pilot
+   widget clicks invoking actual owner approval handlers; label automated UI-handler
+   coverage, not human-interactive task acceptance. One installed-plugin fresh ask;
+   exact request/scoped reads/exact new-target write_file only, deny shell/otherwrites,
+   no overwrite/history clearing/privacy changes/protected hint removal. Existing
+   candidate/usefulness/source-quote oracle unchanged. Strict local diagnostics exact
+   op/target/task_id before same-ID replay and again before normal owned runtime stop;
+   missing is diagnostics_unavailable even on success, no empty record/cause inference
+   or late cleanup absence claim. Replay returns same task/result/counters without work.
+   First failure/timeout prevents further inference, preserves original/cleanup errors,
+   attempts only existing normal owned cleanup and verifies exact owners/jobs/resources
+   gone. Final eight identities remain exact, only new target may appear, other five
+   old artifact names remain absent; all pins/shared identities/evidence unchanged.
+3. Location: HOW and ONE new owner0600 /private/tmp/airlock-verified-text-df776.py,
+   later unique private evidence directory. Adapt original330-line diagnostic runner;
+   no repair/config/restart block. Preserve original330, repair400 and every previous
+   runner/evidence. No source/test/VALIDATION/settings/manifests/profile/plugin/assets/
+   dependencies/history/Git/Context/Docker changes. No imports/runtime/model/scanner/
+   socket/config execution in writer static turn.
+4. Tests: static parent AST/hash/mode/full fresh-eyes and root full-script review;
+   request differs only filename, same arithmetic/source-quote/privacy oracle, exact
+   eight-file baseline/final equality and new target only, immutable index/activation/
+   active hashes/exact root process provenance, no repair or settings writes, native
+   PTY startup plus honestly labeled Pilot task votes, strict diagnostic-before-replay/
+   stop ordering and explicit unavailable, same-ID no-work and independent normal
+   cleanup/save faults. Pure oracle positive and missing/wrong quotes/amounts/private
+   identity/account negatives use synthetic data without runner imports. Later actual
+   correct artifact/fixed receipt/idempotency/cleanup evidence required; preparation/
+   activation and scripted tests do not establish task usefulness. Root owns model/
+   process slot and execution handoff; writer does not run any task or live check.

@@ -4509,3 +4509,214 @@ async def test_branch_model_successful_unload_never_repeats_after_open_client_re
     await service.close()
     assert not service.owned and service.closed and calls.count('post') == 1
     assert calls.count('close') == (2 if client_failure else 1)
+
+
+def test_diagnostic_sanitizer_class_identity_lines_and_secrets(monkeypatch):
+    from pydantic_ai.exceptions import UnexpectedModelBehavior, UsageLimitExceeded, ModelHTTPError, UserError
+    tid = 'a'*32
+    errors = [(ValueError('secret-path /private/document'),4),
+        (UnexpectedModelBehavior('secret',body='secret'),12),(UsageLimitExceeded('secret'),13),
+        (ModelHTTPError(500,'secret',body={'secret':'secret'}),14),(UserError('secret'),15),
+        (a.httpx.ReadTimeout('secret'),16),(a.httpx.ConnectTimeout('secret'),17),
+        (a.httpx.ConnectError('secret'),18),(a.httpx.RemoteProtocolError('secret'),19),
+        (a.httpx.HTTPStatusError('secret', request=a.httpx.Request('GET','http://localhost'),response=a.httpx.Response(500)),20)]
+    class Unknown(ValueError): pass
+    errors.append((Unknown('secret'),0))
+    for error, number in errors:
+        record = a.sanitize_diagnostic(tid,4,error)
+        assert record == {'task_id':tid,'stage':4,'exception_type':number,'airlock_line':0}
+        assert 'secret' not in str(record)
+    try: a.parse_ipc_json(b'{secret')
+    except a.AirlockError as error:
+        record = a.sanitize_diagnostic(tid,3,error)
+    assert record['exception_type'] == 1 and record['airlock_line'] in a.diagnostic_lines()
+    assert a.sanitize_diagnostic('secret',4,ValueError()) is None
+    assert a.sanitize_diagnostic(tid,True,ValueError()) is None
+    assert a.sanitize_diagnostic(tid,4,object()) is None
+
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('mode', ['error','withheld','success','cancel'])
+async def test_diagnostic_actual_worker_child_failure_frame(tmp_path, monkeypatch, mode):
+    tid = 'a'*32
+    commands = iter([{'settings':a.Settings().model_dump(mode='json'),'root':str(tmp_path),
+        'forbidden':[],'writable':False,'probe_port':0}, {'op':'run','task_id':tid,'ask':{}}])
+    frames = []
+    class Channel:
+        async def receive(self): return next(commands)
+        async def send(self, frame): frames.append(frame)
+    monkeypatch.setattr(a,'ChildChannel',Channel)
+    monkeypatch.setattr(a,'sandbox_probe',lambda *args: {'failures':[]})
+    monkeypatch.setattr(a.resource,'setrlimit',lambda *args: None)
+    async def run(*args):
+        if mode == 'error': raise ValueError('secret-document')
+        if mode == 'withheld': raise a.AirlockError('output_withheld')
+        if mode == 'cancel': raise asyncio.CancelledError()
+        return {'response':'positive','protected_sources':[]}
+    monkeypatch.setattr(a,'run_coder',run)
+    if mode == 'cancel':
+        with pytest.raises(asyncio.CancelledError): await a.worker_child()
+        assert len(frames) == 1
+    else:
+        await a.worker_child()
+        final = frames[-1]
+        assert final['ok'] == (mode != 'error')
+        if mode == 'error':
+            assert final['diagnostic']['task_id'] == tid and final['diagnostic']['stage'] == 1
+            assert final['diagnostic']['exception_type'] == 4 and 'secret' not in str(final)
+        else: assert 'diagnostic' not in final
+
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('mode', ['handler','handler_cancel','child','ipc','cancel','cleanup'])
+async def test_diagnostic_actual_transact_origin_and_cleanup(monkeypatch, mode):
+    tid = 'b'*32
+    local = a.LocalTelemetry(); monkeypatch.setattr(a,'_TELEMETRY',local)
+    worker = a.SandboxProcess.__new__(a.SandboxProcess)
+    worker.lock, worker.idle_timeout = asyncio.Lock(), 1
+    worker.process = type('Process',(),{'stdin':object(),'stdout':object()})()
+    calls, replies = [], []
+    class SecretFailure(ValueError): pass
+    primary = asyncio.CancelledError() if mode in ('cancel','handler_cancel') else SecretFailure('secret-document')
+    async def close():
+        calls.append('close')
+        if mode == 'cleanup': raise RuntimeError('secret-cleanup')
+    worker.close = close
+    async def write(stream, value): replies.append(value)
+    frames = iter([{'op':'model','call':'c'*32}, {'op':'done','ok':True,'payload':{'positive':True}}])
+    async def read(*args,**kwargs):
+        if mode in ('ipc','cancel','cleanup'): raise primary
+        if mode == 'child': return {'op':'done','ok':False,'diagnostic':{'task_id':tid,'stage':1,'exception_type':4,'airlock_line':0}}
+        return next(frames)
+    async def handler(frame): raise primary
+    monkeypatch.setattr(a,'write_frame',write); monkeypatch.setattr(a,'read_frame',read)
+    if mode == 'handler':
+        assert await worker.transact({'op':'run','task_id':tid},handler) == {'positive':True}
+        assert replies[-1] == {'call':'c'*32,'ok':False,'payload':{}} and not calls
+    else:
+        expected = RuntimeError if mode == 'cleanup' else asyncio.CancelledError if mode in ('cancel','handler_cancel') else a.AirlockError if mode == 'child' else SecretFailure
+        with pytest.raises(expected): await worker.transact({'op':'run','task_id':tid},handler)
+        assert calls == ['close']
+    records = [r for r in local.records if r.get('task_id') == tid]
+    stages = [r['stage'] for r in records]
+    assert stages == {'handler':[2],'handler_cancel':[2,3],'child':[1,3],'ipc':[3],'cancel':[3],'cleanup':[3,5]}[mode]
+    assert 'secret' not in str(records)
+
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('metadata', [None,{}, {'task_id':'x'*32},
+    {'task_id':'b'*32,'stage':1,'exception_type':4,'airlock_line':999999},
+    {'task_id':'b'*32,'stage':True,'exception_type':4,'airlock_line':0},
+    {'task_id':'b'*32,'stage':1,'exception_type':99,'airlock_line':0},
+    {'task_id':'b'*32,'stage':1,'exception_type':4,'airlock_line':0,'secret':'x'*10000},
+    {'task_id':'a'*32,'stage':1,'exception_type':4,'airlock_line':0}])
+async def test_diagnostic_invalid_child_metadata_never_changes_failure(monkeypatch, metadata):
+    local = a.LocalTelemetry(); monkeypatch.setattr(a,'_TELEMETRY',local)
+    worker = a.SandboxProcess.__new__(a.SandboxProcess)
+    worker.lock, worker.idle_timeout = asyncio.Lock(),1
+    worker.process = type('Process',(),{'stdin':object(),'stdout':object()})()
+    async def close(): pass
+    worker.close = close
+    async def write(*args): pass
+    async def read(*args,**kwargs): return {'op':'done','ok':False,'diagnostic':metadata}
+    monkeypatch.setattr(a,'write_frame',write); monkeypatch.setattr(a,'read_frame',read)
+    with pytest.raises(a.AirlockError,match='^sandbox_operation_failed$'):
+        await worker.transact({'op':'run','task_id':'b'*32})
+    assert [r['stage'] for r in local.records if 'task_id' in r] == [3]
+
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('cancel', [False,True])
+async def test_diagnostic_runtime_cleanup_local_correlation_and_eviction(tmp_path,monkeypatch,cancel):
+    local=a.LocalTelemetry(); monkeypatch.setattr(a,'_TELEMETRY',local)
+    supervisor=a.Supervisor(tmp_path/'state'); f=Fixture(tmp_path,store=supervisor.store)
+    supervisor.runtimes[f.runtime.id]=f.runtime
+    task=f.runtime.submit(a.AskRequest(request='secret-document'))
+    class Worker:
+        process=type('Process',(),{'returncode':None})()
+        async def transact(self,command,handler):
+            assert command['task_id']==task.id
+            if cancel: raise asyncio.CancelledError()
+            raise ValueError('secret-execution')
+        async def close(self): raise RuntimeError('secret-cleanup')
+    f.runtime.worker=Worker()
+    try:
+        with pytest.raises(RuntimeError): await f.runtime.execute(task)
+        records=(await supervisor.dispatch({'op':'diagnostics','target':f.runtime.id,'task_id':task.id}))['diagnostics']
+        assert [r['stage'] for r in records]==[4,5] and 'secret' not in str(records)
+        assert task.completion.result()['reason']==('cancelled' if cancel else 'execution_failed')
+        assert 'diagnostics' not in f.runtime.status(task.id)
+        with pytest.raises(a.AirlockError,match='^diagnostics_unavailable$'):
+            await supervisor.dispatch({'op':'diagnostics','target':f.runtime.id,'task_id':'f'*32})
+        for _ in range(256): a.record_diagnostic('f'*32,4,ValueError('secret'))
+        assert len(local.records)==256
+        with pytest.raises(a.AirlockError,match='^diagnostics_unavailable$'):
+            await supervisor.dispatch({'op':'diagnostics','target':f.runtime.id,'task_id':task.id})
+    finally: f.store.close()
+
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('cancel', [False,True])
+async def test_diagnostic_fault_cannot_mask_transact_failure(monkeypatch,cancel):
+    local=a.LocalTelemetry(); monkeypatch.setattr(a,'_TELEMETRY',local)
+    class Records:
+        def append(self,record): raise RuntimeError('secret-diagnostic-fault')
+    local.records=Records()
+    worker=a.SandboxProcess.__new__(a.SandboxProcess)
+    worker.lock,worker.idle_timeout=asyncio.Lock(),1
+    worker.process=type('Process',(),{'stdin':object(),'stdout':object()})()
+    primary=asyncio.CancelledError() if cancel else ValueError('secret-original')
+    closed=[]
+    async def close(): closed.append(True)
+    async def write(*args): pass
+    async def read(*args,**kwargs): raise primary
+    worker.close=close
+    monkeypatch.setattr(a,'write_frame',write); monkeypatch.setattr(a,'read_frame',read)
+    with pytest.raises(type(primary)) as error:
+        await worker.transact({'op':'run','task_id':'a'*32})
+    assert error.value is primary and closed==[True]
+
+
+
+@pytest.mark.asyncio
+async def test_diagnostic_success_execution_keeps_public_result_and_three_tools(tmp_path,monkeypatch):
+    local=a.LocalTelemetry(); monkeypatch.setattr(a,'_TELEMETRY',local)
+    f=Fixture(tmp_path)
+    task=f.runtime.submit(a.AskRequest(request='synthetic positive'))
+    class Worker:
+        process=type('Process',(),{'returncode':None})()
+        async def transact(self,command,handler): return {'response':'synthetic positive','protected_sources':[]}
+        async def close(self): pass
+    f.runtime.worker=Worker()
+    try:
+        await f.runtime.execute(task)
+        assert task.completion.result()['state']=='completed'
+        assert not [r for r in local.records if 'task_id' in r]
+        assert {tool.name for tool in await a.build_mcp(f.runtime).list_tools()}=={'ask','status','stop'}
+        assert 'diagnostics' not in f.runtime.snapshot()
+        assert not local.provider._active_span_processor._span_processors[0].__dict__.get('exporter')
+    finally: f.store.close()
+
+
+
+def test_diagnostic_validation_unknown_frame_and_optional_import_failure(monkeypatch):
+    import builtins
+    try: a.LocalOutput.model_validate({'response':object()})
+    except ValidationError as error: record=a.sanitize_diagnostic('a'*32,4,error)
+    assert record['exception_type']==11 and record['airlock_line']==0
+    try:
+        secret_local='secret-document /private/secret-path'
+        raise ValueError(secret_local)
+    except ValueError as error: record=a.sanitize_diagnostic('a'*32,4,error)
+    assert record['airlock_line']==0 and 'secret' not in str(record)
+    original_import=builtins.__import__
+    def missing(name,*args,**kwargs):
+        if name=='pydantic_ai.exceptions': raise ImportError('secret-import')
+        return original_import(name,*args,**kwargs)
+    monkeypatch.setattr(builtins,'__import__',missing)
+    assert a.sanitize_diagnostic('a'*32,4,ValueError('secret'))['exception_type']==4

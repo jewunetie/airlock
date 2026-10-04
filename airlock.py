@@ -191,6 +191,70 @@ def telemetry() -> LocalTelemetry:
     return _TELEMETRY
 
 
+@functools.cache
+def diagnostic_lines() -> frozenset[int]:
+    """Executable lines of the exact source loaded by this process, without content."""
+    source = Path(__file__).read_bytes()
+    if hashlib.sha256(source).hexdigest() != SOURCE_DIGEST:
+        return frozenset()
+    pending = [compile(source, __file__, 'exec')]
+    lines = set()
+    while pending:
+        code = pending.pop()
+        lines.update(line for _, _, line in code.co_lines() if line is not None)
+        pending.extend(value for value in code.co_consts if type(value) is type(code))
+    return frozenset(lines)
+
+
+def sanitize_diagnostic(task_id: str, stage: int, error: BaseException) -> dict | None:
+    """Return only fixed numeric error metadata correlated to one generated task."""
+    try:
+        if (type(task_id) is not str or not re.fullmatch('[0-9a-f]{32}', task_id)
+                or type(stage) is not int or stage not in range(1, 6) or not isinstance(error, BaseException)):
+            return None
+        from pydantic import ValidationError
+        kinds = {AirlockError:1, TimeoutError:2, OSError:3, ValueError:4, TypeError:5,
+            KeyError:6, RuntimeError:7, sqlite3.Error:8, asyncio.CancelledError:9,
+            httpx.HTTPError:10, ValidationError:11, httpx.ReadTimeout:16,
+            httpx.ConnectTimeout:17, httpx.ConnectError:18, httpx.RemoteProtocolError:19,
+            httpx.HTTPStatusError:20}
+        with contextlib.suppress(ImportError):
+            from pydantic_ai.exceptions import UnexpectedModelBehavior, UsageLimitExceeded, ModelHTTPError, UserError
+            kinds.update({UnexpectedModelBehavior:12, UsageLimitExceeded:13, ModelHTTPError:14, UserError:15})
+        line, trace = 0, error.__traceback__
+        while trace is not None:
+            frame = trace.tb_frame
+            if (frame.f_globals is globals() and frame.f_code.co_filename == __file__
+                    and trace.tb_lineno in diagnostic_lines()):
+                line = trace.tb_lineno
+            trace = trace.tb_next
+        return {'task_id':task_id, 'stage':stage, 'exception_type':kinds.get(type(error),0), 'airlock_line':line}
+    except BaseException:
+        return None
+
+
+def record_diagnostic(task_id: str, stage: int, error: BaseException) -> dict | None:
+    """Keep a sanitized local record; diagnostic faults never change task behavior."""
+    with contextlib.suppress(BaseException):
+        record = sanitize_diagnostic(task_id, stage, error)
+        if record is not None:
+            telemetry().records.append(record)
+        return record
+
+
+def record_child_diagnostic(value: Any, task_id: str) -> None:
+    """Accept only exact numeric child metadata bound to the original run task."""
+    with contextlib.suppress(BaseException):
+        if (type(value) is dict and set(value) == {'task_id','stage','exception_type','airlock_line'}
+                and type(task_id) is str and re.fullmatch('[0-9a-f]{32}', task_id)
+                and type(value['task_id']) is str and value['task_id'] == task_id
+                and type(value['stage']) is int and value['stage'] == 1
+                and type(value['exception_type']) is int and value['exception_type'] in range(21)
+                and type(value['airlock_line']) is int
+                and (value['airlock_line'] == 0 or value['airlock_line'] in diagnostic_lines())):
+            telemetry().records.append(value.copy())
+
+
 
 
 class Mode(str, enum.Enum):
@@ -2333,6 +2397,7 @@ class SandboxProcess:
                             max_bytes=frame_limit() if frame_limit else MAX_FRAME), self.idle_timeout)
                         if frame.get('op') == 'done':
                             if not frame.get('ok'):
+                                record_child_diagnostic(frame.get('diagnostic'), command.get('task_id'))
                                 raise AirlockError('sandbox_operation_failed')
                             return frame.get('payload', {})
                         if handler is None or not re.fullmatch('[0-9a-f]{32}', frame.get('call', '')):
@@ -2342,13 +2407,20 @@ class SandboxProcess:
                         try:
                             result = await handler(frame)
                             reply = {'call': frame['call'], 'ok': True, 'payload': result}
-                        except asyncio.CancelledError:
+                        except asyncio.CancelledError as error:
+                            record_diagnostic(command.get('task_id'), 2, error)
                             raise
-                        except Exception:
+                        except Exception as error:
+                            record_diagnostic(command.get('task_id'), 2, error)
                             reply = {'call': frame['call'], 'ok': False, 'payload': {}}
                         await write_frame(self.process.stdin, reply)
-            except BaseException:
-                await self.close()
+            except BaseException as error:
+                record_diagnostic(command.get('task_id'), 3, error)
+                try:
+                    await self.close()
+                except BaseException as cleanup_error:
+                    record_diagnostic(command.get('task_id'), 5, cleanup_error)
+                    raise
                 raise
 
     async def close(self):
@@ -4367,6 +4439,7 @@ async def worker_child():
     ceiling = 64*1024*1024
     resource.setrlimit(resource.RLIMIT_FSIZE, (ceiling, ceiling))
     await channel.send({'op':'done','ok':True,'payload':{'sandbox':'probed'}})
+    command = {}
     try:
         command = await channel.receive()
         if command.get('op') != 'run':
@@ -4377,9 +4450,14 @@ async def worker_child():
         if error.code == 'output_withheld':
             await channel.send({'op':'done','ok':True,'payload':{'withheld':True}})
         else:
-            await channel.send({'op':'done','ok':False})
-    except Exception:
-        await channel.send({'op':'done','ok':False})
+            diagnostic = record_diagnostic(command.get('task_id'), 1, error)
+            await channel.send({'op':'done','ok':False, **({'diagnostic':diagnostic} if diagnostic else {})})
+    except asyncio.CancelledError as error:
+        record_diagnostic(command.get('task_id'), 1, error)
+        raise
+    except Exception as error:
+        diagnostic = record_diagnostic(command.get('task_id'), 1, error)
+        await channel.send({'op':'done','ok':False, **({'diagnostic':diagnostic} if diagnostic else {})})
 
 
 class LocalHTTPBoundary:
@@ -4786,23 +4864,31 @@ class WorkspaceRuntime:
             # Exactly one run per worker, no hidden filesystem prescan.
             options = {} if self.settings.pdf_parser is None else {'frame_limit':lambda:
                 90*1024 if task.pdf_read is not None and task.pdf_read.phase != 'finished' else MAX_FRAME}
-            reply = await self.worker.transact({'op':'run','ask':task.request.model_dump(mode='json')},
+            reply = await self.worker.transact({'op':'run','task_id':task.id,'ask':task.request.model_dump(mode='json')},
                 lambda frame: self.worker_message(task, frame), **options)
-            await self.worker.close(); self.worker = None
+            try:
+                await self.worker.close(); self.worker = None
+            except BaseException as error:
+                record_diagnostic(task.id, 5, error)
+                raise
             task.worker_closed = True
             if reply.get('withheld'):
                 self.finish(task, 'withheld', 'privacy')
             else:
                 await self.egress.release(task, LocalOutput.model_validate(reply))
-        except asyncio.CancelledError:
+        except asyncio.CancelledError as error:
+            record_diagnostic(task.id, 4, error)
             self.finish(task, 'cancelled', 'cancelled')
         except AirlockError as error:
+            record_diagnostic(task.id, 4, error)
             reason = 'budget_exhausted' if 'budget' in error.code else 'component_unavailable'
             self.finish(task, 'failed', reason)
-        except sqlite3.Error:
+        except sqlite3.Error as error:
+            record_diagnostic(task.id, 4, error)
             self.state = 'UNAVAILABLE'
             self.finish(task, 'failed', 'component_unavailable')
-        except Exception:
+        except Exception as error:
+            record_diagnostic(task.id, 4, error)
             self.finish(task, 'failed', 'execution_failed')
         finally:
             watch.cancel()
@@ -4812,10 +4898,16 @@ class WorkspaceRuntime:
             try:
                 if self.pdf_parser is not None and task.pdf_read is not None:
                     await self.pdf_parser.abort(task)
+            except BaseException as error:
+                record_diagnostic(task.id, 5, error)
+                raise
             finally:
                 try:
                     if self.worker is not None:
                         await self.worker.close(); self.worker = None
+                except BaseException as error:
+                    record_diagnostic(task.id, 5, error)
+                    raise
                 finally:
                     task.pdf_read = None
                     task.pending_financial = None
@@ -5327,6 +5419,15 @@ class Supervisor:
                     self.shutdown.set()
                 return {'stopped':not errors, 'warnings':errors}
         runtime = self.locate(request.get('target', '.'))
+        if operation == 'diagnostics':
+            tid = request.get('task_id')
+            if (set(request) != {'op','target','task_id'} or type(tid) is not str
+                    or not re.fullmatch('[0-9a-f]{32}', tid) or tid not in runtime.tasks):
+                raise AirlockError('diagnostics_unavailable')
+            records = [record.copy() for record in telemetry().records if record.get('task_id') == tid]
+            if not records:
+                raise AirlockError('diagnostics_unavailable')
+            return {'diagnostics':records}
         if operation == 'status':
             with contextlib.suppress(AirlockError):
                 runtime.revalidate()

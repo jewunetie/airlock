@@ -52,6 +52,12 @@ Failed owned-model unload blocks new work for that service/supervisor lifetime.
 Airlock retains ownership and does not automatically retry unload or replace the
 model client. This does not guarantee reconciliation across supervisor restart.
 
+The owner-only local control operation `diagnostics(target, task_id)` can inspect
+retained content-free failure stage, exception-type and source-line numbers for
+that runtime's exact task. Read it before stopping the runtime; missing or evicted
+records are unavailable. It retains no exception text or document/model content
+and is absent from cloud tools, status and history.
+
 The retained `ui/index.html` and `tools/sync_console.py` are unsupported historical
 web-console artifacts. The current interface is native Textual.
 

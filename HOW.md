@@ -1847,3 +1847,141 @@ no real bind or extra model field. This is the same original-socket ownership ru
    subsequent-Deny empty/nonempty/non-reassembly controls and union-sentinel
    assertions. No runner import/main, inference/runtime/fixture/core-suite actions.
    Root rereads frozen minimal delta/hash before any execution handoff.
+
+### Failed text task: read-only durable phase inspection
+
+1. Data: exact synthetic task e2d35712e75749698cdc8954d214b1ad and workspace
+   2f27178ca2234d7a897cd0c759de1705, configuration 11. Inspect only bounded audit
+   event/configuration numbers and committed fixed final response for that task;
+   never query unrelated history, raw requests, source hints or the ledger key.
+2. API: stdlib sqlite3 URI mode=ro, PRAGMA query_only=ON, parameterized SELECTs
+   from audit and interactions restricted by both exact IDs. No StateStore import,
+   migration, writes, network, process control, diagnostic hook or inference.
+   A missing/mismatched record or unexpected publication fails inspection;
+   audit events narrow durable phases but cannot identify the discarded exception.
+3. Location: existing local airlock.sqlite read-only; owner-only evidence under
+   /private/tmp/airlock-text-229dde-gs5o3cbw. HOW/VALIDATION/report record results.
+   Frozen production and the failed integration evidence remain unchanged.
+4. Tests: require one failed/component_unavailable/null-response final, matching
+   config11, bounded allowed audit events with admitted and two tool_allowed;
+   reject any completed/released event or public candidate. Close the connection
+   on every outcome. This read-only subsection did not itself authorize diagnostic
+   instrumentation or another live task; the independently authorized diagnostic
+   contract below supersedes its former pending-instrumentation status.
+
+## Content-free failed-task diagnostics: independently authorized four-part HOW
+
+1. Data: existing bounded256 LocalTelemetry.records additionally stores exact
+   dictionaries with task_id:str (supervisor-generated32 lowercase hex), stage:int
+   (1worker-child,2parent-handler,3IPC/execution-transport,4runtime-execution,
+   5cleanup), exception_type:int (0other,1exact AirlockError,2TimeoutError,3OSError,
+   4ValueError,5TypeError,6KeyError,7RuntimeError,8sqlite3.Error,9CancelledError,
+   10httpx.HTTPError,11pydantic.ValidationError,12UnexpectedModelBehavior,
+   13UsageLimitExceeded,14ModelHTTPError,15UserError,16httpx.ReadTimeout,
+   17ConnectTimeout,18ConnectError,19RemoteProtocolError,20HTTPStatusError),
+   airlock_line:int (innermost verified pinned-module executable
+   traceback line or0). Unknown concrete types are other. No exception strings,
+   objects, paths, names, locals, documents or model content. Existing deque eviction
+   applies; no storage/settings/schema/exporter or durable-cause recovery.
+2. API: sanitize_diagnostic(task_id,stage,error)->dict|None verifies strict task/stage,
+   exact exception class identity and only root frame globals/code filename/current
+   pinned-source executable-line membership. Optional PydanticAI classes resolve
+   lazily; absence is other and cannot affect the original error. No dynamic names
+   or MRO classification. record_diagnostic captures without
+   allowing diagnostic faults to mask original failures/cancellation. Worker run
+   IPC includes exact task_id; failed child frames optionally carry the strict four
+   numeric/correlation fields. Parent accepts only exactkeys/types/enums, stage1,
+   current pinned line membership and exact original run task ID; malformed metadata
+   is ignored without changing original failure. Parent handler/outer transport,
+   execute conversions and distinct cleanup append independently before conversion/
+   rethrow. Existing owner-only control diagnostics(target,task_id) returns matching
+   retained records only for that runtime's existing exact task, otherwise fixed
+   diagnostics_unavailable. Read before stop; eviction/missing data is unavailable.
+   No MCP/public-status/history/export changes or original exception-policy changes.
+3. Location: existing LocalTelemetry plus narrow sanitizer helpers, worker_child,
+   SandboxProcess.transact, WorkspaceRuntime.execute and Supervisor.dispatch in
+   airlock.py; appended assertions test.py; narrow HOW/ARCH/README/VALIDATION and
+   .superpowers/sdd/tax-diagnostic-report.md. Preserve source229dde/test9595 baseline
+   and original tests/failures. No live runtime/model/scanner/Docker/Context/Git,
+   dependencies/settings/exporters/general callback platform or preparation.
+4. Tests: genuine child/handler/IPC/execute/cleanup failures with inert collaborators,
+   positive execution and cancellation; strict correlation/bounded eviction, malformed/
+   oversized/arbitrary-type/invalid-line child metadata, concrete unknown exception
+   type and synthetic secret messages/paths/locals absent. Diagnostic faults cannot
+   alter original reply/rethrow/cleanup/cancellation. Original fixed public APIs,
+   three MCP tools, no content capture/export remain unchanged. Focused locked offline
+   checks/import/helper/prefix/hash/diffcheck/fresh-eyes only; root independently
+  reviews changed binding before any compatible gates or future bounded live rerun.
+
+## Source3bceb measured-candidate runner: static preparation only
+
+1. Data: frozen source3bceb4133b2534751bc0bc5c4371eced6710d2743312641f3e4b48f445ed4eaa,
+   testb149c3aea90e0def3980429e1c8e5f65eb5ffee467d02375ebf56e186c369297,
+   unchanged helperbdb2e1c4f044623bc375e3c35bc65a7791a110388118c45e74eb9b93741c8172;
+   original corpus list[tuple[str,bool]], two disjoint24 splits each12 benign/12
+   private, distinct from production canaries. Settings/PreparedRuntime/
+   CalibrationProfile retain pii0.3, policy0.5, overrides{}, reassembly1,
+   presetSTRICT/exact strict Governance, parserNone, reviewedFalse/acceptanceNone.
+   Later raw scans contain split/index/text/label/findings/failures/time; metrics
+   are computed from those new rows. Candidate binding/packages/assets/source and
+   timestamps are actual, never a rebound copy of earlier measurements.
+   Evidence includes memory, runtime/jobs, shared service PID/creation/metadata,
+   owned identities, separate primary/cleanup errors and immutable file hashes.
+   Dummy inventory is exactly public-note.txt, synthetic-private.txt and five
+   tax-{revised,signed,missing,ambiguous,forged}.txt, all0600; six prior expected
+   tax artifact names remain absent. Preserve bytes/modes/identity and history.
+2. API: this turn reads/parses/hashes only, never imports or executes the runner
+   or production. Future execution requires root's explicit reviewed slot handoff.
+   It first validates current source/test/helper and trusted stale settings directly;
+   original prepared_settings refuses stale manifest, load_calibration refuses old
+   binding. GET Ollama ps/tags observes metadata only; fresh empty supervisor
+   runtime registry, no existing worker/scanner or job marker, >=6GiB available
+   memory, asset and package pins gate actual SRT/ScannerService startup. Repeat
+   the gate immediately before startup. Production positive/negative canaries must
+   pass; exactly one scan for each48 original texts, healthy generation1 with no
+   failed detector. Private candidate prepared_settings/load_calibration must
+   validate; calibrated_settings must refuse unaccepted settings. Actual Textual
+   run_test renders counts/governance/parser then clicks only Cancel; no Accept,
+   supervisor mutation, worker inference, model load/unload or Docker actions.
+   Cleanup observes owned PID/creation identities, separately attempts scanner.close
+   once, verifies watcher/child/jobs absence, then preservation. Original errors
+   are retained even when cleanup/evidence writing fails; any error invalidates
+   candidate. Shared supervisor/Ollama serve identities stay unchanged. Resident
+   expiry is allowed without intervention; new/replaced resident identity fails.
+3. Location: new owner0600 /private/tmp/airlock-final-preparation-3bceb.py and a
+   unique later airlock-final-3bceb-* private evidence root. Only this HOW and the
+   existing .superpowers/sdd/tax-final-preparation-report.md static section change.
+   Preserve original229 runner/candidate435zqeez, earlier786 candidate/runner,
+   actual activation and failed text-run evidence, all active preparation files
+   and seven dummy inputs. No source/tests/VALIDATION/dependencies/plugin edits,
+   Git/Context, active writes, native acceptance or activation in this wave.
+4. Tests: static ast.parse, exact source/test/runner hashes, mode0600, frozen
+   thresholds/corpus guards, one scan-call loop, recomputed metrics and actual
+   binding, strict/parser/unaccepted and Cancel-only assertions, explicit prior
+   preservation, fresh repeated resource/empty-job gates, separate cleanup and
+   final-save failure handling. Fresh-eyes full runner review before freeze. No
+   scanner/runtime or broad suite repeats; root's402/build/review evidence is
+   attributed separately. Static success supplies no measured candidate/profile
+   identity or live readiness. If reviewed source changes, preserve this runner
+   and prepare another exact-source wave before execution.
+
+Executed scanner-only handoff attempt, 2026-10-04: the frozen runner30a1 exited1
+at the first local supervisor socket ping with sandbox PermissionError, before
+scanner construction/startup. Independent after-gate observation retained its
+separate PermissionError. No retry occurred. Offline index/hash/mode and exact
+102 original files/seven fixture identities/bytes checks passed; no scanner state
+was created. Failure root /private/tmp/airlock-final-3bceb-o2trk2o5 is preserved.
+No48 measurements, new profile, startup Cancel or successful process/resource
+gate exists from this attempt. Root owns the narrow sandbox execution permission
+escalation for any separately authorized next attempt; policy is not unresolved.
+
+Root's separately approved sandbox escalation executed the same frozen runner
+with locked/offline uv and existing cache, exit0, creating source3bceb candidate
+/private/tmp/airlock-final-3bceb-9ujbxgiw. All48 actual scans completed; independent
+offline raw/index/original API verification passed. Calibration24:4 false blocks,
+0 misses; heldout24:6 false blocks,0 misses (12 benign/12 private each). Thresholds
+unchanged, profile reviewedFalse, acceptanceNone, strict governance/parserNone.
+Actual startup rendered these measurements then Cancel only. Recorded owned
+cleanup and active/prior/fixture preservation passed. Candidate profilea7a077 and
+binding9c4b remain reviewable only; independent candidate gate then separate root
+activation/native acceptance handoff are still required. This is not tax readiness.

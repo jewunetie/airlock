@@ -4,7 +4,31 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
-**Current 229dde installed-plugin text integration stopped at its first task.**
+**Source3bceb scanner preparation passed; activation and inference remain pending.**
+The unchanged reviewed runner completed 48 fresh fixed-threshold scans after a
+narrow local-socket escalation. Calibration had 4/12 benign false blocks and
+held-out 6/12, with 0/12 private misses per split and no detector failures.
+Independent candidate checks verified raw rows, current binding, unaccepted
+refusal, Cancel, preservation and owned cleanup. Profile `a7a07745...` remains
+unaccepted. The first sandbox-denied attempt is retained separately. These small
+synthetic results establish no field accuracy or tax readiness.
+
+**Content-free diagnostic source correction passed independent review and core/build checks.**
+Focused synthetic checks exercise original child/handler/IPC/execution failures,
+separate cleanup, strict correlation and malformed metadata refusal, bounded
+eviction, secret-free records, diagnostic faults, cancellation and success.
+The final affected locked offline command passes **59 checks, 343 deselected**;
+imports/current-source line membership/complete prior test prefix/unchanged helper
+and diffcheck pass. Root's full locked offline suite passes **402 tests**, exit 0;
+local MCP/Uvicorn checks used a narrowly approved loopback escalation. Offline
+build and archive inspection confirm the exact current single-module source in
+both wheel and source distribution. No package download or dependency change.
+Independent source review found no concrete findings in this bounded wave.
+Exact results/hashes are in `.superpowers/sdd/tax-diagnostic-report.md`.
+Source changes invalidate the preceding preparation binding. No new preparation,
+runtime, model/scanner operation or failed-task rerun occurred in this correction.
+
+**Prior-source229dde installed-plugin text integration stopped at its first task.**
 Root accepted the actual native startup screen for the installed dummy-folder
 binding, with manual request/read/write/release, privacy enforce, visible workspace
 writes and hidden shell. READY configuration version 11 had healthy scanners.
@@ -22,12 +46,18 @@ the two original fixtures were preserved. Five new owner-only synthetic text
 fixtures and failed-task history remain; no history was cleared or failure retried
 as new work. Actual evidence is retained at
 `/private/tmp/airlock-text-229dde-gs5o3cbw/evidence.json`; the runner exited 1.
-A bounded local diagnostic requires a separately resolved HOW and human decision
-before another inference attempt. Independent failure-evidence review supports
+A bounded local diagnostic requires a separately resolved HOW before another
+inference attempt. Root independently verified the later direct human authority
+to finish synthetic usability work without further interjection; renewed generic
+approval is unnecessary. A scoped mode=ro/query_only inspection of this exact
+task's audit confirms queued, waiting_local, admitted, waiting_local, tool_allowed,
+waiting_local, tool_allowed, failed, all at configuration 11, and the same null
+fixed final result. Those records establish no original exception or tool return.
+Independent failure-evidence review supports
 the recorded withholding, same-ID reuse and owned cleanup, with no acceptance
 bypass or new inference retry found; it cannot identify the original cause.
 
-**Current 229dde local preparation and exact dummy startup/stop passed.**
+**Prior-source229dde local preparation and exact dummy startup/stop passed.**
 Independent candidate and activation evidence reviews found no concrete findings
 within their bounded scopes. Root activated the exact measured profile `52cf04d...`
 through three backed-up owner-only atomic preparation writes. The original global

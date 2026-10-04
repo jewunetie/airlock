@@ -338,6 +338,16 @@ Cloud tool descriptions and behavior are evaluated on synthetic use/no-use, disc
 
 Pydantic/OpenTelemetry instrumentation disables message, tool, and binary content capture. A private exporter-free SDK retains only a bounded allowlist of local operational records. Raw judge explanations and model-generated diagnostics are not public status messages. No hosted tracing or Logfire export is enabled automatically.
 
+Failed-task diagnostics share the existing bounded256 in-memory local records.
+Only the generated task ID and fixed integer stage/exception-type/pinned-source
+line metadata are retained, before private error conversions and separately for
+cleanup. No message, path, name, local variable, traceback object or model content
+is recorded. Strict numeric child metadata is correlated and validated by the
+parent. Owner-only local diagnostics(target,task_id) reads matching current-task
+records before stop; missing/evicted records are unavailable. Diagnostics are
+absent from MCP, public status, history and exporters, and cannot change failure,
+cleanup or cancellation behavior. They cannot reconstruct previously lost causes.
+
 Unit, property-style, adversarial, subprocess, and integration tests cover distinct claims. Real SRT isolation, model/scanner accuracy, native MCP task behavior, Coder tool execution, and multiple interactive TUIs require their actual dependencies and target-platform checks. Skipped tests are not acceptance evidence.
 
 ## 16. Non-goals

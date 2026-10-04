@@ -4,6 +4,73 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+**Current 229dde installed-plugin text integration stopped at its first task.**
+Root accepted the actual native startup screen for the installed dummy-folder
+binding, with manual request/read/write/release, privacy enforce, visible workspace
+writes and hidden shell. READY configuration version 11 had healthy scanners.
+Usage recorded two model requests and two approved native list_files tool calls,
+without establishing successful tool returns. The local revised-summary task failed with fixed
+`component_unavailable`. No artifact or response was published. This is a failed
+usefulness check; selected financial Approve/Deny and the remaining nine cases
+were not run. The underlying exception was discarded by current private IPC/error
+handling and cannot be attributed from the public result.
+The exact same-ID retry returned the same task/result without additional work or
+consent. One normal owned runtime stop succeeded: no active runtime, jobs, owned
+survivors or owned scratch/profile remained; cleanup_errors was empty. Shared
+Ollama identity and model tags, frozen source/test/preparation/plugin bytes and
+the two original fixtures were preserved. Five new owner-only synthetic text
+fixtures and failed-task history remain; no history was cleared or failure retried
+as new work. Actual evidence is retained at
+`/private/tmp/airlock-text-229dde-gs5o3cbw/evidence.json`; the runner exited 1.
+A bounded local diagnostic requires a separately resolved HOW and human decision
+before another inference attempt. Independent failure-evidence review supports
+the recorded withholding, same-ID reuse and owned cleanup, with no acceptance
+bypass or new inference retry found; it cannot identify the original cause.
+
+**Current 229dde local preparation and exact dummy startup/stop passed.**
+Independent candidate and activation evidence reviews found no concrete findings
+within their bounded scopes. Root activated the exact measured profile `52cf04d...`
+through three backed-up owner-only atomic preparation writes. The original global
+profile remains reviewed=false and acceptance=None; each workspace still reviews
+its rules and accepts the profile through the local startup screen.
+Root ran the real Textual screen in a PTY, inspected its unchanged .3/.5, manual,
+enforce and held-out 24/6/0 settings, and used the native Accept button. The exact
+dummy workspace reached READY, config version 10, with healthy scanners and saved
+governance. One normal owned stop succeeded; jobs and owned survivors were absent,
+and fixture/source/other prepared bytes and shared Ollama identities were preserved.
+The verified empty old supervisor 33722 was replaced through normal lifecycle
+controls by current-source supervisor 37079. No inference was submitted.
+The first attempt failed before activation because two synthetic fixture files
+were mode 0644. That evidence remains; only their permissions changed to 0600
+before the successful unchanged-script retry. Detailed evidence and independent
+review are in `.superpowers/sdd/tax-final-preparation-report.md`.
+Live model/disclosure/manual financial/natural-client workflows remain unverified.
+Configured Linux-PDF integration and the exact container/Context-save holds remain
+separate. No production or tax-readiness claim follows from startup acceptance.
+
+**Current 229dde preparation candidate freshly measured, frozen and unaccepted.**
+This paragraph records the earlier measurement-only phase before activation above.
+Actual SRT/ScannerService required startup canaries passed in one generation;
+48 original labelled corpus texts each received one fresh scan at unchanged
+0.3/0.5, empty overrides/reassembly fraction 1.0. Calibration: **4/12 benign false blocks,
+0/12 private misses**; held-out: **6/12 false blocks, 0/12 misses**. No detector
+failed; all false blocks came from liquid_policy. No copied counts or tuning.
+Small synthetic results do not establish field accuracy or tax readiness.
+Candidate `/private/tmp/airlock-final-229dde-435zqeez`, profile SHA256
+`52cf04d04e1f7ad6fd1614d10c23a7987141dab6792f2e0b761d3a8a82f255f0`,
+binds exact source 229dde/test9595/helper bdb2 and current assets/packages/settings.
+Original APIs verified it, unreviewed/unaccepted enforcement refused, and actual
+native startup Cancel returned None with unchanged governance/pdf_parser=None.
+Fresh candidate-copy verification recomputed counts and checked every frozen,
+active and preserved prior 7869 candidate byte hash. Owned 31481/31494/31506 are
+absent/jobs empty; primary/cleanup error lists are both empty. Supervisor 33722
+stays empty and Ollama 1290/43844 PID/creation identities remain unchanged.
+No activation/Accept/lifecycle/model/PDF/Docker/Git/Context actions, source/test
+edits or repeated core/build suite. Independent candidate review precedes the
+root-owned separate activation gate. Full hash/command/evidence appendix is in
+`.superpowers/sdd/tax-final-preparation-report.md`; original 7869 candidate and
+earlier failed/limited workflow evidence remain unchanged.
+
 **Present whole-branch I1/I2/M1 correction passed final source review and core/build checks.**
 The independent complete correction review resolved all original and interim
 findings, with no remaining concrete source findings. Root ran locked offline

@@ -1667,3 +1667,183 @@ no real bind or extra model field. This is the same original-socket ownership ru
    early CLOSED then no-op refusal. Cancellation/timeout/HTTP/error payload controls
    preserve first error and ownership. Locked offline focused/import/helper/prefix/
    diffcheck/fresh-eyes checks only; no live model/scanner/Docker actions.
+
+## Current 229dde measured preparation candidate only
+
+1. Data model: reuse current Settings/PreparedRuntime/CalibrationProfile and raw
+   original 24+24 disjoint labelled synthetic corpus; 12 benign/12 private each,
+   excluding canaries. Freeze source 229dde3db6a9feb72a6dc5598b65519f00e937fcb6289c225d092ab3d98382ee,
+   tests 9595c45afbf853562fad921ec3f26b84f940b729c326496d68e755995b2f1b27
+   and unchanged helper bdb2e1c4f044623bc375e3c35bc65a7791a110388118c45e74eb9b93741c8172.
+   Preserve pii 0.3 / policy 0.5/empty overrides/reassembly fraction 1.0, all governance/hard
+   caps and actual pdf_parser=None. Fresh profile reviewed=false, acceptance=None.
+   Owner-only evidence preserves raw findings/timestamps/labels, scoped backups,
+   binding and artifact hashes, primary errors separate from cleanup failures.
+   Original 7869 candidate and runner remain byte-identical historical evidence.
+2. API contract: read current APIs/config/assets and prior runner/report first;
+   validate stale trusted settings directly only for low-level measurement.
+   Fresh memory/process/cache/Ollama GET metadata gate requires empty runtimes,
+   no occupied scanner/worker and at least 6 GiB available for owned scanner.
+   Preserve shared services/model, allow ordinary expiry without reload; no
+   inference/load/unload/interrupt. Actual SRTLauncher/ScannerService required
+   initialization and positive/negative canaries precede exactly one scan per
+   original corpus item at fixed thresholds. Compute errors from fresh results;
+   no copied counts/rebinding/tuning. Build exact current-source candidate via
+   actual calibration_binding, package/asset pins and measured timestamp/corpus.
+   Original prepared_settings/load_calibration must verify; calibrated_settings
+   must refuse enforce without acceptance. Real startup UI must display measured
+   results/unchanged governance/native-parser notice; only Cancel returns None,
+   starting nothing. Owned cleanup/absence/preservation are independently checked;
+   any measurement/cleanup error prevents valid candidate. Freeze runner/candidate
+   and stop for independent review/root handoff before activation/Accept.
+3. Location: HOW/VALIDATION and append original tax-final-preparation-report.md;
+   new private /private/tmp/airlock-final-preparation-229dde.py and unique root
+   with source/settings/manifest/profile/corpus/results/backups/preview/index.
+   Source/tests/dependencies, active manifest/assets/settings/profile/plugin and
+   SQLite acceptance stay read-only. No Git/Context/Docker/lifecycle/delegation.
+4. Tests: fresh healthy canaries/one generation/no detector failures, disjoint
+   corpus/counts and independently recomputed errors, exact source/test/helper/
+   config/packages/assets binding, unreviewed/unaccepted refusal and native Cancel.
+   Byte comparisons cover current active files and original 7869 candidate. Verify
+   exact owned process absence/jobs empty and shared PID/creation identity retained;
+   primary/cleanup errors kept separately. Self-review/frozen independent candidate
+   review precedes root-owned activation/nativeAccept. No repeated 377 core/build
+   suites and no tax/PDF readiness claim; original build-cache failure stays history.
+
+## Private 229dde activation runner: static preparation only
+
+1. Data model: frozen candidate /private/tmp/airlock-final-229dde-435zqeez,
+   source 229dde3db6a9feb72a6dc5598b65519f00e937fcb6289c225d092ab3d98382ee,
+   tests 9595c45afbf853562fad921ec3f26b84f940b729c326496d68e755995b2f1b27,
+   profile 52cf04d04e1f7ad6fd1614d10c23a7987141dab6792f2e0b761d3a8a82f255f0,
+   frozen index cd57fa6f39d302564de3c1102bc7e2e78e52f55504b8e57f4c482447403374b7.
+   Independently recompute metrics from actual frozen findings/labels; compare
+   profile/summary. Preserve .3/.5/empty overrides/reassembly1/parserNone, packages,
+   assets/governance/hard caps, reviewedfalse/global acceptanceNone. Private scoped
+   backups/evidence retain active bytes, dummy identity/contents, process creation
+   identities, metadata/residency, runtime/jobs and separate primary/cleanup errors.
+2. API contract: execution held until root candidate/script gates and explicit
+   handoff. Fresh available memory >=6GiB, empty runtimes/jobs/no unknown scanner/
+   worker gate; verify old supervisor33722 creation1790960090.008094, repo path and
+   c639 source ping. Preserve Ollama serve1290 creation1790953712.354191; GET tags/ps
+   records current residency, permitting normal expiry without intervention. Only
+   three targets receive atomic owner-only writes/readback. Original current
+   prepared_settings/load_calibration verify; calibrated_settings refuses global
+   unaccepted settings. Immediately reverify exact empty old supervisor before one
+   normal stop_all, wait for exact absence, ensure_supervisor starts current source.
+   Native startup run_async in root PTY requires normal keyboard activation of the
+   existing Accept button after rendered-screen inspection. No pilot, .exit, handler
+   invocation, forceaccept or flags. Cancel starts nothing; changed settings refuse.
+   Accepted exact settings/runtime config version and saved governance preferences
+   evidence local acceptance; preferences expose no calibration acceptance field.
+   Start dummy, verify READY/scanners healthy/tasks and approvals empty, then one
+   normal owned stop and separate process/job absence/preservation checks. Unknown
+   start outcome or uncertain stop never retries mutations; preserve for root.
+   Nonexclusive ModelService tags/show metadata health cannot preload/unload; no
+   inference/task submitted. Keep primary errors and cleanup observations separately.
+3. Location: HOW and original tax-final-preparation-report.md; new owner-only
+   /private/tmp/airlock-activation-229dde.py and later unique private evidence root.
+   Later only repo/runtime.manifest.json and existing airlock-runtime/
+   {prepared-settings.json,calibration-profile.json} activate. Frozen candidates/
+   runners/source/tests/deps and VALIDATION unchanged. Root owns external-file
+   permission, PTY/native input; no Git/Context/Docker or alternate-surface retry.
+4. Tests: now static AST parse/self-review/hash only, no runner execution. Later
+   frozen artifact/disjoint count/binding/refusal/pin checks, native exact Accept or
+   Cancel, current-source ping, saved preferences/READY/healthy scanners, owned stop/
+   jobs absence and shared service identity. Existing residency may expire normally;
+   new/replaced model runners are recorded as ambiguity, never called unchanged.
+   No global approval, broad tests/build repeats, inference or tax/PDF readiness.
+
+### Dummy fixture permission correction before activation retry
+
+1. Data: the existing two exact synthetic dummy input files, original modes 0644,
+   new modes 0600; directory remains 0700, contents and identities unchanged.
+   Retain the first failed activation evidence with primary/cleanup unsafe_state.
+2. API: native chmod changes only these fixture permissions. No source guard is
+   changed. The first attempt failed at dummy_snapshot before activation or any
+   lifecycle mutation; retry reruns fresh gates and normal native acceptance.
+3. Location: /private/tmp/airlock-dummy-workspace/public-note.txt and
+   synthetic-private.txt only; existing activation runner remains unchanged.
+4. Tests: inspect original ownership/modes/content; verify owner-only modes after
+   chmod. Existing exact snapshot/content/identity and guarded activation checks
+   remain binding. No uncertain mutation is retried or historical failure erased.
+
+## Private current-source text integration: static runner only
+
+1. Data model: fixed source229dde/test9595/profile52cf pins and actual installed
+   bridge bound to /private/tmp/airlock-dummy-workspace. Preserve existing two0600
+   fixture identities/bytes and history. Ten bounded tasks cover cases1/2/4/5/6:
+   revised and signed local artifacts, selected wages, financial Deny, missing and
+   ambiguous artifacts, identifier/full/forged withholding, clean arithmetic.
+   Reuse financial_golden_cases raw text; remove printed derived nets from revised/
+   signed fixtures, retaining identity/account/sign/revision/absence/ambiguity.
+   New inputs tax-{revised,signed,missing,ambiguous,forged}.txt; only new artifacts
+   tax-{preparation,signed,selected,denied,missing,ambiguous}.json. Refuse existing
+   names; no overwrite. Independent Decimal oracles and exact physical source quote
+   verification determine usefulness. Owner-only evidence keeps original request/
+   disclosure/IDs/counters, native exact proposals/votes, truthful supporting raw
+   hints/original requests, canonical publication/raw-rendered findings, artifact
+   bytes/digests, scoped committed ledger observations and process/cleanup identities.
+2. API contract: root static gate/runtime slot precedes all execution/inference.
+   Fresh >=6GiB available, exact already-resident pinned model metadata, empty
+   runtimes/jobs/no unknown scanner/worker; shared Ollama service unchanged, no
+   explicit model load/unload/change. Actual load_settings/prepared_settings verify;
+   root PTY run_async Accept reviews fixture-only manual request/read/write/release,
+   enforce and visible workspace writes, shell hidden/manual. Strict global settings
+   remain unchanged. Start one normal runtime, exact installed StdioTransport/Client
+   ask/status/stop, native Coder/model/scanners/SRT. Real make_tui/run_test review
+   widgets may receive local field input and click existing controls; never invoke
+   selection/verification handlers directly. Request/read/write proposals are exact
+   and path-scoped; deny shell/outside/other writes. Selected wages must actually
+   reach financial_selection, include every observed matching current occurrence
+   with truthful original hint/context/input/artifact, real ordinary raw/rendered
+   scans, canonical {"wages":"1150.25"}, Verify-and-Approve once; actual financial
+   Deny must reach financial_review. Ordinary undeclared release is a detection
+   limitation, not selected success. Retain collisions/hints/history; no retries to
+   manufacture output. Same request_id/content must reuse committed task/result/
+   counters/consumption without work or repeated consent. Timeout stops exact task
+   once and fails; uncertain mutation never retries. Failed component/cleanup stops
+   subsequent inference with NEEDS_CONTEXT and exact task/job/process observations;
+   no speculative hook/restart, no claim original preconversion cause was captured.
+   Root explicitly resolved this diagnostic limit. Stop only owned runtime once;
+   primary errors and independently attempted cleanup/preservation remain separate.
+3. Location: HOW, new tax-final-integration-report.md and owner-only
+   /private/tmp/airlock-final-text-integration-229dde.py; later unique private results
+   and named fixture inputs/artifacts. Source/tests/deps/active settings/profile/
+   manifest/plugin unchanged; no history deletion/Git/Context/Docker. PDF3 held.
+   Root permits narrow sqlite3 URI mode=ro/query_only reads without StateStore:
+   parameterized source_registration(source_ref,registration_ref,workspace_ref,
+   task_ref,evidence_ref,origin_ref), source_contribution(source_ref,registration_ref),
+   global_ledger(source,length,geometry,algorithm), shared_financial(source_ref,
+   registrations_ref,consent_ref) only for sources from current UI occurrence refs;
+   financial_consumption(consent_ref,task_ref,review_ref) only exact current taskHMAC.
+   No SQL writes/migration/acceptance injection/unrelated history. HMAC key used
+   privately, never saved. Root independently checks committed evidence afterward.
+4. Tests: static AST/hash/fixtures-oracle and UI/scope guards only now, no runner
+   import/execution. Later local correct Decimal artifacts/quotes/fixed receipts,
+   actual selected canonical publication and private withheld identities, real Deny,
+   missing/ambiguous no fabricated values, exact clean arithmetic, durable same-ID
+   positive and one-use consumption/complete geometry/contribution rows. Real
+   raw/rendered scanner findings retained; omitted hint or blocking scanner/collision
+   is recorded at its layer without weakening. Verify worker/helper process absence,
+   registry/scratch disposition, immutable original fixtures/source/profile/plugin/
+   shared services and separate errors. No tax readiness; natural gate remains later.
+
+### Text runner static correction wave: three bounded changes
+
+1. Data: retain the original 496-line runner/hash01ea00c547d6ec595646355eabfa22c26f70cd1424eb006ec42513cc4ec771f9
+   owner-only before edits. Publication sentinels are the union of every golden
+   forbidden value plus existing dummy SSN734-52-1986; prior checks remain.
+2. API: fixture-only native startup explicitly sets shell visibility hidden and
+   verifies hidden/manual after Accept. First selected-wages positive requires
+   nonempty actual raw/rendered reassembly findings. Subsequent selected-Deny may
+   have empty findings under approved fully-shared repeat suppression; both still
+   require actual financial_selection -> financial_review, healthy ordinary scans,
+   no non-reassembly findings, exact Deny and unchanged committed ledger state.
+   No fabricated warning, source/history/configuration change or production fix.
+3. Location: only HOW, private runner and original integration report. Preserve
+   original under /private/tmp/airlock-final-text-integration-229dde-01ea00c547d6.py.
+4. Tests: targeted static AST/delta/hidden-manual assertions, first-positive versus
+   subsequent-Deny empty/nonempty/non-reassembly controls and union-sentinel
+   assertions. No runner import/main, inference/runtime/fixture/core-suite actions.
+   Root rereads frozen minimal delta/hash before any execution handoff.

@@ -4,6 +4,29 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+**The separately corrected missing/ambiguous local evaluation passed both cases.**
+With unchanged source/settings and fresh request IDs, the missing artifact contains
+`interest_income: null` and no alternatives. The ambiguous artifact contains null
+and both exact decimal-string alternatives, without choosing a final value. Both
+retain the complete verbatim source line, omit private synthetic identity/account,
+and pass the original physical-file oracle. The ambiguous task first wrote the
+wrong structure, then corrected it after reading
+its own artifact; only the final file passes, not every intermediate write.
+Each fixed completed/null receipt and same-ID replay passed without additional
+model/tool/token work or financial consent.
+The tasks used respectively five model requests/four tools and seven/six. Startup
+acceptance used native keyboard input; task votes were automated native Textual
+handlers. Four exact-task diagnostic captures returned diagnostics_unavailable;
+there were no primary, diagnostic or cleanup errors. Normal owned stop left no
+runtime, jobs or seven recorded owners alive. The ten prior files and all frozen
+source/config/preparation/model pins remained unchanged; only the two new artifacts
+were added. Evidence:
+`/private/tmp/airlock-missing-ambiguous-renderwait-df776-r82g7ee8/evidence.json`
+(SHA256 `7853c5365dd3e9c2e4e2c6d517c6f0eac67350ba9ce89b96deb906631bc667d0`).
+These local-only passes do not establish signed arithmetic, selected publication,
+the opposite financial vote, PDF support or overall tax readiness. The original
+display-synchronization failure below remains preserved.
+
 **The missing/ambiguous local evaluation stopped at a harness synchronization gap.**
 Only the missing task's request-Allow vote was recorded before the assertion
 `Exact displayed row unavailable`. The UI refresh handler can return while another

@@ -4799,7 +4799,7 @@ def contextual_policy_adapter(tmp_path, monkeypatch):
         'Flag non-public legal disputes, settlements, lawsuits, or investigations.',
         'Flag addiction, recovery, or substance use information about a person.',
         'Flag private immigration or visa status.',
-        'Flag disclosure of company information that is confidential or has not been publicly announced.',
+        'Flag disclosure of non-public company information that is confidential or has not been announced, such as confidential plans, internal financial results, a pending acquisition, or an internal investigation.',
     )
     prefix = 'Policy:\n' + '\n'.join('- '+rule for rule in rules) + '\n\nText:\n'
     class Tokenizer:

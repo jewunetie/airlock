@@ -4,6 +4,18 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+**Current working source restores the first reviewed contextual wording.**
+After saving the rejected 96-case experiment in Git at `8a674c0`, only the company-rule
+literal and its fixture expectation were restored. Full source/test byte hashes
+again equal `873e634c`/`1fc118dd` from checkpoint `bcfb6bf`. Independent restoration review,
+the fresh full **423-check locked suite**, offline builds and exact archive checks
+passed. Its scanner behavior was measured in the recorded 64-case run below;
+the 80/96-case results remain rejected experiment evidence and do not describe
+the restored source. Its targeted benign false blocks remain unresolved. No candidate
+profile was accepted or activated, and active settings/assets/model/supervisor
+state were not changed. Further policy or scanner-backend changes require their
+own resolved contract; these failed wording experiments are not readiness proof.
+
 **The final example-free company wording was rejected on usability evidence.**
 Source SHA256 `71500729956f69ec2e52c8fbaac939a7720f7a06b3cd8b26b3224e1fb763330c`
 and tests SHA256 `a7417f5d85b5d9f19ded9a682bb912518b9142a8bc132539464b7923c0ca804a`

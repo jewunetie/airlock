@@ -4,6 +4,26 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+**Local artifact and outbound-format prompt clarification passed review and core checks.**
+Only worker instructions changed: preserve the complete requested local artifact
+structure and source quotes, check the original requirements before finishing, and
+apply the decimal/flat-JSON financial shape to outbound disclosure only. Schemas,
+tools, policy, limits and privacy checks are unchanged. The original incomplete
+artifact and failure remain preserved; the ambiguous prompt is not a proven cause.
+One appended regression verifies the actual serialized ModelRequest instructions
+and full AskRequest, native local read/write with nested quotes, fixed private-work
+receipt and same-ID no-work replay. It fails on the original prompt and passes
+with the clarification. All 402 earlier test bytes are retained unchanged.
+Affected locked offline checks pass 19 tests; root's full suite passes **403 tests**.
+Independent bounded review found no concrete findings. Offline build and archive
+inspection confirm exact current single-module source in wheel and source archive.
+The first inspection assertion omitted the build tool's standard .gitignore file;
+that file was read and verified unchanged before the corrected archive check passed.
+No dependency change or download. Scripted replies establish delivery and native
+handling, not real-model compliance. This source change invalidates the prior
+scanner binding; fresh measurement, acceptance and live provenance checks remain
+required before readiness can be claimed.
+
 **Exact library repair passed; the next live artifact failed the requested completeness check.**
 The two independently backed-up preparation dictionaries gained only the resolved
 PCRE2 10.49 library read grant. Effective settings and calibration binding stayed

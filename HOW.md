@@ -2222,3 +2222,44 @@ records the exact assertions and original failure.
    Root owns model/process slot and explicit execution/external-write handoff. No
    source imports, execution, runtime/model/scanner or external writes during writer
    static turn; no new broad suites/calibration/preparation.
+
+## Local provenance versus outbound financial representation: approved prompt wave
+
+1. Data: entities/fields/types unchanged: AskRequest raw request/disclosure_request,
+   LocalOutput response/protected_sources, native tool arguments/artifacts, governance,
+   privacy state and all limits. Preserve failed8ejpl1c8 evidence/artifact and seven
+   fixtures, all previous runners/evidence, active exact PCRE2 file grants. The
+   observed correct three amounts with omitted sources is an original usefulness
+   failure; prompt ambiguity is supported, its causal role is not proven.
+2. API: ONLY run_coder worker instructions gain these literal clarifications:
+   'For local files, follow the original task\'s full requested structure and provenance, '
+   'including exact source quotes when requested, subject to local tool policy. '
+   'Before returning LocalOutput, check completed local work against every explicit '
+   'requirement of the original task and correct omissions using permitted tools. '
+   Existing financial sentence becomes 'For outbound disclosure of requested exact '
+   'financial fields, propose a standalone exact decimal string or a flat JSON '
+   'object of decimal strings and retain truthful protected sources. '
+   Its following representation grants no release authority as before. Empty response
+   for no disclosure, protected source instructions and Airlock tool/disclosure policy
+   authority remain byte-for-byte. No extra judge/validator/model call, schema/tool/API/
+   policy/limit/reminder changes. Self-check is worker instruction, not a verified
+   completion assertion or a grant to disclose/local-write.
+3. Location: production run_coder worker instructions in airlock.py; ONE appended
+   test in test.py; this HOW and private .superpowers/sdd/tax-local-provenance-prompt-report.md.
+   Preserve every original test byte/assertion. No VALIDATION (root owns it), active
+   settings/manifests/profile/plugin/assets/dependencies/history/Git/Context/Docker or
+   runtime/model/scanner mutation. Source change invalidates current calibration
+   binding; root full review/tests/build/new measurement precedes any activation.
+4. Tests: appended actual native Coder scripted regression based on the existing
+   financial-local-artifact harness. Assert first emitted ModelRequest instructions
+   contain exact local structure/provenance/self-check/outbound-only clauses plus
+   unchanged privacy instructions; parse UserPromptPart JSON and assert complete raw
+   AskRequest equality including source-quote requirement. Actual native read/write
+   produces nested sources with exact quotes, omits synthetic identity/account, and
+   returns empty response with truthful protected sources. WorkspaceRuntime.execute
+   publishes only fixed content-free receipt, scanner calls0, no approvals/sharing;
+   exact-ID replay does no work. Locked offline red on original prompt then green on
+   clarified prompt; affected existing native financial/Coder tests unchanged. Static
+   original-test-prefix/hash/helper/import/diff checks and full fresh-eyes review.
+   Scripted tool replies prove delivery/native behavior, not real-model compliance.
+   No live task/rerun/inference/measurement or broader checks by writer.

@@ -35,6 +35,76 @@ errors. Evidence is retained at
 its verified index SHA256 is
 `ff0d10b3cf26c8666af839ed676b6ba11270e44df2d19b3255368abd8be08e7f`.
 
+On 2026-10-04, the operator explicitly approved deletion of the exact retained
+never-started PDF test container in message
+`01a109a7-c5d3-7262-9f8b-284bbd41ab67`. Revalidation matched the original daemon
+ID/version, immutable container ID/name/image, complete image-default and owned
+labels, and created/nonrunning state with PID zero and zero start timestamp.
+Deletion targeted only ID
+`a1cc40a0d0068fc11948801a89c46ffdae2a3e0a8a136dde1c8d78829b418f8e`,
+without force or volume removal. Independent inspections by ID and name both
+returned 404. Original durable failed record and assets were retained unchanged.
+Owner-only before/delete/after evidence is at
+`/private/tmp/airlock-approved-pdf-cleanup-po4i8gcj`. This resolves the explicit
+cleanup hold; it does not establish usable PDF parsing or change the original
+failed integration result.
+
+**Resumed R8 verification passed 29 parser cases, then failed the Coder route.**
+The fully reread unchanged runner `569fe05b` used current source `4cd37657`, the
+existing fixed daemon/image and a freshly derived source-bound helper. Actual
+parser startup, signed multi-page forms, Unicode/null/missing/qualified fields,
+malformed/XFA/encrypted/blank refusals, smaller caps, raw framing, and maximum
+524,288-byte Unicode output all passed, including independent exact-owned
+container/host/pipes/job cleanup for these cases. No model inference occurred.
+
+The first actual SRT/Coder manual signed-form case committed
+failed/component_unavailable/null before any PDF job or read approval. Its worker
+observer retained three identities but missed worker_owned_paths; the later
+cleanup observation raised KeyError. Missing expected PDF-job observations also
+failed. The original component failure's cause is not established. Later paging,
+manual Deny, stale-vote, channel and lifecycle cases were not reached. No blind
+retry or activation occurred, and the overall result remains FAILED.
+
+The parent waited for the exact runner to exit and independently verified
+unchanged original global service identities/state, all retained file snapshots,
+old PDF failure record/bundle/policy, cleanup and Gemma evidence, and all twelve
+dummy fixtures. No original records were recovered or rewritten. These checks
+prove preservation during this execution, not successful Coder workflow cleanup.
+No owned job records remain in the new test directories, but missed worker path
+observation prevents a complete worker scratch/profile absence claim.
+Private results are at `/private/tmp/airlock-r8-final-ngke01no/results.json`, SHA256
+`b02d1a6b6b2ba94783f436d2eaa0f3a5c2fa3447170a03ccc641e66e2c3012b5`;
+parent evidence is `/private/tmp/airlock-r8-parent-z69jrs1c/evidence.json`, SHA256
+`1ea9db78f64443287bcb29fede97e8e15640090ad9911dab9d14ae9d4896e22a`.
+This is partial synthetic parser evidence, not complete PDF or tax readiness.
+
+**The noninterfering observer diagnostic also failed, with a new concrete gate.**
+Deterministic live/gone/AccessDenied controls confirmed the old observer could
+interrupt the real handler. A reviewed private observer now records paths first,
+retains observation errors and forwards the handler unchanged; these changes
+affect only the diagnostic, never production or the original runner/evidence.
+One actual SRT/Coder signed-form case reached manual read approval and an allowed
+tool, but committed failed/component_unavailable/null before a PDF job was created.
+Nine observer NoSuchProcess errors were recorded without interrupting the handler.
+Its separate diagnostic still requires complete observation and remains FAILED.
+
+The parser retained an owned CLI handle with no creation-time identity; this
+confirms PdfParser.record_cli's identity-capture refusal. Cleanup likewise refused
+to certify that missing clock. A short-lived-command exit race is plausible, but
+the original psutil/OSError subtype was not recorded and is not established.
+Observed worker identities and now-retained worker registry/profile/scratch
+absence passed; parser cleanup completeness did not. Global/file/fixture
+preservation again passed independently with no errors, including the preceding
+failed R8 files. No retry, policy weakening or production edit followed.
+
+Evidence `/private/tmp/airlock-r8-coder-diagnostic-_5sji78k/results.json` has SHA256
+`f3938d3434572441ef0b6ff050117d595a002c9e56ca014d8df8b92556ad69b8`;
+parent `/private/tmp/airlock-r8-parent-t3r2vyrb/evidence.json` has SHA256
+`7999e386a8de1aa0285ddee2e481c698d23219c3f654834b51b64b8be401be6e`.
+Whether a confirmed exited/reaped owned CLI may use completion evidence when
+creation-time capture is unavailable is a pending operator contract decision.
+Live/unknown process and daemon/container creation uncertainty stay fail-closed.
+
 The following entries describe earlier checkpoints.
 
 The final locked/offline core suite passed **457 tests** on source SHA256

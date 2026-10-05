@@ -3919,3 +3919,62 @@ fresh-eyes review before committing.
   document hashes allowed to differ. Require exact owned cleanup or record failure;
   diagnostic usefulness is not artifact correctness or tax readiness. A successful
   close again cannot establish the cause of the earlier intermittent error.
+
+## Resumed R8 native PDF verification after approved cleanup
+
+Data: current source hash, exact existing reviewed 719-line R8 runner hash,
+the retained 129-path immutable map, twelve original dummy fixtures and original
+global supervisor/Ollama process identities. Record private before/after snapshots,
+runner exit/log and fixed preservation errors. The original failed PDF job record
+and its bundle remain unchanged after the explicitly approved container removal.
+
+API: a temporary parent invokes the fully reread existing R8 runner with current
+source and verified human cleanup/root handoff references. The runner uses only
+the existing fixed cached daemon/image, current AST-derived helper, synthetic PDF
+cases, original production parser APIs and scripted Coder replies. No inference,
+activation, old-job recovery, global configuration or source mutation. Parent
+checks exact file/fixture/process/global-state preservation independently after
+any runner outcome. A nonzero exit, missing case or cleanup uncertainty stays
+failed; no retry or weakened assertions. Existing parser deadlines/caps remain.
+
+Location: one owner-only /private/tmp parent/evidence directory; existing R8 runner
+unchanged. HOW.md and VALIDATION.md record scope/evidence; production/tests and
+dependencies unchanged.
+
+Tests: full current-session read of runner and relevant parser APIs, fresh parent
+review, fixed hashes before invocation, exact original services still empty and
+model resident, independent final preservation checks even on failure. Require
+the runner's exact-owned container/host/pipes/job cleanup assertions. Scripted
+integration is not native model/scanner/financial disclosure or tax readiness.
+
+### R8 observer failure diagnosis
+
+Data: synthetic runtime/worker/tree/process doubles, an exact psutil.NoSuchProcess
+instance, original reviewed observe_worker AST and callback ordering; retain the
+original failed run. API: execute only the extracted observer with a fake exited
+handle, assert the original exception and missing path observation; compare a
+private diagnostic observer that records paths first and catches observation
+errors while forwarding the original callback unchanged. Observation errors stay
+explicit completeness failures, never successful cleanup evidence. Location: one
+private temporary assert check; HOW/VALIDATION. Production, native runner and its
+evidence stay unchanged. Tests: live-handle positive control, gone-handle failure,
+original callback/result/exception preservation despite observer failure. No new
+native execution or inferred original failure cause is established by this check.
+
+### One corrected-observer Coder PDF diagnostic
+
+Data: one synthetic signed/form PDF, current source and unchanged R8 runner,
+exact successful parser-run candidate settings/helper assets, new private state
+and observation-error list. Preserve earlier failed evidence and every original
+global/file/fixture snapshot. API: import the reviewed runner's existing coder_case
+for this one local-only scripted task; change only its observer to capture owned
+paths first and catch observation errors without changing the original handler.
+Keep exact receipt, tool/vote/grant-replay, PDF job count and independent cleanup
+assertions. Any observation error fails diagnostic completeness even if the task
+succeeds. No inference, global activation, schema/policy/production change or old
+state recovery. Location: new owner-only /private/tmp diagnostic/parent evidence;
+HOW/VALIDATION. Tests: existing positive/gone observer controls plus AccessDenied,
+original outcome forwarding; root full read and fresh review before one execution.
+Outer parent waits the owned diagnostic and independently audits preservation.
+This replaces no case in the original failed suite and cannot establish that
+observer failure caused the original native failure or complete R8 readiness.

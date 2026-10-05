@@ -36,10 +36,20 @@ A live worker rerun successfully completes read_liteparse begin/chunk/end withou
 identity errors and closes worker/parser/model clients cleanly, but the third
 model reply times out under the diagnostic60-second cutoff, before any artifact:
 `/private/tmp/airlock-live-document-worker-c67f100230e24d5fac61182d678690c0/evidence.json`.
-That run predates the added final held-CLI hash recheck. A final-source diagnostic
-with the existing prepared180-second model timeout is separate evidence. Neither
-run accepts a profile or activates global settings. Live artifact/selected release,
-table fidelity and Docling acquisition/native fit remain open.
+That run predates the added final held-CLI hash recheck. The final-source live
+SRT/resident-Gemma rerun with the existing prepared180-second model timeout passes:
+eight model calls, six tools, manually approved scan read, exact wages1250.25,
+expenses(250.10), adjustment-15.05, net985.10 and reference001234 in the private
+artifact. Independent assertions verify task completion, response:null (fixed
+receipt only), original scan bytes, no identity failures/jobs and all three
+component closes. Evidence:
+`/private/tmp/airlock-live-document-worker-e69b8db1306b4e0787f1866d0efdbca6/evidence.json`,
+SHA256 `1b9441ed2134adfc7821686c3db6fbfd44de461dbc2950c3b05d75cccdec1154`.
+Artifact SHA256: `19f9d97dd7839be82446c0b4db85018de5e66c7b70d3425194589dc7edffd78c`.
+Prepared settings, calibration and plugin hashes remain unchanged. Neither run
+accepts a profile or activates global settings. This synthetic all-local positive
+does not establish selected release, table fidelity, scanner accuracy or tax
+readiness. Docling acquisition/native fit also remain open.
 
 ### Named document tools and owned parser integration, 2026-10-05
 

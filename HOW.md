@@ -41,6 +41,30 @@ unchanged inputs, exact local amounts/totals/source context, empty all-local
 outbound response, exact selected approval/denial and fail-closed scanner behavior,
 and worker/parser/model-client cleanup with original resident services preserved.
 
+### Private live selected-field approval and denial
+
+Data: copy the independently verified synthetic scan and local JSON artifact into
+fresh private workspaces/history; request only wages1250.25 and net_total985.10.
+Retain exact source/artifact bytes, occurrence refs, raw financial context, config
+and human-test decisions. Use the existing pinned resident worker and prepared
+scanner assets, with original enforce/privacy/manual-release rules. No acceptance
+or activation; these are method checks before production startup approval.
+API: actual SRT/model task execution and ScannerService scans; allow exact read
+votes, then approve or deny only the requested proposal in separate cases. If the
+existing financial_selection route is reached, supply fixture-verified exact
+occurrence/file proofs through select_financial/verify_financial before the final
+vote. Scanner findings/failures still withhold; no bypass, fake scanner, automatic
+global consent or broader field release. Record any failed/missing stage honestly.
+Location: one private /private/tmp runner and case workspaces/evidence; HOW and
+VALIDATION only in the repo. Tests: fresh read/review before execution, actual
+scanner health/positive controls, exact selected JSON values and no other fields,
+denial returns no content, source/artifact/global hashes unchanged, finite existing
+model/resource budgets and full owner/scanner/client cleanup. A synthetic test
+reviewer cannot establish real financial-document accuracy or user acceptance.
+The root records global/resident-model preservation independently of the runner.
+An additional direct real-scanner/Egress identifier negative must withhold before
+approval; label it separately from the actual worker/model selected-field cases.
+
 ### Shipped parser selection and owner integration
 
 Data: retain the existing optional pypdf route and add trusted

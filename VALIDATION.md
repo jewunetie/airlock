@@ -4,6 +4,62 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+### Document parser feasibility and CSV contracts, 2026-10-05
+
+The selected scope is PDFs/images with local OCR and table extraction, plus CSV;
+Word/Excel are extras. Docling2.133.0 and LiteParse2.15.1 were installed only in
+an isolated development environment. Matching the project's locked Torch2.13.0
+and Transformers5.15.1 requires torchvision0.28.0; `uv pip check` passes there.
+Docling converter import used approximately357MB resident memory before models.
+Neither imports nor dependency checks establish parser accuracy or memory fit.
+
+Real LiteParse OCR ran on an owned synthetic scanned PDF and an in-memory
+converted PNG in the existing immutable Linux image under512MiB memory/AS,
+15-second CPU, FSIZE0,32-process, nonroot/read-only/network-none confinement.
+The private syscall profile adds only eventfd2 and AF_UNIX-restricted socketpair
+for internal Tokio notifications. Actual IPv4, IPv6 and Unix socket creation
+remained denied. Every exact disposable container was independently absent after
+cleanup; production profiles and global settings were not changed.
+
+Both successful routes retained Wages,1250.25,(250.10),-15.05 and001234 exactly,
+with OCR word/page boxes. Peak RSS was63028KiB for the scanned PDF and115932KiB
+for the in-memory PNG route. The fixture's explicit200-DPI mapping is not general
+image orientation/DPI validation. Direct PNG parsing failed on a temporary-file
+write, correctly withheld under existing limits. **Neither positive produced
+table blocks**; paragraph/spatial text does not prove required table extraction.
+Evidence is `/private/tmp/airlock-document-feasibility-20261005/scan-evidence.json`,
+SHA256 `0d833e379a318b46fd73c3ecf9292229b20f94b3bbccb8888b9512903010ff66`;
+the complete fixture/package manifest SHA256 is
+`2091ee6f3b0979d8a7422ca89ddd28ee942523e7c1c8507b79831ea952fbad3e`.
+These are native parser feasibility checks, not shipped owner/Coder integration.
+
+The new CSV reader preserves raw string cells and complete row source text,
+including BOM/CRLF/multiline/blank rows and physical line ranges. It uses existing
+bounded SRT reads, Coder approval/accounting and final release policy. Focused
+actual Coder allow/manual-allow/deny/disabled/manual-deny checks pass, with a
+forwarding reader spy proving no reads before approval or on denied calls.
+Fresh review found the negative-Coder coverage gap and a quoted-first-cell BOM
+case; both now have regression coverage, and BOM remains in original source text.
+The full locked suite passes **547 core checks**, with eight existing provider
+HTTP-client deprecation warnings and no skips or failures. Root source SHA256 is
+`8b16ccf48ed4d3cedcb00b97e2193f2e188764c4c5378332ab53c0b659fe08b3`,
+tools SHA256 `d1da1542667c1975b14e848a5535507598a0953aef65bed31556662f5c3e6d4d`,
+and test SHA256 `d7b3fcd0e6d359e95208a5f5cec25696012c11400a8aa77d5a5faddc4a086bc7`.
+Complete output is `/private/tmp/airlock-csv-full-20261005.log`. A final review
+also corrected marker-only BOM reconstruction and negative-test owner cleanup;
+the final static rereview found no remaining actionable code defect.
+Final wheel/sdist builds and exact two-module/source-byte/entrypoint checks pass.
+An isolated installed-wheel import verifies CSV BOM/quoted values, source context,
+enabled registration and CLI help. Complete build output is
+`/private/tmp/airlock-csv-build-final-20261005.log`; archive and installed evidence
+are in `/private/tmp/airlock-csv-build-final-20261005/`. The active environment,
+plugin binding and global services/configuration were not replaced or activated.
+
+Docling's pinned layout/table assets are not acquired; its asset decision remains
+pending. Required table fidelity, complete image bounds/orientation, shipped
+OCR owner/approval integration and the full local/selected-release tax workflow
+remain unverified. No scanner calibration acceptance or global activation occurred.
+
 ### Operator tool module and extension contracts, 2026-10-04
 
 The approved independent tool slice passes **525 locked core checks**, with eight
@@ -47,7 +103,7 @@ no production safeguard or assertion was relaxed.
 
 Docling/LiteParse adapters, OCR/table accuracy and their native confined execution
 are **not implemented or validated by this checkpoint**. The first supported
-document-format/OCR scope remains a pending question in Airlock Project Status.
+document-format/OCR scope was subsequently resolved on2026-10-05 as recorded above.
 Old single-module prepared manifests/calibration are incompatible with this source;
 these checks do not accept or replace any real scanner profile.
 

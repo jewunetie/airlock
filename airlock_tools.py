@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import hashlib
+import csv
 import inspect
+import io
 import json
 import os
 from pathlib import Path
@@ -16,7 +18,7 @@ from typing import Any, Literal
 from jsonschema import Draft202012Validator, SchemaError
 from pydantic import BaseModel, ConfigDict, Field, StrictStr, model_validator
 
-DEFAULT_TOOLS = ('read_file', 'write_file', 'edit_file', 'list_files', 'grep', 'shell', 'calculate')
+DEFAULT_TOOLS = ('read_file', 'write_file', 'edit_file', 'list_files', 'grep', 'shell', 'calculate', 'read_csv')
 BOUNDARIES = {name: 'shell' if name == 'shell' else 'write' if name in ('write_file', 'edit_file')
               else 'read' for name in DEFAULT_TOOLS}
 SCHEMA_KEYS = frozenset({'type', 'properties', 'required', 'additionalProperties', 'items', 'enum',
@@ -26,6 +28,59 @@ SCHEMA_KEYS = frozenset({'type', 'properties', 'required', 'additionalProperties
 
 class ToolContractError(ValueError):
     """Fixed local tool-contract failure, without private paths or exception text."""
+
+
+def csv_document(data: bytes, max_text_bytes: int) -> str:
+    """Preserve UTF8 CSV string cells and exact original physical row text locally."""
+    try:
+        text = data.decode('utf-8')
+        physical = io.StringIO(text, newline='').readlines()
+        reader_text = text.removeprefix('\ufeff')
+        if text and not reader_text:
+            reader_text = '\n'  # Preserve a marker-only source as an empty row.
+        reader = csv.reader(io.StringIO(reader_text, newline=''), strict=True)
+        output, used, start = [], 0, 0
+        for index, cells in enumerate(reader):
+            line = json.dumps({'row':index, 'cells':cells, 'source_start_line':start+1,
+                'source_end_line':reader.line_num,
+                'source_text':''.join(physical[start:reader.line_num])}, ensure_ascii=True)
+            used += len(line.encode('utf-8')) + 1
+            if len(line) > 59000 or used > max_text_bytes:
+                raise ToolContractError('csv_output_limit')
+            output.append(line)
+            start = reader.line_num
+        return '\n'.join(output)
+    except (UnicodeError, csv.Error):
+        raise ToolContractError('csv_invalid_document') from None
+
+
+def csv_tool(read_bytes, page_text, max_text_bytes: int):
+    """Build the CSV tool using the worker's existing bounded filesystem reader."""
+    from pydantic_ai import Tool
+    from pydantic_ai.exceptions import ToolFailed
+
+    def read_csv(path: StrictStr, offset: int = 0, limit: int | None = None) -> str:
+        """Read comma-delimited UTF8 CSV as raw string rows with source provenance.
+
+        Args:
+            path: Local .csv file within the workspace or granted private scratch.
+            offset: Zero-based logical row to start reading, never a byte offset.
+            limit: Optional positive row count, bounded by the local read window.
+
+        Returns:
+            Paged JSON rows with cells, exact source_text and physical line ranges.
+            No numeric conversion, header inference or formula evaluation occurs.
+            Invalid CSV, unsafe files and size/window errors produce a fixed local
+            failure; this read does not authorize disclosure or additional tools.
+        """
+        try:
+            if Path(path).suffix.lower() != '.csv':
+                raise ToolContractError('csv_invalid_document')
+            return page_text(csv_document(read_bytes(path), max_text_bytes), offset, limit)
+        except Exception:
+            raise ToolFailed('The local CSV cannot be read with these settings.') from None
+
+    return Tool(read_csv, takes_ctx=False, sequential=True)
 
 
 class ExtensionSpec(BaseModel):

@@ -1726,7 +1726,7 @@ def test_source_cli_help_and_fixed_invalid_command():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('manual', [False, True])
-@pytest.mark.parametrize('tool', ['read_file', 'calculate', 'custom_echo'])
+@pytest.mark.parametrize('tool', ['read_file', 'read_csv', 'calculate', 'custom_echo'])
 async def test_actual_coder_tools_and_approval_hook_contract(tmp_path, manual, tool, monkeypatch):
     from pydantic import TypeAdapter
     from pydantic_ai.messages import ModelResponse, ToolCallPart
@@ -1735,6 +1735,15 @@ async def test_actual_coder_tools_and_approval_hook_contract(tmp_path, manual, t
     monkeypatch.setenv('TMPDIR', str(scratch))
     document = tmp_path/'synthetic.txt'
     document.write_text('Synthetic local file read positive control')
+    if tool == 'read_csv':
+        document = tmp_path/'synthetic.csv'
+        document.write_text('category,amount\nexpense,"(250.10)"\n')
+    csv_reads=[]
+    original_read=a.read_media_bytes
+    def tracked_read(*args,**kwargs):
+        csv_reads.append(args[1])
+        return original_read(*args,**kwargs)
+    monkeypatch.setattr(a,'read_media_bytes',tracked_read)
     policy = a.Governance(request='allow', read='deny' if tool == 'calculate' else 'manual' if manual else 'allow', write='allow', shell='allow',
                           write_visibility='visible', release='auto')
     fixture = Fixture(tmp_path, policy)
@@ -1765,7 +1774,8 @@ async def test_actual_coder_tools_and_approval_hook_contract(tmp_path, manual, t
                             else {'context':'Semantic context retained'} if tool == 'custom_echo' else {'path':str(document)})
                     part = ToolCallPart(tool, args, tool_call_id='read-1')
                 else:
-                    expected = '-15.05' if tool == 'calculate' else 'Semantic context retained' if tool == 'custom_echo' else 'Synthetic local file read positive control'
+                    expected = ('-15.05' if tool == 'calculate' else 'Semantic context retained' if tool == 'custom_echo'
+                                else '(250.10)' if tool == 'read_csv' else 'Synthetic local file read positive control')
                     assert expected in str(value['messages'])
                     part = ToolCallPart(params['output_tools'][0]['name'],
                                         {'response': 'Synthetic result', 'protected_sources': []})
@@ -1774,6 +1784,7 @@ async def test_actual_coder_tools_and_approval_hook_contract(tmp_path, manual, t
                 return await fixture.runtime.worker_message(task, {'op':op, 'payload':value})
             if op == 'approve_tool':
                 assert not import_marker.exists()
+                assert not csv_reads
                 pending = asyncio.create_task(fixture.runtime.worker_message(task, {'op':op, 'payload':value}))
                 while not fixture.runtime.approvals.pending:
                     await asyncio.sleep(0)
@@ -1801,6 +1812,63 @@ async def test_actual_coder_tools_and_approval_hook_contract(tmp_path, manual, t
     assert [value['approved'] for value in checks] == ([False, True] if needs_approval else [False])
     assert [value for op, value in channel.calls if op == 'tool_finished'] == [{'id': 'read-1'}]
     assert task.tool_calls == 1 and 'read-1' in task.consumed
+    assert csv_reads == ([str(document)] if tool == 'read_csv' else [])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('mode', ['deny','disabled','manual_deny'])
+async def test_actual_coder_csv_denied_without_read(tmp_path,monkeypatch,mode):
+    from pydantic import TypeAdapter
+    from pydantic_ai.messages import ModelResponse,ToolCallPart
+    scratch=tmp_path/'scratch';scratch.mkdir()
+    monkeypatch.setenv('TMPDIR',str(scratch))
+    policy=a.Governance(request='allow',read='manual' if mode=='manual_deny' else 'deny' if mode=='deny' else 'allow',
+        write='deny',shell='deny',release='deny',write_visibility='visible')
+    fixture=Fixture(tmp_path,policy)
+    if mode=='disabled':
+        fixture.settings=fixture.settings.model_copy(update={'enabled_tools':('calculate',)})
+        fixture.runtime.settings=fixture.settings
+    task=fixture.task();reads=[];pending_approvals=[]
+    original_read=a.read_media_bytes
+    def tracked_read(*args,**kwargs):
+        reads.append(args[1]);return original_read(*args,**kwargs)
+    monkeypatch.setattr(a,'read_media_bytes',tracked_read)
+    document=tmp_path/'private.csv';document.write_text('private,001234\n')
+    class Channel:
+        model_calls=0
+        async def call(self,op,value):
+            assert not reads
+            if op=='policy':return {'policy':policy.model_dump(mode='json')}
+            if op=='model':
+                self.model_calls+=1
+                params=value['parameters']
+                names={item['name'] for item in params['function_tools']}
+                assert ('read_csv' in names)==(mode=='manual_deny')
+                part=(ToolCallPart('read_csv',{'path':str(document)},tool_call_id='csv-1') if self.model_calls==1
+                    else ToolCallPart(params['output_tools'][0]['name'],{'response':'','protected_sources':[]}))
+                return {'response':TypeAdapter(ModelResponse).dump_python(ModelResponse(parts=[part]),mode='json')}
+            if op=='tool_check':return await fixture.runtime.worker_message(task,{'op':op,'payload':value})
+            if op=='approve_tool':
+                pending=asyncio.create_task(fixture.runtime.worker_message(task,{'op':op,'payload':value}))
+                pending_approvals.append(pending)
+                while not fixture.runtime.approvals.pending:await asyncio.sleep(0)
+                vote=next(iter(fixture.runtime.approvals.pending.values()))
+                assert vote.content['args']=={'path':str(document),'offset':0,'limit':None}
+                assert fixture.runtime.approvals.decide(vote.id,False,vote.version)
+                return await pending
+            if op=='guard':return {'decision':'allow'}
+            if op in ('tool_finished','trajectory'):return {}
+            pytest.fail(op)
+    channel=Channel()
+    try:
+        assert await a.run_coder({'ask':{'request':'Read CSV privately','disclosure_request':None}},
+            channel,fixture.settings,tmp_path)=={'response':'','protected_sources':[]}
+        assert channel.model_calls==2 and not reads
+    finally:
+        for pending in pending_approvals:
+            if not pending.done():pending.cancel()
+        await asyncio.gather(*pending_approvals,return_exceptions=True)
+        fixture.store.close()
 
 
 @pytest.mark.parametrize('operation,left,right,expected', [
@@ -1826,6 +1894,62 @@ def test_decimal_calculator_exact(operation, left, right, expected):
 def test_decimal_calculator_fixed_invalid_arguments(operation, left, right):
     with pytest.raises(a.AirlockError, match='^calculator_invalid_arguments$'):
         a.calculate_decimal(operation, left, right, 64)
+
+
+@pytest.mark.parametrize('text', [
+    '\ufeffname,amount\r\n"quoted, name","001234"\r\n\r\n"multi\r\nline",-15.05\r\n',
+    'amount\n1250.25\n(250.10)\n-15.05\n+001.20\n',
+    'value\r"vertical\vform\ffeed",x\rlast,\r',
+    'value,empty\n"Unicode \u0085 separator",\n', '',
+    '\ufeff"quoted, label",001\r\n\r\n', '\ufeff',
+])
+def test_csv_preserves_raw_source_and_string_cells(text):
+    rows = [a.json.loads(line) for line in a.local_tools.csv_document(text.encode(), 524288).splitlines()]
+    assert ''.join(row['source_text'] for row in rows) == text
+    assert [row['row'] for row in rows] == list(range(len(rows)))
+    assert all(isinstance(cell, str) for row in rows for cell in row['cells'])
+    if text=='\ufeff':assert rows[0]['cells']==[]
+    if 'quoted, label' in text:
+        assert rows[0]['cells']==['quoted, label','001'] and rows[1]['cells']==[]
+    if '(250.10)' in text:
+        assert [row['cells'][0] for row in rows] == ['amount','1250.25','(250.10)','-15.05','+001.20']
+    if '001234' in text:
+        assert rows[1]['cells'] == ['quoted, name', '001234']
+        assert rows[2]['cells'] == []
+        assert rows[3]['cells'] == ['multi\r\nline','-15.05']
+        assert (rows[3]['source_start_line'],rows[3]['source_end_line']) == (4,5)
+
+
+@pytest.mark.parametrize('data,cap,code', [
+    (b'"unfinished',524288,'csv_invalid_document'),(b'\xff',524288,'csv_invalid_document'),
+    (b'x'*131073,524288,'csv_invalid_document'),
+    (b'x'*59000,524288,'csv_output_limit'),(b'a,b\n',10,'csv_output_limit'),
+])
+def test_csv_failures_are_fixed_and_return_no_partial_document(data, cap, code):
+    with pytest.raises(a.local_tools.ToolContractError,match='^'+code+'$'):
+        a.local_tools.csv_document(data,cap)
+
+
+@pytest.mark.parametrize('fault', ['suffix','window','reader','row_cap'])
+def test_csv_tool_fixed_failures(fault):
+    from pydantic_ai.exceptions import ToolFailed
+    reads=[]
+    def read(path):
+        reads.append(path)
+        if fault == 'reader':raise ValueError('private document filename')
+        return b'x'*59000 if fault == 'row_cap' else b'a,b\n'
+    tool=a.local_tools.csv_tool(read,a.page_document_text,524288)
+    with pytest.raises(ToolFailed,match='^The local CSV cannot be read with these settings.$'):
+        tool.function('private.txt' if fault == 'suffix' else 'private.csv',offset=-1 if fault == 'window' else 0)
+    assert bool(reads) == (fault != 'suffix')
+
+
+def test_csv_paging_and_read_boundary():
+    tool=a.local_tools.csv_tool(lambda path:b'a,b\n1,001\n',
+        lambda text,offset,limit:a.page_document_text(text,offset,limit,label='CSV rows'),524288)
+    result=tool.function('source.csv',offset=1,limit=1)
+    assert 'CSV rows.' in result and '"cells": ["1", "001"]' in result and '"row": 0' not in result
+    assert a.local_tools.BOUNDARIES['read_csv']=='read'
 
 
 def test_enabled_tools_configuration():

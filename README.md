@@ -24,7 +24,7 @@ After explicit history deletion, opaque ID/payload fingerprints remain. Replayin
 
 The worker uses the native Coder tools `read_file`, `write_file`, `edit_file`, `list_files`, `grep`, and `shell`, inside the Sandbox Runtime. OS capabilities and local governance control access; a caller's request cannot grant permissions. Privacy scanning runs on candidate disclosures, with enforce, warn, and off modes. In enforce mode, scanner failure or an ordinary privacy finding withholds the answer. Exact selected financial fields have the additional local verification flow below.
 
-The native `calculate` tool performs exact decimal addition, subtraction and multiplication without monetary rounding. It takes plain decimal strings and needs no file or command approval; task admission and disclosure checks still apply. All seven tools are enabled by default. Select enabled tools on the startup screen for this start, or save defaults across starts in trusted TOML configuration, for example `enabled_tools = ["read_file", "calculate"]`. An empty list disables all worker tools. Disabling a named tool does not remove filesystem capabilities available through another enabled tool such as `shell`.
+The native `calculate` tool performs exact decimal addition, subtraction and multiplication without monetary rounding. It takes plain decimal strings and needs no file or command approval; task admission and disclosure checks still apply. The governed `read_csv` tool preserves CSV strings and source rows. All eight tools are enabled by default. Select enabled tools on the startup screen for this start, or save defaults across starts in trusted TOML configuration, for example `enabled_tools = ["read_file", "calculate"]`. An empty list disables all worker tools. Disabling a named tool does not remove filesystem capabilities available through another enabled tool such as `shell`.
 
 You can register your own tools in trusted local TOML, outside the workspace.
 Keep their owned Python files outside workspace/state, without symlinks, hard
@@ -121,6 +121,14 @@ An optional explicitly prepared `pdf_parser` uses a fixed local Linux byte parse
 Preparation must pin the local Unix endpoint and daemon ID/version/kernel, absolute Docker CLI/hash, existing immutable Linux ARM64 image and Python executable/hash, exact locked pypdf version/source files, and the reviewed syscall policy. Explicitly generate `helper.py` with `pdf_parser_source()` from current root code, copy only locked pypdf `.py` files into the narrow read-only bundle, and hash its complete file set into `AssetSpec`. Keep bundle/policy outside source, workspace and runtime state. Store the resulting `PdfParserSpec` only in trusted local preparation/configuration; regenerate compatible measured calibration and obtain exact startup acceptance before activating it. Existing source-bound profiles cannot authorize a changed helper. No new dependency or maintained second parser module is needed.
 
 PDF reads include ordinary page text and a distinct JSON section for exact qualified AcroForm text fields, including empty/missing values. Field-only nonempty text is readable; blank forms, encrypted/image-only documents, duplicate/malformed fields and XFA can be refused. OCR and visual document understanding are not provided. Input/page/text/deadline/hard memory limits stay separate, and cleanup uncertainty withholds parser text.
+
+`read_csv` reads comma-delimited UTF8 files as string-valued rows, with the original
+row text and physical line ranges. It preserves quoted commas/newlines, empty
+cells, leading zeros and decimal signs; it does not interpret headers, amounts
+or formulas. A UTF8 BOM is retained in original text and excluded from the first
+cell. Zero-based offset/limit pages logical rows. Existing read approval and
+release rules apply; invalid, oversized or unreadable rows give a fixed local
+error. PDF/image OCR and table adapters are still in development.
 
 Form JSON puts each ordinary field on its own line for bounded offset/limit reads. A single escaped field entry larger than the existing 60000-character read window remains explicitly unreadable through that reader; the full extraction still retains it within the complete byte cap.
 

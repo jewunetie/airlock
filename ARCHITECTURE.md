@@ -141,7 +141,7 @@ read_file  write_file  edit_file  list_files  grep  shell
 
 Delegation is disabled. Repository instructions are not automatically promoted into trusted system instructions. Coder supplies its normal bounded output, argument repair, and context-management machinery. Airlock uses Pydantic hooks for local approval and exact-call validation rather than duplicating the native filesystem tools.
 
-Airlock additionally registers a native `calculate` tool for exact plain-decimal addition, subtraction and multiplication. `Settings.enabled_tools` selects among these seven built-ins; worker preparation and owner model/tool boundaries reject disabled names. Startup selections apply to that start; trusted TOML supplies defaults across starts. Calculation uses admitted-task authorization without filesystem or shell grants, retaining tool budgets, deduplication, audit and cancellation. Its eventual response still passes disclosure checks and release governance.
+Airlock additionally registers a native `calculate` tool for exact plain-decimal addition, subtraction and multiplication, and a governed `read_csv` tool preserving CSV string rows and source text. `Settings.enabled_tools` selects among these eight built-ins; worker preparation and owner model/tool boundaries reject disabled names. Startup selections apply to that start; trusted TOML supplies defaults across starts. Calculation uses admitted-task authorization without filesystem or shell grants, retaining tool budgets, deduplication, audit and cancellation. Its eventual response still passes disclosure checks and release governance.
 
 Tools execute sequentially. Exact approvals bind the tool name, validated arguments, task, and configuration version, and cannot be replayed. Read, write, and shell policies are independent. Native shell work remains confined by SRT even when a command launches another program.
 
@@ -173,6 +173,7 @@ All filesystem access below uses the worker's SRT grants. Read results and tool 
 | `write_file` / `edit_file` | Change granted writable files; derived content remains private | Write visibility and policy; exact validated call approval when manual; completed changes are not rolled back on later failure |
 | `shell` | Programs may use all filesystem capabilities granted by SRT; no network | Shell visibility and policy; exact call approval when manual; denying a named write tool does not remove shell write capability |
 | `calculate` | Exact bounded decimal addition, subtraction and multiplication; no files, commands or monetary rounding | Admitted task and enabled tool; fixed local argument errors, existing accounting and eventual disclosure checks |
+| `read_csv` | Raw UTF8 comma-delimited string rows with source text and physical line ranges | Exact read approval, bounded local files and output; eventual disclosure checks |
 | Worker/judge model requests | Supervisor forwards bounded private context to the configured local model | Literal loopback endpoint only; worker has no direct network; limits/errors cannot authorize release |
 | Scanner requests/results | Candidate text and bounded decoded views; private findings returned to supervisor | Required scanner health and limits; enforce mode withholds on findings or failures |
 | Cloud `ask` | Admit one request into the locally selected workspace | Request policy; request text cannot set workspace or governance; retry identity binds the original payload |
@@ -197,6 +198,13 @@ By default PDFs are parsed in a short-lived, resource-limited subprocess that in
 Input is chunked over private read-bound pipes under the existing channel lock. Exact grants, sequence/size/configuration checks and matching completion prevent replay or replacement. No text returns before input EOF, full bounded terminal stdout EOF, successful exit and verified exact owned container removal/independent absence. Owner-only `pdf-jobs` records retain original pins/IDs/complete image-plus-owner labels for recovery; uncertain creation or cleanup withholds text and disables the configured route. Recovery never enumerates unrelated daemon objects.
 
 Extracted page text and exact qualified AcroForm text-field labels/raw string or null values use the same zero-based line offset/limit interface, with bounded windows and continuation. The complete UTF-8 representation, including page/form markers and separators, obeys the text cap. Duplicate/malformed/unrepresentable forms and XFA are refused. Byte, page, extracted-text, time, and memory limits are separate. Text extraction is not visual document understanding; scanned/image-only or encrypted PDFs can be rejected. No hidden OCR service, remote parser, or external media URL fetch is used.
+
+The separate tools module also supplies `read_csv`, a governed read of bounded
+comma-delimited UTF8 bytes. Its JSON rows preserve raw string cells and complete
+physical source text/line ranges; the BOM remains in source text as an encoding
+marker. There is no header inference, amount conversion or formula execution.
+The existing text byte cap and zero-based logical-row paging bound its output.
+Exact tool approval is independent of information-release authorization.
 
 ## 8. Agent health and shared inference
 

@@ -87,7 +87,7 @@ try:
     _tools_bytes = TOOLS_SOURCE.read_bytes()
 except OSError:
     raise SystemExit('Airlock: tools_source_unavailable') from None
-TOOLS_MODULE_SHA256 = '4b88c43cebe3ff08ed7ed0b08c2262b6f39d08bff49db962fa9dae21ebf23771'
+TOOLS_MODULE_SHA256 = 'd1da1542667c1975b14e848a5535507598a0953aef65bed31556662f5c3e6d4d'
 if hashlib.sha256(_tools_bytes).hexdigest() != TOOLS_MODULE_SHA256:
     raise SystemExit('Airlock: tools_source_changed')
 _tools_spec = importlib.util.spec_from_file_location('airlock_tools', TOOLS_SOURCE)
@@ -113,7 +113,7 @@ SCHEMA_VERSION = 3
 ALGORITHM_VERSION = "fragment-graph-v2"
 DEFAULT_TOOLS = local_tools.DEFAULT_TOOLS
 TOOL_NAMES = frozenset(DEFAULT_TOOLS)
-READ_TOOLS = frozenset({"read_file", "list_files", "grep"})
+READ_TOOLS = frozenset({"read_file", "read_csv", "list_files", "grep"})
 WRITE_TOOLS = frozenset({"write_file", "edit_file"})
 TERMINAL = {"completed", "withheld", "denied", "cancelled", "failed"}
 SAFE_MESSAGES = {
@@ -4475,8 +4475,8 @@ async def read_pdf_in_worker(data: bytes, settings: Settings, *, channel: ChildC
             process.kill(); await process.wait()
 
 
-def page_document_text(text: str, offset: int = 0, limit: int | None = None) -> str:
-    """PDF adapter uses Coder's zero-based line paging and bounded text window."""
+def page_document_text(text: str, offset: int = 0, limit: int | None = None, *, label: str = 'PDF text') -> str:
+    """Document adapters use Coder's zero-based line paging and bounded text window."""
     if type(offset) is not int or offset < 0 or (limit is not None and (type(limit) is not int or limit < 1)):
         raise AirlockError('invalid_read_window')
     lines = text.splitlines()
@@ -4492,7 +4492,7 @@ def page_document_text(text: str, offset: int = 0, limit: int | None = None) -> 
             break
         output.append(line); used += len(line); next_offset = index + 1
     continuation = f'\nMore text available; read with offset={next_offset}.' if next_offset < len(lines) else '\nEnd of document.'
-    return f'PDF text. Total lines: {len(lines)}.\n' + ''.join(output) + continuation
+    return f'{label}. Total lines: {len(lines)}.\n' + ''.join(output) + continuation
 
 
 def calculate_decimal(operation: Literal['add', 'subtract', 'multiply'], left: str, right: str,
@@ -4661,6 +4661,10 @@ async def run_coder(command: dict, channel: ChildChannel, settings: Settings, ro
         capabilities=[Instrumentation(settings=telemetry().instrument())])
     agent = Agent(PipeModel('worker'), output_type=LocalOutput,
         tools=[local_tools.calculator_tool(settings.max_candidate_chars),
+               local_tools.csv_tool(lambda path: read_media_bytes(root, path, settings.max_pdf_bytes,
+                   scratch=Path(os.environ['TMPDIR'])),
+                   lambda text, offset, limit: page_document_text(text, offset, limit, label='CSV rows'),
+                   settings.max_pdf_text_bytes),
                *local_tools.extension_tools([item for item in settings.extensions if item.name in settings.enabled_tools],
                                             root=root, max_chars=settings.max_candidate_chars)],
         capabilities=[hooks, coder,

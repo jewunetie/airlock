@@ -1,7 +1,114 @@
 # Airlock promotion and hardening HOW-spec
 
+## Docling/LiteParse preparation and required document scope
+
+Data: the verified October5 user decision requires PDFs/images with local OCR and
+table extraction, plus CSV; Word/Excel are useful extras. Preserve raw extracted
+text, exact string cells, page/row/column and bounding-box provenance, parser and
+package identity. Never infer signs, monetary rounding, missing values or source
+authority. Existing request, approval, source and release models remain intact.
+
+API: prepare the two released Python libraries in an isolated uv-managed test
+environment, reusing installed locked dependencies where compatible; no changes
+to active model/runtime configuration, no model-weight downloads or inference
+during dependency/API inspection. Verify actual package versions/byte APIs and
+required assets first. Local OCR must use preverified existing traineddata, with
+missing-asset refusal before calling a library that might download automatically.
+Remote OCR, URLs, external plugins and runtime installs/downloads are forbidden.
+Record resource requirements and incompatibilities rather than bypassing limits.
+Only a subsequently resolved parser contract may execute document bytes.
+
+The new shipped tool contract will be governed reads taking path:StrictStr and
+the existing zero-based offset/optional limit. An owned parser child receives
+bounded already-read bytes, backend/format/settings identity and exact grants;
+it returns only complete bounded local text/table/provenance results after exit
+and verified cleanup. CSV can use stdlib csv with explicit provenance, preserving
+quoted and multiline cells as strings. No parser runs inside the unrestricted
+supervisor. Current pypdf Linux ceilings and native hard-limit refusal remain;
+a separate OCR resource route requires an explicit decision if those limits do
+not support the verified library/assets. Errors remain fixed local codes.
+
+Location: prep environments/API evidence only in owner-only /private/tmp;
+prospective tools/adapters remain airlock_tools.py, root boundary/process/settings
+integration airlock.py, tests test.py, docs/HOW/architecture/validation and locked
+uv dependency metadata. No third production module or Pi migration.
+
+Tests: actual pinned-library version/API/asset checks without downloads, package
+compatibility and resource observations. Later contract checks require real
+synthetic tax-like digital/scanned PDF/image table positives, UTF8 CSV quoting/
+multiline rows, exact values/labels/provenance, malformed/encrypted/oversized and
+missing assets, manual/deny/replay/cancellation/descendant cleanup, no egress and
+unchanged source files. Separate real parsing/confinement evidence from fixtures;
+fresh review and full locked checks/build precede each completed checkpoint.
+
 The approved tool-module section supersedes earlier single-module location/build
 statements; production supervision stays in airlock.py.
+
+### Confined LiteParse feasibility check
+
+Data: generated tax-like PDF and PNG fixtures contain only synthetic labels and
+string amounts, including cents, negative/parenthesized values and leading-zero
+identifiers. Existing English traineddata is copied only after SHA256 verification
+into a private fixture bundle; the released Linux LiteParse package and every
+fixture/asset file are recorded by digest. Results retain raw text, cells, page
+positions and errors, without rounding or inferred corrections.
+
+API: a disposable owned Linux child reads only this read-only private bundle and
+returns bounded JSON evidence. Keep the existing immutable image, denied network,
+nonroot user, dropped capabilities, read-only root, 512MiB memory/address-space,
+15-second CPU, 32-process and zero file-write-size limits. A private diagnostic
+seccomp profile may add eventfd2 and socketpair restricted to AF_UNIX for Tokio's
+internal notifications; socket/connect/listen network access stays denied and
+has explicit negative controls. Preflight exact OCR bytes before parser calls;
+use explicit English, one OCR worker, no remote OCR, no pool, no screenshots or
+image extraction, fatal OCR failures and no continuation after page errors.
+Observe execution/peak memory and preserve failures, never raise limits silently.
+This check does not activate settings or establish the shipped owner protocol.
+
+Location: HOW.md and VALIDATION.md document the evidence; fixtures, Linux package,
+script and diagnostic profile remain under owner-only /private/tmp directories.
+No production adapter, dependency lock, global assets or service is changed.
+
+Tests: actual scanned PDF/PNG and digital PDF positives with table/raw-value
+assertions, missing/changed assets and network denials, complete exit and exact
+container absence after cleanup. API presence/import success alone is insufficient.
+Document mismatches and failures rather than accepting partial OCR/table output.
+The image compatibility check may use the already locked Pillow version to
+convert a synthetic PNG to PDF entirely in memory, with explicit raster/page
+scale recorded in provenance. This grants no scratch writes and changes no
+tax values; direct-image and converted-image results are reported separately.
+
+### Required CSV read tool
+
+Data: comma-delimited UTF8 CSV rows retain cells:list[str], row:int (zero-based),
+source_start_line/source_end_line:int (one-based physical lines), and
+source_text:str containing the complete original physical lines for that row.
+Preserve BOM in source_text; it is an encoding marker, not a cell prefix. Preserve
+marker-only input as an empty-cell row carrying its exact original source text.
+Preserve blank rows, CRLF, quoted commas/newlines, empty cells, leading zeros
+and exact decimal/sign spelling. No header inference, numeric conversion or
+formula evaluation. Concatenating row source_text reconstructs the input text.
+
+API: read_csv(path:StrictStr, offset:int=0, limit:int|None=None)->str is a governed
+read under existing Coder hooks, exact manual approval and source/release rules.
+Read unchanged regular bytes within the existing workspace/private-scratch scope
+and max_pdf_bytes bound; require .csv and strict UTF8/comma csv.reader. Return one
+JSON object per logical row, through existing zero-based line paging. Complete
+serialized text must fit max_pdf_text_bytes; a row must fit the existing read
+window. Decode/CSV/window/size/file failures give fixed private tool errors and
+never partial parsed results. This tool adds no runtime asset or dependency and
+grants no permission to share its content.
+
+Location: parser and Pydantic tool factory in airlock_tools.py; root run_coder
+passes its existing bounded reader/page adapter and registers read governance;
+test.py checks parser fidelity and actual Coder approval/denial integration.
+Update the shipped module pin, README/HOW/VALIDATION and packaging evidence.
+
+Tests: exact source reconstruction, quoting/multiline/CRLF/BOM/blank rows,
+signed and parenthesized decimal and leading-zero strings, malformed quotes,
+invalid UTF8, field/row/output caps, paging, unknown/disabled/read-denied tool,
+exact manual allow/deny and no execution before approval. Full existing core and
+packaging checks plus a fresh review precede checkpoint completion.
 
 ## Approved tool module and operator extensions
 

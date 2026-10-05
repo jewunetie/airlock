@@ -64,6 +64,31 @@ reviewer cannot establish real financial-document accuracy or user acceptance.
 The root records global/resident-model preservation independently of the runner.
 An additional direct real-scanner/Egress identifier negative must withhold before
 approval; label it separately from the actual worker/model selected-field cases.
+After a pre-approval refusal, a passive private diagnostic retains each exact
+guard proposal and original scanner result without modifying decisions, forwards
+all results/errors unchanged and repeats the same bounded cases once for cause
+attribution. Keep the original failure and failed-exit assertions intact.
+If the measured refusal is solely a contextual rule false positive, a private
+CPU-only wording experiment may reuse the exact verified local LiquidPolicy
+weights and production adapter. Data: unchanged six rules/thresholds, exact
+financial JSON, benign labels and explicit confidential-company/all-rule positive
+controls. API: compare baseline and literal candidate wording with original scan
+results; only a private process changes its rule prefix, no shipped source,
+profile/backend/acceptance change. Location: one /private/tmp runner/cache/evidence;
+HOW/VALIDATION record results. Tests: verified model pins, CPU placement, baseline
+reproduction, all control detections/false blocks and original service/global
+preservation. This diagnostic runs outside SRT and cannot establish startup,
+live release, field accuracy or permission to change enforced rules.
+A private method diagnostic may also measure the already approved Gemma context
+option against the exact financial JSON, unpublished company results and all
+existing contextual startup controls. Use unchanged prompt/schema/options,
+existing resident pinned model and a single shared limiter/client generation;
+retain uncertainty/failure latch and actual returned findings. Private settings
+select the option; no source/default/backend/profile/acceptance is changed. One
+/private/tmp runner/evidence plus HOW/VALIDATION; exact expected contextual rule,
+clear financial JSON, negative control, latch and HTTP close assertions remain
+explicit, with original service/global preservation independently verified. Any
+failure keeps the alternative unready; no rule relaxation or model download.
 
 ### Shipped parser selection and owner integration
 

@@ -51,6 +51,63 @@ accepts a profile or activates global settings. This synthetic all-local positiv
 does not establish selected release, table fidelity, scanner accuracy or tax
 readiness. Docling acquisition/native fit also remain open.
 
+The first real-scanner/SRT/Gemma selected-field approve/deny attempt fails before
+either release vote: both tasks are withheld for privacy after four model calls
+and two read tools. Scanner startup passes and reports no failures; each case
+has only read approvals, so withholding does not establish manual denial success.
+The separate direct ScannerService/Egress identifier control detects an actual
+reassembly finding with no scanner failure and withholds before approval. All
+three runtime STOPPED audits, empty job lists, scanner/model close and independent
+original global/service/model preservation pass. Evidence:
+`/private/tmp/airlock-live-selected-fields-bf0da3e63c2b4a578bd6d3466868a0f6/evidence.json`;
+preservation snapshots:
+`/private/tmp/airlock-live-selected-preservation-before-20261005.json` and
+`/private/tmp/airlock-live-selected-preservation-after-20261005.json`.
+The first report does not retain exact guard/scanner proposals, so it does not
+identify the refusal's category or cause. A passive-observer diagnostic retains
+these for attribution; original assertions and privacy rules remain unchanged.
+The passive repeat identifies the exact failure: the correct two-field JSON and
+exact numeric hints are present, while four identical scanner calls have only
+LiquidPolicy/context_5 findings on fragments of wages/net_total (scores0.542–0.645,
+threshold0.5), no failures and no other scanner finding. These context findings
+disqualify the existing reassembly-only financial-selection route. Both tasks
+again withhold before a release vote; the identifier negative and all closures
+pass. Evidence:
+`/private/tmp/airlock-live-selected-fields-6b8ac3e79f8b4db89d18460c9a92e817/evidence.json`,
+SHA256 `e7a52bc649841596e737bd3ccbb9f2c1998e6fd3a9e3c9d497e2f583c245b5ea`.
+Independent global/service/model preservation also passes after this repeat.
+This is a synthetic contextual false block, not an approval API failure. A
+private CPU-only wording comparison is separate diagnostic evidence, outside
+SRT; no rule, threshold, backend or global profile is changed by that experiment.
+The first fifteen-control CPU comparison reproduces the exact baseline anchors:
+four of five benign cases block, all ten private cases block. One company-context
+candidate reduces benign blocks to one but misses unpublished company results;
+the evidence-required candidate keeps four benign blocks and introduces the same
+miss. Both are rejected. Corrected required-rule scoring and two additional fixed
+literal candidates also reproduce that private-company miss; none is adopted.
+Unchanged rules' outputs shift because all rules share the encoder prefix.
+Evidence: `/private/tmp/airlock-policy-wording-b7204426de434c4aba63e031bbb06f79/evidence.json`
+and `/private/tmp/airlock-policy-wording-d4904c17d7da4978884f937bbc053272/evidence.json`.
+These selected/reused controls are diagnostic regression data, not held-out or
+field accuracy. Earlier larger failed company-rule evaluations below remain
+relevant regression gates. Liquid remains default, with no wording change.
+
+The unchanged-prompt Gemma option passes the exact selected financial JSON,
+unpublished-company-results case, five contextual startup canaries and neutral
+control. The legal canary correctly matches context_2 with verbatim evidence,
+but also returns context_5 uncertain: it speculates that the confidential personal
+inheritance dispute might involve private company information. That uncertainty
+is a detector failure, so the nine-case diagnostic fails overall; this is not
+startup acceptance or selected-release success. Exact native replies are retained
+in `/private/tmp/airlock-gemma-financial-context-1672306255d14ef0b62e913d9ceb34ea/evidence.json`,
+SHA256 `b820ae34cc227d2dc8c8b37d48f1e5c78f9142e26dada27280bcae5e6f37bc1b`.
+The owned HTTP client closes; independent global hashes, service identities and
+resident model preservation pass in
+`/private/tmp/airlock-gemma-financial-preservation-after-20261005.json`.
+Source prompt/schema/options, rules, thresholds and default backend are unchanged.
+Clarifying asserted facts versus invented possibilities needs a separate resolved
+experimental scope; genuine uncertainty and failed health must remain blocking.
+
 ### Named document tools and owned parser integration, 2026-10-05
 
 The final locked suite passes **588 core checks**, with eight existing provider

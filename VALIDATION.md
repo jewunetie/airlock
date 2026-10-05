@@ -4,6 +4,39 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+On 2026-10-04, the configurable Gemma context backend passed **487 locked/offline
+core tests** on source SHA256
+`4cd37657a8c4865b5ebc3df287c51fb72922cdedceb71d3d89e7ced6179e184a`
+and test SHA256
+`2517c9231f963dcc060b0cda07c58daac5df76b75747e1d41f9915e468a59de5`.
+Eight provider deprecation warnings concern the existing HTTP client interface;
+there were no test failures or skips. Liquid remains the default. Gemma selection
+uses the already pinned worker model and shared inference slot, replaces only
+Liquid Policy, preserves the other detectors, and requires fresh bound calibration.
+Fresh review found and corrected repeated scanner reloads after a permanent Gemma
+failure and a queued call starting after an earlier generation failed; both have
+regression coverage. The final frozen candidate wrapper matches the prior reviewed
+shadow classifier. No dependency, global configuration or plugin change was made.
+
+**The real Gemma method check completed but failed health.** Seven predetermined
+synthetic cases ran through current ModelService.context_scan using the already
+resident pinned gemma4:12b-mlx. All six positives produced exact anchored matches,
+and the neutral negative was clean. The legal positive additionally produced
+semantic uncertainty, yielding gemma_context failure; this correctly fails the
+all-categories startup requirement. Technical completion is not healthy readiness.
+No retry, tuning, profile acceptance, production activation or workspace task was
+performed. This method-only check does not establish the complete SRT scanner
+pipeline or field accuracy. Model client closure, original process identities,
+global settings/plugin/manifest bytes, prior evidence and all twelve original
+dummy fixtures passed independent final preservation checks, with no cleanup
+errors. Evidence is retained at
+`/private/tmp/airlock-gemma-production-095qt056/evidence.json`, SHA256
+`20ed641f6d76247273e54d3f45caf95a0749ecb7d97b6b984fd07e4a7ab8b5d7`;
+its verified index SHA256 is
+`ff0d10b3cf26c8666af839ed676b6ba11270e44df2d19b3255368abd8be08e7f`.
+
+The following entries describe earlier checkpoints.
+
 The final locked/offline core suite passed **457 tests** on source SHA256
 `2592f4d0b1c17fe6856338515e1618f5b9d583e5a6577a07b61dae7ca0e31c06`
 and test SHA256

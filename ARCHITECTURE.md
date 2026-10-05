@@ -225,6 +225,20 @@ candidate response
 
 Betterleaks runs offline with explicit pinned rules. Presidio supplies configured structured/rule-based recognition. Liquid PII and Policy Linter supply learned recognition. The two Liquid forward passes are serialized; deterministic scans may overlap. Both encoder weights can remain resident while scanners are active.
 
+The default context backend is Liquid. An explicit `context_backend = "gemma"`
+uses the already pinned local Gemma worker model instead of Liquid Policy. The
+supervisor makes stateless, bounded, tool-free classifications through the same
+inference limiter used by workers and judges; SRT scanners gain no network access.
+Betterleaks, Presidio, Liquid PII, reassembly and release authorization still apply.
+Gemma returns the same six rule meanings as clear/match/uncertain with exact local
+evidence quotes, not probability scores. Uncertainty and errors fail closed;
+failed generation or health latches context unavailability until explicit restart.
+Queued classification rechecks availability before generation, and maintenance
+does not reload a scanner behind a permanently failed context service.
+Six anchored positives and a clean negative precede readiness. Calibration binds
+the selected backend, model digest and complete classifier contract; accepting a
+Liquid profile or changing its sensitivity cannot accept the Gemma backend.
+
 Semantic detectors inspect the original and bounded decoded views. Betterleaks performs its own decoding. Findings preserve detector-specific metadata and decoded-view provenance; unmappable decoded spans do not receive invented original-text offsets.
 
 Each scanner generation must pass fixed positive rule/entity/span probes and a negative probe. A clean-looking empty result from a nonfunctional scanner is not healthy. Probes check basic operation; they do not establish representative accuracy.

@@ -3733,6 +3733,83 @@ arithmetic or tax readiness; those live gates remain separate.
   immutable/global/fixture snapshots; a successful probe cannot explain the
   earlier intermittent error or establish model-task cleanup correctness.
 
+## Native verification of the configurable Gemma method
+
+Data: exact current source/test/HOW hashes; fixed six existing Gemma positive
+anchors and existing scanner neutral negative. Record each production ScanResult,
+anchored match/failure, source-bound backend calibration fingerprint, fixed errors
+and actual elapsed time in a new owner-only temporary evidence directory. Preserve
+the frozen earlier shadow evidence/index, all twelve original dummy files, repo
+prepared manifest, global prepared settings/profile/plugin bytes and original
+supervisor/Ollama/runner PID/create-time identities.
+
+API: call only current ModelService.health and context_scan with the previously
+approved already resident gemma4:12b-mlx/digest117d0d84. Existing literal loopback
+metadata and model requests, shared limiter, frozen prompt/schema/options and
+host validators. No SRT/runtime/task, acceptance, model preload/unload/download,
+policy/source/asset mutation or CPU admission gate. Confirm exact resident model,
+global supervisor empty and original process identities before every case. If a
+generation error latches the backend, stop without retry or model interruption.
+Semantic uncertainty/health miss remains failed health, never a clean detection.
+Native result does not establish complete scanner/SRT pipeline accuracy.
+
+Location: one new private /private/tmp runner and evidence directory; root
+HOW.md/VALIDATION.md. Source/test do not change during execution. Model client is
+closed independently in finally; all preservation and cleanup errors are retained.
+
+Tests: runner is fully read and fresh-reviewed before execution. Assert exact
+source/test hashes, unchanged prompt/schema/options against the prior reviewed
+shadow definitions, and all before/after preserved identities/bytes. Anchored
+span match with no failures for each positive, fully clean neutral negative,
+required-detector selection and no calibration acceptance. Evidence is saved
+before/finally after failures; no green claim from missing or partial results.
+
+## Approved configurable Gemma context scanner
+
+Data model: Settings.context_backend is liquid or gemma, default liquid. Gemma
+uses the existing explicitly pinned local Gemma worker_model/worker_digest and
+ModelService, never a separately loaded model. Reject Gemma selection without a
+Gemma name and digest. Add Detector.GEMMA_CONTEXT with the same six context rules;
+no probability score. Keep raw exact quotes, verdict and bounded explanation local.
+Use the frozen shadow prompt/schema/options and six positive health anchors plus
+neutral negative. Calibration binds backend, pinned model and classifier contract
+alongside existing source/assets/packages; old acceptance cannot transfer.
+
+API: supervisor ModelService.context_scan uses its existing HTTP client and same
+inference limiter as worker/judge. Literal loopback /api/chat, stateless tool-free
+text, temperature0, think=false, num_predict4096, keep_alive=-1; no download,
+separate load/unload, redirect, remote model, repair, fallback or blind retry.
+Verify catalog/digest/local capability before use through existing health. Bound
+whole scan including queue/views/chunks by scanner_timeout; decoded views retain
+their existing limits and deterministic chunk/span attribution. Cap calls200,
+native response32KiB, content24KiB and findings at existing configured limit.
+Validate completed native generation/model/message/counts and strict six-key JSON,
+duplicate/nonfinite rejection, verdicts and verbatim quote bounds. Match creates
+findings; uncertainty creates detector failure. Ordinary errors/cancellation after
+starting a generation latch context unavailability for this ModelService lifetime,
+without shutting down shared Ollama. Queue cancellation still releases the slot.
+
+ScannerService receives the same ModelService. In gemma mode only Liquid Policy
+construction/asset grant/health is replaced; Betterleaks/Presidio/LiquidPII remain
+in SRT with no network. Required detector sets become backend-specific. Every
+Gemma category must pass anchored span health, with no uncertain/error outcome;
+negative must have no findings/failure. Failed health never enables enforce mode.
+Default Liquid behavior stays intact. Production activation remains unapproved.
+
+Location: root airlock.py Settings/Detector/calibration/LocalDetectors/
+ScannerService/ModelService/Supervisor. Tests in test.py; contracts/defaults and
+executed evidence in ARCHITECTURE.md, README.md, VALIDATION.md. No dependencies,
+global profiles/manifests/plugin/fixtures/model lifecycle changes.
+
+Tests: default parity, invalid selection and calibration separation; unchanged
+independent detectors; strict reply/missing/extra/duplicate/invalid quotes/types/
+uncertainty/truncation/size rejection; original and decoded spans, overlap and
+finding bounds; shared limiter serialization/queue cancellation; failed health
+and later failures withhold; raw text stays local. Meaningful scripted checks,
+fresh review and full locked suite precede native source-bound testing. Native
+measurement may correctly fail health/readiness; preserve all prior false-block/
+uncertainty evidence and never tune heldout cases or accept a profile to go green.
+
 ## Pending approval disconnect and cancellation contract checks
 
 Data model: two synthetic request IDs and exact raw requests, existing task/

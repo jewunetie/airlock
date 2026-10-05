@@ -42,6 +42,15 @@ Starting a workspace first shows its rules. Accept your saved choices or configu
 
 The screen also shows scanner sensitivity and measured evaluation errors. Accepting a compatible profile applies it to this workspace without approving it globally. Sensitivity changes require a new tested profile and restart. In the running screen, edit the governance settings and select Apply governance to save changes. Pending work keeps the stricter rules it has encountered; changes invalidate pending approvals. Enabling scanners after an off-mode start or changing workspace write access requires stop/start.
 
+The default context scanner remains Liquid. Trusted configuration can explicitly
+select `context_backend = "gemma"` using the same pinned local Gemma worker model.
+This replaces only Liquid's context check; the other privacy checks remain.
+Gemma uses clear/match/uncertain decisions with exact local evidence, rather than
+Liquid probability thresholds. Uncertain answers or failed health checks block
+release. A failed generation or health check requires an explicit restart, and
+this backend needs its own measured, accepted profile. Adding this option does
+not activate it or establish real-document accuracy.
+
 Release checks serialize across workspaces. SQLite commits the disclosure evidence and final response before the response is published. A failed commit publishes no candidate and makes the runtime unavailable.
 
 Storage failure also prevents an answer already awaiting scanning or local approval

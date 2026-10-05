@@ -571,6 +571,233 @@ class Scanner:
         return a.ScanResult(list(result.findings), set(result.failures))
 
 
+def context_clear():
+    return {rule:{'verdict':'clear','quotes':[],'explanation':''} for rule in a.CONTEXT_IDS}
+
+
+def test_gemma_configuration_and_calibration_separation():
+    baseline = a.Settings()
+    assert baseline.context_backend == 'liquid' and a.required_detectors(baseline) == a.REQUIRED_DETECTORS
+    for values in ({'context_backend':'other'}, {'context_backend':'gemma'},
+                   {'context_backend':'gemma','worker_model':'gemma4:12b-mlx','worker_digest':'bad'}):
+        with pytest.raises(ValidationError):
+            a.Settings(**values)
+    pinned = a.Settings(worker_model='gemma4:12b-mlx',worker_digest='a'*64)
+    gemma = pinned.model_copy(update={'context_backend':'gemma'})
+    assert a.required_detectors(gemma) == a.REQUIRED_DETECTORS-{a.Detector.LIQUID_POLICY}|{a.Detector.GEMMA_CONTEXT}
+    assert a.calibration_binding(pinned) != a.calibration_binding(gemma)
+    assert a.calibration_binding(gemma) != a.calibration_binding(gemma.model_copy(update={'worker_digest':'b'*64}))
+
+
+def test_gemma_keeps_independent_local_detectors(monkeypatch):
+    created = []
+    class Detector:
+        def __init__(self,settings): created.append(type(self).__name__)
+    for name in ('PresidioDetector','LiquidPIIDetector','LiquidPolicyDetector'):
+        monkeypatch.setattr(a,name,type(name,(Detector,),{}))
+    scanner = a.LocalDetectors(a.Settings(context_backend='gemma',worker_model='gemma4:12b-mlx',worker_digest='a'*64))
+    assert created == ['PresidioDetector','LiquidPIIDetector']
+    assert set(scanner.detectors) == {a.Detector.PRESIDIO,a.Detector.LIQUID_PII}
+    assert scanner.unavailable == {a.Detector.BETTERLEAKS}
+
+
+@pytest.mark.parametrize('fault', ['wrong-model','incomplete','extra','message-extra','thinking','bool-count','missing-count','token-limit'])
+def test_gemma_native_reply_validation(fault):
+    reply = {'model':'gemma4:12b-mlx','created_at':'synthetic','message':{'role':'assistant','content':'{}'},
+        'done':True,'done_reason':'stop','eval_count':1,'prompt_eval_count':1}
+    if fault == 'wrong-model': reply['model'] = 'other'
+    elif fault == 'incomplete': reply['done'] = False
+    elif fault == 'extra': reply['extra'] = 'not allowed'
+    elif fault == 'message-extra': reply['message']['tool_calls'] = []
+    elif fault == 'thinking': reply['message']['thinking'] = 'unexpected'
+    elif fault == 'bool-count': reply['eval_count'] = True
+    elif fault == 'missing-count': del reply['prompt_eval_count']
+    elif fault == 'token-limit': reply['eval_count'] = 4097
+    with pytest.raises(a.AirlockError):
+        a.context_native_reply(a.json_bytes(reply),'gemma4:12b-mlx')
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('uncertain', [False, True])
+async def test_gemma_scanner_health_and_independent_findings(monkeypatch, uncertain):
+    settings = a.Settings(context_backend='gemma',worker_model='gemma4:12b-mlx',worker_digest='a'*64)
+    calls, closed, launches = [], [], []
+    class Process:
+        process = type('Child',(),{'returncode':None})()
+        async def transact(self,request,**kwargs):
+            if request['op'] == 'init': return {'failures':[]}
+            text = request['text']; calls.append(text)
+            findings = []
+            for probe in a.SCANNER_CANARIES[:3]:
+                if text == probe.text:
+                    start = text.index(probe.evidence)
+                    findings.append(a.PrivacyFindingFull(category=a.Category.PII,detector=probe.detector,
+                        detector_version='synthetic',rule_id=probe.label,start=start,end=start+len(probe.evidence)).model_dump())
+            return {'findings':findings,'failures':[]}
+        async def close(self): closed.append(True)
+    class Launcher:
+        async def spawn(self,*args,**kwargs): launches.append(True); return Process()
+        def probes(self): return a.contextlib.nullcontext({})
+    class Model:
+        context_unavailable = False
+        async def context_scan(self,text):
+            if self.context_unavailable: return a.ScanResult(failures={a.Detector.GEMMA_CONTEXT})
+            if uncertain: return a.ScanResult(failures={a.Detector.GEMMA_CONTEXT})
+            for probe in a.GEMMA_CONTEXT_CANARIES:
+                if text == probe.text:
+                    start = text.index(probe.evidence)
+                    return a.ScanResult([a.PrivacyFindingFull(category=a.Category.CONTEXT,
+                        detector=a.Detector.GEMMA_CONTEXT,detector_version='a'*64,rule_id=probe.label,
+                        start=start,end=start+len(probe.evidence))])
+            return a.ScanResult()
+    monkeypatch.setattr(a,'verify_digest',lambda *args:None)
+    monkeypatch.setattr(a,'verify_asset',lambda *args:None)
+    model = Model()
+    scanner = a.ScannerService(settings,Launcher(),model)
+    try:
+        await scanner.start()
+        assert calls == [p.text for p in (*a.SCANNER_CANARIES[:3],*a.GEMMA_CONTEXT_CANARIES)]+[a.SCANNER_NEGATIVE_CANARY]
+        if uncertain:
+            assert model.context_unavailable and scanner.process is None and closed
+            assert (await scanner.scan('candidate')).unsafe
+            scanner.retry_after = 0
+            await scanner.start()
+            assert len(launches) == 1
+        else:
+            assert not scanner.failures and scanner.process is not None
+            scan = await scanner.scan(a.SCANNER_CANARIES[1].text)
+            assert scan.unsafe and scan.findings[0].detector == a.Detector.PRESIDIO
+    finally:
+        await scanner.close()
+
+
+@pytest.mark.parametrize('invalid', ['missing','extra','duplicate','nonfinite','coercion','quote',
+    'clear-evidence','match-empty','long-quote','long-explanation'])
+def test_gemma_context_reply_rejects_invalid_evidence(invalid):
+    values = context_clear()
+    item = values['context_0']
+    if invalid == 'missing': del values['context_0']
+    elif invalid == 'extra': values['extra'] = item
+    elif invalid == 'coercion': item['explanation'] = 12
+    elif invalid == 'quote': item.update(verdict='match',quotes=['invented'])
+    elif invalid == 'clear-evidence': item['quotes'] = ['private']
+    elif invalid == 'match-empty': item['verdict'] = 'match'
+    elif invalid == 'long-quote': item.update(verdict='match',quotes=['x'*401])
+    elif invalid == 'long-explanation': item['explanation'] = 'x'*601
+    raw = a.json.dumps(values)
+    if invalid == 'duplicate': raw = raw[:-1]+',"context_0":'+a.json.dumps(item)+'}'
+    if invalid == 'nonfinite': raw = raw.replace('"explanation": ""','"explanation": NaN',1)
+    with pytest.raises((a.AirlockError,ValidationError)):
+        a.context_decisions(raw,'private'+'x'*401)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('outcome', ['match','clear','uncertain','invalid','truncated','oversized'])
+async def test_gemma_production_transport_offsets_and_failure_latch(outcome):
+    settings = a.Settings(context_backend='gemma',worker_model='gemma4:12b-mlx',worker_digest='a'*64)
+    service = a.ModelService(settings)
+    await service.client.aclose()
+    calls = []
+    async def health(): pass
+    service.health = health
+    def respond(request):
+        data = a.json.loads(request.content)
+        assert request.url == 'http://127.0.0.1:11434/api/chat'
+        assert set(data) == {'model','messages','format','options','stream','think','keep_alive'}
+        assert data['model'] == settings.worker_model and data['format'] == a.CONTEXT_SCHEMA
+        assert data['options'] == a.CONTEXT_OPTIONS and data['think'] is False and data['keep_alive'] == -1
+        text = a.json.loads(data['messages'][1]['content'])['candidate']; calls.append(text)
+        rules = context_clear()
+        if outcome == 'match' and 'private fact' in text:
+            rules['context_0'].update(verdict='match',quotes=['private fact'])
+        elif outcome == 'uncertain': rules['context_0']['verdict'] = 'uncertain'
+        elif outcome == 'invalid': rules['context_0'].update(verdict='match',quotes=['invented'])
+        reply = {'model':settings.worker_model,'created_at':'synthetic','message':{'role':'assistant','content':a.json.dumps(rules)},
+            'done':True,'done_reason':'length' if outcome == 'truncated' else 'stop','eval_count':5,'prompt_eval_count':20}
+        return a.httpx.Response(200,content=b'x'*32769 if outcome == 'oversized' else a.json_bytes(reply))
+    service.client = a.httpx.AsyncClient(transport=a.httpx.MockTransport(respond),trust_env=False)
+    try:
+        result = await service.context_scan('private fact private fact')
+        if outcome == 'match':
+            assert [(f.start,f.end) for f in result.findings] == [(0,12),(13,25)]
+            assert all(f.score is None and f.detector == a.Detector.GEMMA_CONTEXT for f in result.findings)
+            decoded = await service.context_scan('base64:cHJpdmF0ZSBmYWN0')
+            assert any(f.start is None and f.components['view'] == 'decoded'
+                       and f.components['view_start'] == 0 for f in decoded.findings)
+        elif outcome == 'clear': assert not result.unsafe
+        else: assert a.Detector.GEMMA_CONTEXT in result.failures
+        if outcome in ('invalid','truncated','oversized'):
+            assert service.context_unavailable
+            count = len(calls)
+            assert (await service.context_scan('another')).unsafe and len(calls) == count
+    finally:
+        await service.close()
+
+
+@pytest.mark.asyncio
+async def test_gemma_shared_slot_queue_and_active_cancellation():
+    service = a.ModelService(a.Settings(context_backend='gemma',worker_model='gemma4:12b-mlx',worker_digest='a'*64))
+    await service.client.aclose()
+    entered, release = asyncio.Event(), asyncio.Event()
+    async def health(): pass
+    service.health = health
+    async def respond(request):
+        entered.set(); await release.wait()
+        return a.httpx.Response(500)
+    service.client = a.httpx.AsyncClient(transport=a.httpx.MockTransport(respond),trust_env=False)
+    pending = None
+    try:
+        await service.limiter.acquire(source='model:airlock')
+        pending = asyncio.create_task(service.context_scan('private fact'))
+        await asyncio.sleep(0.01)
+        assert not entered.is_set()
+        pending.cancel()
+        with pytest.raises(asyncio.CancelledError): await pending
+        assert not service.context_unavailable
+        service.limiter.release()
+        pending = asyncio.create_task(service.context_scan('private fact'))
+        await asyncio.wait_for(entered.wait(),2)
+        pending.cancel()
+        with pytest.raises(asyncio.CancelledError): await pending
+        assert service.context_unavailable
+        await asyncio.wait_for(service.limiter.acquire(source='model:airlock'),2)
+        service.limiter.release()
+    finally:
+        release.set()
+        if pending is not None:
+            pending.cancel(); await asyncio.gather(pending,return_exceptions=True)
+        await service.close()
+
+
+@pytest.mark.asyncio
+async def test_gemma_queued_call_does_not_generate_after_latch():
+    service = a.ModelService(a.Settings(context_backend='gemma',worker_model='gemma4:12b-mlx',worker_digest='a'*64))
+    await service.client.aclose()
+    entered, release = asyncio.Event(), asyncio.Event()
+    calls, tasks = [], []
+    async def health(): pass
+    service.health = health
+    async def respond(request):
+        calls.append(request); entered.set(); await release.wait()
+        return a.httpx.Response(500)
+    service.client = a.httpx.AsyncClient(transport=a.httpx.MockTransport(respond),trust_env=False)
+    try:
+        tasks.append(asyncio.create_task(service.context_scan('first')))
+        await asyncio.wait_for(entered.wait(),2)
+        tasks.append(asyncio.create_task(service.context_scan('queued')))
+        await asyncio.sleep(0.01)
+        release.set()
+        results = await asyncio.wait_for(asyncio.gather(*tasks),2)
+        assert len(calls) == 1 and service.context_unavailable and all(r.unsafe for r in results)
+        await asyncio.wait_for(service.limiter.acquire(source='model:airlock'),2)
+        service.limiter.release()
+    finally:
+        release.set()
+        for task in tasks: task.cancel()
+        await asyncio.gather(*tasks,return_exceptions=True)
+        await service.close()
+
+
 class Fixture:
     def __init__(self, directory, policy=None, scanner=None, store=None, name='workspace'):
         self.root = directory/name

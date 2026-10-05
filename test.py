@@ -1281,6 +1281,174 @@ async def test_financial_local_artifact_with_native_coder(tmp_path, monkeypatch,
         f.store.close()
 
 
+def document_route_settings(tmp_path, backend='liteparse'):
+    legacy = pdf_route_settings(tmp_path).pdf_parser.model_dump()
+    legacy.update(backend=backend,pypdf_version=None,parser_version={'liteparse':'2.15.1','docling':'2.133.0'}[backend])
+    legacy['seccomp']['sha256']={'seccomp.json':'6cea4d19c3c0b3d6416285ea56d3ef26bd3083830c8319cd334a470558650fc2'}
+    return a.Settings(document_parsers={backend:a.PdfParserSpec.model_validate(legacy)})
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('mode',['allow','manual_allow','deny','disabled','manual_deny','missing'])
+async def test_document_actual_coder_named_read_and_approval(tmp_path,monkeypatch,mode):
+    from pydantic_ai.messages import ModelResponse,ToolCallPart
+    from PIL import Image
+    scratch=tmp_path/'scratch';scratch.mkdir();monkeypatch.setenv('TMPDIR',str(scratch))
+    policy=a.Governance(request='allow',read='manual' if mode.startswith('manual') else 'deny' if mode=='deny' else 'allow')
+    f=Fixture(tmp_path,policy);settings=document_route_settings(tmp_path)
+    settings=settings.model_copy(update={'governance':policy,'max_pdf_bytes':1024,
+        'enabled_tools':('calculate',) if mode=='disabled' else a.DEFAULT_TOOLS})
+    f.runtime.settings=settings
+    image=Image.effect_noise((150,150),80).convert('RGB');document=tmp_path/'scan.png'
+    image.save(document);image.close();source=document.read_bytes()
+    assert 1024<len(source)<settings.max_image_bytes
+    reads=[];chunks=[];original=a.read_media_bytes
+    def tracked(*args,**kwargs):reads.append(args[1]);return original(*args,**kwargs)
+    monkeypatch.setattr(a,'read_media_bytes',tracked)
+    task=f.task()
+    class Parser:
+        async def begin(self,task,read,size):
+            assert read.media_type=='png' and read.tool_name=='read_liteparse' and size==len(source)
+            read.phase='streaming';read.expected_bytes=size
+        async def chunk(self,task,read,seq,data):
+            assert seq==read.next_seq;chunks.append(data);read.next_seq+=1
+        async def finish(self,task,read):
+            assert b''.join(chunks)==source;read.phase='finished';return 'Wages 1250.25'
+        async def abort(self,task):pytest.fail('Unexpected parser abort')
+    f.runtime.document_parsers={} if mode=='missing' else {'liteparse':Parser()}
+    class Channel:
+        lock=asyncio.Lock()
+        models=0
+        async def _exchange(self,op,value):return await self.call(op,value)
+        async def call(self,op,value):
+            if op=='policy':return {'policy':policy.model_dump(mode='json')}
+            if op=='model':
+                self.models+=1;params=value['parameters']
+                visible={item['name'] for item in params['function_tools']}
+                # Missing prepared owner is caught at the owner boundary, not by model visibility.
+                assert ('read_liteparse' in visible)==(mode not in ('deny','disabled'))
+                part=(ToolCallPart('read_liteparse',{'path':str(document)},tool_call_id='doc-1') if self.models==1
+                    else ToolCallPart(params['output_tools'][0]['name'],{'response':'','protected_sources':[]}))
+                if self.models==2 and mode in ('allow','manual_allow'):assert '1250.25' in str(value['messages'])
+                return {'response':a.TypeAdapter(ModelResponse).dump_python(ModelResponse(parts=[part]),mode='json')}
+            if op=='approve_tool':
+                assert not reads and not chunks
+                pending=asyncio.create_task(f.runtime.worker_message(task,{'op':op,'payload':value}))
+                try:
+                    while not f.runtime.approvals.pending:await asyncio.sleep(0)
+                    vote=next(iter(f.runtime.approvals.pending.values()))
+                    assert vote.content['args']=={'path':str(document),'offset':0,'limit':None}
+                    assert f.runtime.approvals.decide(vote.id,mode=='manual_allow',vote.version)
+                    return await pending
+                finally:
+                    if not pending.done():pending.cancel()
+                    await asyncio.gather(pending,return_exceptions=True)
+            if op=='guard':return {'decision':'allow'}
+            if op=='trajectory':return {}
+            return await f.runtime.worker_message(task,{'op':op,'payload':value})
+    try:
+        channel=Channel()
+        assert await a.run_coder({'ask':{'request':'Read scan privately','disclosure_request':None}},channel,settings,tmp_path)=={
+            'response':'','protected_sources':[]}
+        success=mode in ('allow','manual_allow')
+        assert reads==([str(document)] if success else []) and bool(chunks)==success
+        assert task.pdf_read is None and not channel.lock.locked() and channel.models==2
+    finally:f.store.close()
+
+
+@pytest.mark.parametrize('backend',['liteparse','docling'])
+def test_document_helpers_and_fixed_routes(tmp_path,backend):
+    settings=document_route_settings(tmp_path,backend)
+    assert settings.pdf_parser is None and settings.document_parsers[backend].backend==backend
+    derived=ast.parse(a.document_parser_source(backend))
+    original=ast.parse(a.TOOLS_SOURCE.read_text())
+    for name in ('document_assets','document_image','extract_document_bytes'):
+        source=next(node for node in original.body if getattr(node,'name',None)==name)
+        generated=next(node for node in derived.body if getattr(node,'name',None)==name)
+        assert ast.dump(source,include_attributes=False)==ast.dump(generated,include_attributes=False)
+    assert ('DOCUMENT_BACKEND='+repr(backend)) in a.document_parser_source(backend).decode()
+    with pytest.raises(a.local_tools.ToolContractError,match='^pdf_unavailable$'):
+        a.local_tools.document_assets(tmp_path/'bundle',backend)
+    with pytest.raises(ValidationError):
+        a.Settings(document_parsers={('docling' if backend=='liteparse' else 'liteparse'):settings.document_parsers[backend]})
+
+
+@pytest.mark.parametrize('orientation',range(1,9))
+def test_document_image_orientation_and_original_provenance(orientation):
+    from PIL import Image
+    image=Image.new('RGB',(20,10),'white');exif=Image.Exif();exif[274]=orientation
+    source=a.io.BytesIO();image.save(source,format='PNG',exif=exif);image.close()
+    data=source.getvalue()
+    pdf,provenance=a.local_tools.document_image(data,'png',4096,200)
+    assert pdf.startswith(b'%PDF-') and provenance['source_sha256']==a.hashlib.sha256(data).hexdigest()
+    assert (provenance['original_width'],provenance['original_height'])==(20,10)
+    assert provenance['exif_orientation']==orientation
+    assert (provenance['oriented_width'],provenance['oriented_height'])==((10,20) if orientation>=5 else (20,10))
+    with pytest.raises(a.local_tools.ToolContractError,match='^pdf_input_limit$'):
+        a.local_tools.document_image(data,'png',len(data)-1,200)
+    with pytest.raises(a.local_tools.ToolContractError,match='^unsupported_file$'):
+        a.local_tools.document_image(data,'png',4096,199)
+    with pytest.raises(a.local_tools.ToolContractError,match='^unsupported_file$'):
+        a.local_tools.document_image(data,'jpeg',4096,200)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('backend',['liteparse','docling'])
+@pytest.mark.parametrize('fault',[None,'missing','task','call','grant','version','tool','policy','media'])
+async def test_document_owner_exact_route_and_media(tmp_path,backend,fault):
+    f=Fixture(tmp_path);f.runtime.settings=document_route_settings(tmp_path,backend)
+    task=f.task();seen=[]
+    class Parser:
+        async def begin(self,task,read,size):
+            seen.append((read.tool_name,read.media_type,size));read.phase='streaming'
+        async def finish(self,task,read):
+            read.phase='finished';return 'Wages 1250.25'
+        async def abort(self,task):seen.append('abort')
+    f.runtime.document_parsers={} if fault=='missing' else {backend:Parser()}
+    async def message(op,payload):return await f.runtime.worker_message(task,{'op':op,'payload':payload})
+    try:
+        tool='read_'+backend
+        reply=await message('tool_check',{'name':tool,'args':{'path':'scan.png'},'id':'document-1'})
+        if fault=='missing':
+            assert reply=={'decision':'deny'} and task.pdf_read is None and not seen
+            return
+        assert reply['decision']=='allow' and task.pdf_read.media_type=='png'
+        common={'task_id':task.id,'call_id':'document-1','grant':reply['pdf_grant'],'config_version':f.runtime.config_version}
+        if fault in ('task','call','grant','version'):
+            key={'task':'task_id','call':'call_id','grant':'grant','version':'config_version'}[fault]
+            common[key]=f.runtime.config_version+1 if fault=='version' else '0'*64
+        if fault=='tool':task.current_tool='read_'+('docling' if backend=='liteparse' else 'liteparse')
+        if fault=='policy':f.runtime.update_governance({**f.runtime.governance.model_dump(),'read':'deny'},f.runtime.config_version)
+        payload={**common,'size':10}
+        if fault=='media':payload['media_type']='pdf'
+        result=await message('pdf_begin',payload)
+        if fault:
+            assert result=={'error':'pdf_unavailable'} and seen==['abort']
+        else:
+            assert result=={'next_seq':0} and seen==[(tool,'png',10)]
+            assert await message('pdf_end',{**common,'seq':0})=={'text':'Wages 1250.25'}
+        await message('tool_finished',{'id':'document-1'})
+        assert task.pdf_read is None
+    finally:f.store.close()
+
+
+@pytest.mark.asyncio
+async def test_document_supervisor_retains_failed_owner(tmp_path):
+    supervisor=a.Supervisor(tmp_path/'state');calls=[]
+    class Owner:
+        fail=True
+        async def close(self):
+            calls.append('close')
+            if self.fail:raise a.AirlockError('pdf_unavailable')
+    owner=Owner();supervisor.document_parsers={'liteparse':owner}
+    try:
+        with pytest.raises(a.AirlockError,match='^pdf_unavailable$'):await supervisor.cleanup_shared()
+        assert supervisor.shared_closing and supervisor.document_parsers=={'liteparse':owner}
+        owner.fail=False;await supervisor.cleanup_shared()
+        assert calls==['close','close'] and not supervisor.document_parsers and not supervisor.shared_closing
+    finally:supervisor.store.close()
+
+
 @pytest.mark.asyncio
 async def test_financial_related_release_reassembly(tmp_path):
     f = Fixture(tmp_path, a.Governance(request='allow', read='allow', release='manual'))
@@ -1802,8 +1970,9 @@ async def test_actual_coder_tools_and_approval_hook_contract(tmp_path, manual, t
                                channel, fixture.settings, fixture.root if tool == 'custom_echo' else tmp_path)
     assert result == {'response': 'Synthetic result', 'protected_sources': []}
     assert import_marker.exists() == (tool == 'custom_echo')
-    assert channel.visible_tools == (a.TOOL_NAMES - a.READ_TOOLS if tool == 'calculate'
-                                     else a.TOOL_NAMES | {'custom_echo'} if tool == 'custom_echo' else a.TOOL_NAMES)
+    prepared_names = a.TOOL_NAMES - set(a.local_tools.DOCUMENT_TOOLS)
+    assert channel.visible_tools == (prepared_names - a.READ_TOOLS if tool == 'calculate'
+                                     else prepared_names | {'custom_echo'} if tool == 'custom_echo' else prepared_names)
     assert channel.model_calls == 2
     checks = [value for op, value in channel.calls if op == 'tool_check']
     approvals = [value for op, value in channel.calls if op == 'approve_tool']
@@ -3150,6 +3319,46 @@ async def test_pdf_route_scripted_lifecycle_positive(scripted_pdf_parser):
     assert commands[-3][0:2]==['container','remove']
     assert commands[-2][0:2]==commands[-1][0:2]==['container','inspect']
     assert all(proc.returncode is not None for proc,_ in parser.cli_handles)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('backend',['liteparse','docling'])
+@pytest.mark.parametrize('mode',['finish','abort','recover'])
+async def test_document_named_owned_lifecycle(scripted_pdf_parser,tmp_path,backend,mode):
+    old,task,_,state,_,_=scripted_pdf_parser
+    data=old.spec.model_dump()
+    data.update(backend=backend,pypdf_version=None,parser_version={'liteparse':'2.15.1','docling':'2.133.0'}[backend])
+    data['seccomp']['sha256']={'seccomp.json':'6cea4d19c3c0b3d6416285ea56d3ef26bd3083830c8319cd334a470558650fc2'}
+    spec=a.PdfParserSpec.model_validate(data)
+    settings=old.settings.model_copy(update={'pdf_parser':None,'document_parsers':{backend:spec}})
+    parser=a.PdfParser(settings,tmp_path/'named-state','b'*64,spec=spec)
+    parser.pins=old.pins;parser.ready=True;parser.image_labels=old.image_labels
+    read=a.PdfRead('named-call','c'*64,1,'d'*64,tool_name='read_'+backend,media_type='png')
+    task.pdf_read=read
+    try:
+        await parser.begin(task,read,3)
+        assert parser.job.spec.backend==backend and parser.job.media_type=='png'
+        recorded=parser.job
+        if mode=='abort':await parser.abort(task)
+        else:
+            await parser.chunk(task,read,0,b'png')
+            assert '1250.25' in await parser.finish(task,read)
+        if mode=='recover':
+            parser.job=recorded.model_copy(update={'phase':'created','cli_processes':[]})
+            parser.save()
+            assert (await parser.command(parser.create_args(),a.time.monotonic()+2))[0]==0
+            changed=spec.model_copy(update={'image_id':'sha256:'+'9'*64})
+            parser.spec=parser.prepared_spec=changed
+            seen=[];pins=parser.pins
+            async def observe(deadline,**kwargs):
+                seen.append(parser.spec.image_id);await pins(deadline,**kwargs)
+            parser.pins=observe
+            await parser.recover()
+            assert seen==[spec.image_id] and parser.spec is changed
+        assert parser.job is None and not parser.slot.locked()
+        assert a.json.loads(state.read_text()) is None and not list(parser.folder.iterdir())
+        assert all(process.returncode is not None for process,_ in parser.cli_handles)
+    finally:await parser.close()
 
 
 @pytest.mark.asyncio

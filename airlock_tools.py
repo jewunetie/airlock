@@ -18,7 +18,8 @@ from typing import Any, Literal
 from jsonschema import Draft202012Validator, SchemaError
 from pydantic import BaseModel, ConfigDict, Field, StrictStr, model_validator
 
-DEFAULT_TOOLS = ('read_file', 'write_file', 'edit_file', 'list_files', 'grep', 'shell', 'calculate', 'read_csv')
+DOCUMENT_TOOLS = {'read_liteparse':'liteparse', 'read_docling':'docling'}
+DEFAULT_TOOLS = ('read_file', 'write_file', 'edit_file', 'list_files', 'grep', 'shell', 'calculate', 'read_csv', *DOCUMENT_TOOLS)
 BOUNDARIES = {name: 'shell' if name == 'shell' else 'write' if name in ('write_file', 'edit_file')
               else 'read' for name in DEFAULT_TOOLS}
 SCHEMA_KEYS = frozenset({'type', 'properties', 'required', 'additionalProperties', 'items', 'enum',
@@ -81,6 +82,143 @@ def csv_tool(read_bytes, page_text, max_text_bytes: int):
             raise ToolFailed('The local CSV cannot be read with these settings.') from None
 
     return Tool(read_csv, takes_ctx=False, sequential=True)
+
+
+def document_tools(reader):
+    """Construct named local parser reads; execution requires an owner-issued grant."""
+    from pydantic_ai import Tool
+    tools=[]
+    for name in DOCUMENT_TOOLS:
+        def build(name):
+            async def read_document(ctx, path: StrictStr, offset: int = 0, limit: int | None = None) -> str:
+                """Read a local PDF or PNG/JPEG/WebP image with the named prepared parser.
+
+                Args:
+                    path: Local file inside the workspace or granted private scratch.
+                    offset: Zero-based line offset in private text/JSON provenance.
+                    limit: Optional positive count under the existing read-window bound.
+
+                Returns:
+                    Bounded parsed text, string cells and page/box provenance after
+                    exact read approval and owned confined child cleanup. Missing
+                    prepared assets, malformed input and resource/cleanup failures
+                    return fixed local errors. This tool grants no release permission.
+                """
+                return await reader(name,ctx.tool_call_id,path,offset,limit)
+            return Tool(read_document,name=name,takes_ctx=True,sequential=True)
+        tools.append(build(name))
+    return tools
+
+
+def document_assets(bundle: Path, backend: str) -> None:
+    """Refuse absent or changed local OCR/model bytes before importing a parser."""
+    expected={'assets/tessdata/eng.traineddata':'7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2'}
+    if backend=='docling':
+        expected.update({
+            'assets/tessdata/osd.traineddata':'9cf5d576fcc47564f11265841e5ca839001e7e6f38ff7f7aacf46d15a96b00ff',
+            'assets/docling/docling-project--docling-layout-heron/model.safetensors':'00333a43451945aaf89db8ca9c0a17e75d1537c17db60fdb91aa95f4c7929e0c',
+            'assets/docling/docling-project--docling-layout-heron/config.json':'fdea30805ce2f5666b147fca941dcdd27ad468e27d6ed21902207d3da056a97d',
+            'assets/docling/docling-project--docling-layout-heron/preprocessor_config.json':'cd38cd59999e7a95d68e487fbe5132df3d4e5c32a0836add57e6126ba0c4eaf1',
+            'assets/docling/docling-project--docling-models/model_artifacts/tableformer/accurate/tableformer_accurate.safetensors':'2a7d6c924b3cd12fb99a09280ca9c33a89c5d60b93253617d2e088c1a40374d9',
+            'assets/docling/docling-project--docling-models/model_artifacts/tableformer/accurate/tm_config.json':'984e122ceb8ccf84d84c9d2882f6f2302a44b4f1e577babd6289892c36f3cffd'})
+    elif backend!='liteparse':
+        raise ToolContractError('pdf_unavailable')
+    for name,digest in expected.items():
+        path=bundle/name
+        if path.is_symlink() or not path.is_file():
+            raise ToolContractError('pdf_unavailable')
+        with path.open('rb') as stream:
+            actual=hashlib.file_digest(stream,'sha256').hexdigest()
+        if actual!=digest:raise ToolContractError('pdf_unavailable')
+
+
+def document_image(data: bytes, media: str, byte_cap: int, pixel_cap: int) -> tuple[bytes,dict]:
+    """Normalize one bounded raster locally into PDF bytes; retain original provenance."""
+    import warnings
+    from PIL import Image,ImageOps
+    if not 1 <= len(data) <= byte_cap:raise ToolContractError('pdf_input_limit')
+    with warnings.catch_warnings():
+        warnings.simplefilter('error',Image.DecompressionBombWarning)
+        with Image.open(io.BytesIO(data)) as image:
+            if (image.format!={'png':'PNG','jpeg':'JPEG','webp':'WEBP'}.get(media)
+                    or image.width*image.height>pixel_cap or getattr(image,'n_frames',1)!=1):
+                raise ToolContractError('unsupported_file')
+            orientation=image.getexif().get(274,1)
+            if type(orientation) is not int or not 1 <= orientation <= 8:
+                raise ToolContractError('unsupported_file')
+            provenance={'source_sha256':hashlib.sha256(data).hexdigest(),'media':media,
+                'original_width':image.width,'original_height':image.height,'exif_orientation':orientation,
+                'raster_dpi':150,'page_origin':'top_left','page_units':'points','pixels_to_points':72/150}
+            with ImageOps.exif_transpose(image) as oriented:
+                provenance.update(oriented_width=oriented.width,oriented_height=oriented.height)
+                with oriented.convert('RGBA') as rgba, Image.new('RGBA',rgba.size,'white') as background:
+                    with Image.alpha_composite(background,rgba) as composite, composite.convert('RGB') as rendered:
+                        output=io.BytesIO();rendered.save(output,format='PDF',resolution=150)
+    if len(output.getvalue())>16777216:raise ToolContractError('pdf_input_limit')
+    return output.getvalue(),provenance
+
+
+def extract_document_bytes(data: bytes, backend: str, media: str, pages: int,
+                           text_cap: int, image_bytes: int, image_pixels: int, bundle: Path) -> str:
+    """Parse bounded bytes with pinned local libraries inside the owned Linux child."""
+    import dataclasses
+    import importlib.metadata
+    document_assets(bundle,backend)
+    if media=='pdf':
+        if not data.startswith(b'%PDF-'):raise ToolContractError('unsupported_file')
+        provenance={'source_sha256':hashlib.sha256(data).hexdigest(),'media':'pdf'}
+    else:data,provenance=document_image(data,media,image_bytes,image_pixels)
+    records=[{'kind':'source','backend':backend,**provenance}]
+    if backend=='liteparse':
+        if importlib.metadata.version('liteparse')!='2.15.1':raise ToolContractError('pdf_unavailable')
+        import liteparse
+        if Path(liteparse.__file__).resolve().parent!=bundle/'liteparse':raise ToolContractError('pdf_unavailable')
+        parser=liteparse.LiteParse(ocr_enabled=True,ocr_language='eng',tessdata_path=str(bundle/'assets/tessdata'),
+            max_pages=pages+1,quiet=True,num_workers=1,extract_blocks=True,extract_form_fields=True,
+            emit_word_boxes=True,ocr_failure_fatal=True,continue_on_page_error=False,
+            extract_images=False,extract_screenshots=False,extract_links=False,keep_headers_footers=True)
+        try:
+            result=parser.parse(data)
+            if result.total_pages>pages:raise ToolContractError('pdf_page_limit')
+            if result.page_errors or result.image_error_count:raise ToolContractError('pdf_unavailable')
+            if not result.text.strip():raise ToolContractError('pdf_no_text')
+            for page in result.pages:
+                value=dataclasses.asdict(page)
+                blocks=value.pop('blocks',None);items=value.pop('text_items')
+                records.append({'kind':'page',**value})
+                records.extend({'kind':'text_item','page_num':page.page_num,**item} for item in items)
+                records.extend({'kind':'block','page_num':page.page_num,**item} for item in blocks or [])
+        finally:parser.close()
+    else:
+        if importlib.metadata.version('docling-slim')!='2.133.0':raise ToolContractError('pdf_unavailable')
+        import docling
+        if Path(docling.__file__).resolve().parent!=bundle/'docling':raise ToolContractError('pdf_unavailable')
+        from docling.document_converter import DocumentConverter,PdfFormatOption
+        from docling.datamodel.base_models import ConversionStatus,DocumentStream,InputFormat
+        from docling.datamodel.pipeline_options import PdfPipelineOptions,TesseractOcrOptions
+        from docling.datamodel.accelerator_options import AcceleratorOptions
+        options=PdfPipelineOptions(artifacts_path=bundle/'assets/docling',enable_remote_services=False,
+            allow_external_plugins=False,accelerator_options=AcceleratorOptions(device='cpu',num_threads=1),
+            ocr_options=TesseractOcrOptions(lang=['eng'],path=str(bundle/'assets/tessdata')),
+            do_ocr=True,do_table_structure=True,do_code_enrichment=False,do_formula_enrichment=False,
+            do_picture_description=False,do_picture_classification=False,
+            generate_page_images=False,generate_picture_images=False)
+        converter=DocumentConverter(allowed_formats=[InputFormat.PDF],
+            format_options={InputFormat.PDF:PdfFormatOption(pipeline_options=options)})
+        result=converter.convert(DocumentStream(name='document.pdf',stream=io.BytesIO(data)),
+            raises_on_error=True,max_num_pages=pages,max_file_size=len(data))
+        if result.status!=ConversionStatus.SUCCESS or result.errors:raise ToolContractError('pdf_unavailable')
+        if len(result.document.pages)>pages:raise ToolContractError('pdf_page_limit')
+        for item,_ in result.document.iterate_items():
+            records.append({'kind':'docling_item','item':item.model_dump(mode='json')})
+        if len(records)==1:raise ToolContractError('pdf_no_text')
+    output=[];used=0
+    for record in records:
+        line=json.dumps(record,ensure_ascii=True,allow_nan=False)
+        used+=len(line.encode())+1
+        if used>text_cap or len(line)>59000:raise ToolContractError('pdf_output_limit')
+        output.append(line)
+    return '\n'.join(output)
 
 
 class ExtensionSpec(BaseModel):

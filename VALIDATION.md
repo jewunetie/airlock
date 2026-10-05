@@ -4,6 +4,74 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+### Named document tools and owned parser integration, 2026-10-05
+
+The final locked suite passes **588 core checks**, with eight existing provider
+deprecation warnings and no failures/skips. Complete output is
+`/private/tmp/airlock-document-final2-20261005.log`. `uv sync --locked` and
+`uv pip check` pass with exact LiteParse2.15.1, minimal Docling-slim2.133.0
+extras and compatible torchvision0.28.0. Inline/project dependencies agree.
+Source SHA256 is `fb3a48a954283cf0e4eb160ed12e49cdd256564ad8a16bcb1d9f909f0bd82616`;
+tools SHA256 is `5a6ee257160423f3533acf2060e168a1c016a54bd57e0076fb2720748c843e82`;
+tests SHA256 is `d58d5533768273d3dbe3a56c62c67940b4714571f64bf7ac4c4a4cf513133222`.
+
+Actual Coder with scripted replies exercises named-parser manual allow/deny,
+allow/disabled/denied/missing-owner behavior, exact normalized approval args,
+zero reads before approval and matching owner-streamed bytes. An image larger
+than the independent PDF cap remains allowed under its image cap. Owner checks
+reject wrong task/call/grant/configuration/tool/media and policy changes. Image
+checks retain original digest/dimensions and all eight EXIF orientations, and
+reject byte/pixel/format mismatches. Generated helper ASTs match shipped functions.
+Scripted actual subprocess pipes exercise both named routes' finish, explicit
+abort/cleanup and retained-job recovery with original pins before restoring new
+prepared specifications. These lifecycle scripts are not native Docker evidence.
+Failed supervisor owners remain retained until cleanup succeeds.
+
+The generated shipped LiteParse helper also executes natively against synthetic
+scanned PDF/PNG and malformed input in the fixed confined image. Exact effective
+settings are verified through production validation, tested signs/decimal strings/
+leading zeros are preserved, and every exact container is independently absent
+after cleanup. Evidence is
+`/private/tmp/airlock-native-document-bff17e1b809547e48efa8b6a7a1e130d/evidence.json`,
+SHA256 `51de52b2a6dcd38babd13eff79590de55f5ae0d05825995362b0cf7ee24644f2`.
+Generated helper SHA256 is
+`e363c627e5e686bc1fe61e36d6db8973eda2115549744d216f661178b6460ca5`.
+This separate diagnostic does not establish the full owner workflow.
+
+The unchanged strict PdfParser owner separately passes its actual digital-PDF,
+malformed-file and image-OCR startup canaries and close. Every CLI creation time
+is captured; no identity-policy relaxation was used. No retained jobs/live CLI
+processes remain. Evidence is
+`/private/tmp/airlock-strict-document-owner-77d4cef8e4c549fcbf715ffd24d8e938/evidence.json`.
+This successful run does not prove the previously observed identity failure's
+cause or eliminate every possible occurrence of it.
+
+A further actual Coder/strict-owner check manually approves a synthetic scanned
+PNG, parses its bytes in the owned Linux child, performs two exact decimal
+subtractions and writes a private JSON artifact with total985.10. Original scan
+bytes stay unchanged; the outbound response is empty and close leaves no jobs or
+live CLI processes. Evidence is
+`/private/tmp/airlock-strict-document-owner-2760f920ef954b029421c39a4106330f/evidence.json`.
+Model replies are scripted and the worker SRT process is not executed in this
+harness; it is useful integration evidence, not live-model tax acceptance.
+The first artifact harness stalled because its workspace was not registered
+ready. Only that test was interrupted; close passed, no jobs/CLI survived, and
+the corrected registration/approval loop passed without production-code changes.
+
+Wheel/sdist builds, exact two-module/source-byte archive checks, isolated wheel
+import/module pin/tool registration and installed CLI help pass. Evidence is
+`/private/tmp/airlock-document-build-20261005/evidence.json`; installed files are
+in `/private/tmp/airlock-document-installed-20261005`. Fresh review corrected the
+initial context-annotation registration and independent image-cap defects, added
+actual Coder/recovery coverage, and found no further production boundary defect.
+
+Required table fidelity, Docling native parsing/model fit, real worker SRT/model
+acceptance and the full local/selected-release tax workflow remain unproven.
+Docling assets are not downloaded; their explicit acquisition decision remains
+pending. LiteParse's earlier scans yielded no table blocks; fatal OCR mode only
+reports systemic OCR failure, not proof that every source element was recognized.
+No global services, plugin binding, scanner acceptance or runtime settings changed.
+
 ### Document parser feasibility and CSV contracts, 2026-10-05
 
 The selected scope is PDFs/images with local OCR and table extraction, plus CSV;

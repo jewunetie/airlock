@@ -2,6 +2,61 @@
 
 ## Docling/LiteParse preparation and required document scope
 
+### Shipped parser selection and owner integration
+
+Data: retain the existing optional pypdf route and add trusted
+Settings.document_parsers:dict[Literal['liteparse','docling'],PdfParserSpec], empty
+by default. Each fixed specification declares backend, exact parser version,
+daemon/CLI/image/Python pins, complete read-only dependency/OCR/model bundle and
+syscall policy. The existing pypdf fields/defaults remain compatible. Native
+library versions are LiteParse2.15.1 and Docling2.133.0; packages/assets are
+prepared explicitly, never installed/downloaded by tools. Existing512MiB/15CPU-
+second/FSIZE0/page/input/output/PID limits remain binding. Each job/read retains
+the exact tool/backend, input media type, original configuration/version/task/
+call/grant, pins and ownership. Image bytes/pixels/frames remain bounded by the
+existing settings; returned provenance retains original digest/dimensions/EXIF
+orientation and the oriented raster-to-page scale.
+
+API: read_liteparse and read_docling take path:StrictStr, offset:int=0 and
+limit:int|None=None and return paged bounded private text/JSON provenance. The
+operator may explicitly enable either or both through enabled_tools; missing
+prepared routes/assets cannot execute. Ordinary read_file stays unchanged.
+These are governed reads, with the same exact manual votes, replay/configuration
+checks and budgets. Map the literal tool to its trusted prepared entry; no caller
+selects backend/options/URLs/grants. Bind the owner streaming protocol to that
+read and route, accept bounded already-read bytes only, and retain channel-lock,
+EOF/exit/removal/independent-absence requirements before returning text. Reject
+changed policy, wrong task/call/backend/media/config/sequence, canceled reads,
+missing/mismatched assets, parse errors or partial results with fixed local errors.
+Restart recovery retains every original route/job pin; an uncertain route remains
+unavailable and cannot be replaced to evade cleanup. Helpers remain generated
+from shipped reviewed definitions, not separately maintained parser programs.
+
+LiteParse uses explicit local English traineddata, one worker, fatal OCR failures,
+no page-error continuation/pool/screenshots/images/remote OCR. Image conversion
+uses existing Pillow only in memory, after byte/pixel/frame/format validation and
+EXIF orientation normalization; original provenance is retained. Both text and
+structured table blocks are returned without inventing missing table structure.
+Docling standard OCR/table implementation and native resource success remain
+dependent on its pending explicit pinned asset acquisition; unavailable Docling
+fails closed and is not counted as tax-ready. No larger resource route is implied.
+
+Location: extraction/schema/tool/helper definitions in airlock_tools.py; root
+airlock.py retains all supervision, settings/identity, exact grants, owned parser
+instances, framing and lifecycle. Tests remain test.py; dependency changes through
+uv keep inline/project/lock equal. HOW/ARCHITECTURE/README/VALIDATION state supported
+behavior and executed limits. Private prepared test bundles/evidence stay in tmp;
+existing global settings/services/plugin/calibration are not changed or activated.
+
+Tests: preserve all old pypdf contracts; actual Coder parser read approve/deny/
+disabled/manual-deny and no read/import before approval; wrong-route/config/task/
+call/media replay and cancellation; pinned helper/package/model/OCR failures;
+frame/size/page/text/pixel/format/multiframe/orientation limits and no partial text;
+real confined synthetic PDF/image positives and exact tax strings/positions, with
+network/unsafe-syscall denials and complete cleanup. Test owned recovery separately
+from parser accuracy and selected-release privacy. Fresh review, full locked core,
+build/isolated-install checks and explicit honest evidence precede each checkpoint.
+
 Data: the verified October5 user decision requires PDFs/images with local OCR and
 table extraction, plus CSV; Word/Excel are useful extras. Preserve raw extracted
 text, exact string cells, page/row/column and bounding-box provenance, parser and
@@ -77,6 +132,14 @@ The image compatibility check may use the already locked Pillow version to
 convert a synthetic PNG to PDF entirely in memory, with explicit raster/page
 scale recorded in provenance. This grants no scratch writes and changes no
 tax values; direct-image and converted-image results are reported separately.
+Independent image checks also exercise existing max_image_bytes/max_image_pixels,
+single-frame and PNG/JPEG/WebP restrictions before raster loading, existing
+Pillow EXIF orientation handling, and explicit fixed raster-to-page scale.
+Keep original bytes/digest/dimensions/orientation in local provenance; record
+oriented dimensions, DPI and top-left page units rather than inventing original
+pixel boxes. Synthetic rotated/mirrored JPEGs must recover the same raw values;
+byte/pixel/frame overflow and unsupported media must fail before OCR. These
+checks do not resolve the still-pending production parser selection API.
 
 ### Required CSV read tool
 

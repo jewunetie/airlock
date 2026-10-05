@@ -2,23 +2,26 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
-#     "fastmcp>=4.0.10,<4.1",
+#     "docling-slim[convert-core,feat-ocr-tesserocr,format-pdf,models-local]==2.133.0",
 #     "fastmcp-tasks>=4.0.10,<4.1",
+#     "fastmcp>=4.0.10,<4.1",
 #     "filelock>=3.32.3,<4",
 #     "httpx>=0.28.1,<0.29",
 #     "jsonschema>=4.26,<5",
+#     "liteparse==2.15.1",
 #     "opentelemetry-sdk>=1.45,<1.46",
 #     "pillow>=12.3,<13",
 #     "platformdirs>=4.12.1,<5",
 #     "presidio-analyzer>=2.2.364,<2.3",
 #     "psutil>=7.2.2,<8",
-#     "pydantic>=2.13.4,<2.14",
 #     "pydantic-ai-harness>=0.36,<0.37",
 #     "pydantic-ai-slim[openai]>=2.46.0,<2.47.0",
 #     "pydantic-settings>=2.15,<2.16",
+#     "pydantic>=2.13.4,<2.14",
 #     "pypdf>=6.16.1,<7",
 #     "textual>=8.2.8,<8.3",
 #     "torch>=2.13.0,<2.14.0",
+#     "torchvision==0.28.0",
 #     "transformers>=5.15.0,<5.16.0",
 #     "uvicorn>=0.52.4,<0.55",
 # ]
@@ -87,7 +90,7 @@ try:
     _tools_bytes = TOOLS_SOURCE.read_bytes()
 except OSError:
     raise SystemExit('Airlock: tools_source_unavailable') from None
-TOOLS_MODULE_SHA256 = 'd1da1542667c1975b14e848a5535507598a0953aef65bed31556662f5c3e6d4d'
+TOOLS_MODULE_SHA256 = '5a6ee257160423f3533acf2060e168a1c016a54bd57e0076fb2720748c843e82'
 if hashlib.sha256(_tools_bytes).hexdigest() != TOOLS_MODULE_SHA256:
     raise SystemExit('Airlock: tools_source_changed')
 _tools_spec = importlib.util.spec_from_file_location('airlock_tools', TOOLS_SOURCE)
@@ -113,7 +116,7 @@ SCHEMA_VERSION = 3
 ALGORITHM_VERSION = "fragment-graph-v2"
 DEFAULT_TOOLS = local_tools.DEFAULT_TOOLS
 TOOL_NAMES = frozenset(DEFAULT_TOOLS)
-READ_TOOLS = frozenset({"read_file", "read_csv", "list_files", "grep"})
+READ_TOOLS = frozenset({"read_file", "read_csv", "read_liteparse", "read_docling", "list_files", "grep"})
 WRITE_TOOLS = frozenset({"write_file", "edit_file"})
 TERMINAL = {"completed", "withheld", "denied", "cancelled", "failed"}
 SAFE_MESSAGES = {
@@ -406,7 +409,9 @@ class PdfParserSpec(BaseModel):
     image_id: str = Field(pattern='^sha256:[0-9a-f]{64}$')
     python_path: Literal['/usr/local/bin/python']
     python_sha256: str = Field(pattern='^[0-9a-f]{64}$')
-    pypdf_version: str = Field(min_length=1, max_length=64)
+    backend: Literal['pypdf','liteparse','docling'] = 'pypdf'
+    pypdf_version: str | None = Field(default=None,min_length=1, max_length=64)
+    parser_version: str | None = Field(default=None,min_length=1,max_length=64)
     bundle: AssetSpec
     seccomp: AssetSpec
 
@@ -424,9 +429,14 @@ class PdfParserSpec(BaseModel):
                 or not self.cli.is_absolute() or not self.bundle.path.is_absolute()
                 or not self.seccomp.path.is_absolute()
                 or set(self.seccomp.sha256) != {'seccomp.json'}
-                or self.seccomp.sha256['seccomp.json'] !=
-                    'e8a4daad44feb37626d50eee92d6c0adb1722eab0a1a48b10a88a2e8b730cf85'):
+                or self.seccomp.sha256['seccomp.json'] != (
+                    'e8a4daad44feb37626d50eee92d6c0adb1722eab0a1a48b10a88a2e8b730cf85' if self.backend=='pypdf'
+                    else '6cea4d19c3c0b3d6416285ea56d3ef26bd3083830c8319cd334a470558650fc2')):
             raise ValueError('fixed local PDF parser pins required')
+        if (self.backend=='pypdf' and (self.pypdf_version is None or self.parser_version is not None)
+                or self.backend!='pypdf' and (self.pypdf_version is not None or self.parser_version !=
+                    {'liteparse':'2.15.1','docling':'2.133.0'}[self.backend])):
+            raise ValueError('fixed parser version required')
         return self
 
 
@@ -442,6 +452,8 @@ class PdfRead:
     received_bytes: int = 0
     deadline: float = 0.0
     job_id: str | None = None
+    tool_name: str = 'read_file'
+    media_type: Literal['pdf','png','jpeg','webp'] = 'pdf'
 
 
 class PdfMessage(BaseModel):
@@ -528,6 +540,7 @@ class Settings(BaseSettings):
     pdf_timeout: float = Field(default=15, ge=1, le=60)
     pdf_memory_mb: int = Field(default=512, ge=128, le=2048)
     pdf_parser: PdfParserSpec | None = None
+    document_parsers: dict[Literal['liteparse','docling'],PdfParserSpec] = Field(default_factory=dict)
     reassembly_max_states: int = Field(default=20000, ge=100, le=100000)
     ollama_unload_on_idle: bool = True
     reassembly_fraction: float = Field(default=1.0, gt=0, le=1)
@@ -592,10 +605,14 @@ class Settings(BaseSettings):
     def chunk_geometry(self):
         if self.scanner_overlap >= self.scanner_chunk_chars:
             raise ValueError("scanner overlap must be smaller than chunk")
-        if self.pdf_parser is not None and (self.max_pdf_bytes > 16_777_216
+        if (self.pdf_parser is not None or self.document_parsers) and (self.max_pdf_bytes > 16_777_216
                 or self.max_pdf_text_bytes > 524_288 or self.max_pdf_pages > 100
                 or self.pdf_timeout > 15 or self.pdf_memory_mb > 512):
             raise ValueError('fixed PDF parser ceilings exceeded')
+        if self.pdf_parser is not None and self.pdf_parser.backend!='pypdf':
+            raise ValueError('read_file requires the pypdf route')
+        if any(spec.backend!=name for name,spec in self.document_parsers.items()):
+            raise ValueError('document parser backend mismatch')
         return self
 
 
@@ -659,6 +676,7 @@ def prepared_settings(root: Path = INSTALLATION_ROOT) -> dict:
         except importlib.metadata.PackageNotFoundError:
             raise AirlockError('dependencies_missing') from None
     data = manifest.settings.copy()
+    if 'document_parsers' in data:data['document_parsers'] = data['document_parsers'].copy()
     for key in ('srt', 'betterleaks', 'betterleaks_rules', 'calibration', 'scratch_root'):
         if data.get(key) is not None:
             value = Path(data[key])
@@ -669,14 +687,18 @@ def prepared_settings(root: Path = INSTALLATION_ROOT) -> dict:
             data[key] = {**data[key], 'path': str(value if value.is_absolute() else root/value)}
     data['extra_runtime_reads'] = [str(Path(v) if Path(v).is_absolute() else root/v)
                                    for v in data.get('extra_runtime_reads', [])]
-    if data.get('pdf_parser') is not None:
-        parser = data['pdf_parser'].copy()
+    entries = [('pdf_parser',data['pdf_parser'])] if data.get('pdf_parser') is not None else []
+    entries += [('read_'+name,value) for name,value in data.get('document_parsers',{}).items()]
+    for key,value in entries:
+        parser = value.copy()
         parser['cli'] = Path(parser['cli'])
         for name in ('bundle', 'seccomp'):
             asset = parser[name].copy()
             asset['path'] = Path(asset['path'])
             parser[name] = AssetSpec.model_validate(asset)
-        data['pdf_parser'] = PdfParserSpec.model_validate(parser)
+        parsed = PdfParserSpec.model_validate(parser)
+        if key=='pdf_parser':data[key]=parsed
+        else:data['document_parsers'][key.removeprefix('read_')]=parsed
     # The manifest supplies provisioning, not silently broadened governance.
     if any(key in data for key in ('governance', 'preset', 'calibration_acceptance')):
         raise AirlockError('manifest_policy_forbidden')
@@ -1719,7 +1741,7 @@ class CalibrationProfile(BaseModel):
 def calibration_binding(settings: Settings) -> str:
     names = ('worker_model', 'worker_digest', 'context_backend', 'betterleaks_sha256', 'betterleaks_rules_sha256',
              'pii_asset', 'policy_asset', 'hf_modules_asset', 'scanner_chunk_chars', 'scanner_overlap',
-             'max_scan_findings', 'reassembly_min_fragment', 'reassembly_max_states', 'pdf_parser', 'extensions')
+             'max_scan_findings', 'reassembly_min_fragment', 'reassembly_max_states', 'pdf_parser', 'document_parsers', 'extensions')
     packages = {}
     for name in ('presidio-analyzer', 'transformers', 'torch', 'pydantic-ai-slim', 'pydantic-ai-harness'):
         with contextlib.suppress(importlib.metadata.PackageNotFoundError):
@@ -3745,7 +3767,7 @@ def pdf_parser_main() -> None:
             result.extend(piece)
         return bytes(result)
     try:
-        if len(sys.argv) != 8 or any(not re.fullmatch('[0-9]+', v) for v in sys.argv[1:5]):
+        if len(sys.argv) not in (8,12) or any(not re.fullmatch('[0-9]+', v) for v in sys.argv[1:5]):
             raise AirlockError('pdf_unavailable')
         pages, text_cap, memory_mb, cpu = map(int, sys.argv[1:5])
         if not (1 <= pages <= 100 and 1 <= text_cap <= 524288
@@ -3766,14 +3788,22 @@ def pdf_parser_main() -> None:
         if files != set(expected) or any(p.is_symlink() for p in bundle.rglob('*')):
             raise AirlockError('pdf_unavailable')
         for name, digest in expected.items():
-            if (Path(name).is_absolute() or '..' in Path(name).parts
-                    or hashlib.sha256((bundle/name).read_bytes()).hexdigest() != digest):
+            if Path(name).is_absolute() or '..' in Path(name).parts:
                 raise AirlockError('pdf_unavailable')
+            with (bundle/name).open('rb') as stream:
+                if hashlib.file_digest(stream,'sha256').hexdigest() != digest:
+                    raise AirlockError('pdf_unavailable')
         if hashlib.sha256(Path('/proc/self/exe').read_bytes()).hexdigest() != sys.argv[5]:
             raise AirlockError('pdf_unavailable')
         sys.path.insert(0, str(bundle))
-        import pypdf
-        if pypdf.__version__ != sys.argv[6] or Path(pypdf.__file__).resolve().parent != bundle/'pypdf':
+        backend = sys.argv[8] if len(sys.argv)==12 else 'pypdf'
+        if globals().get('DOCUMENT_BACKEND',backend) != backend:
+            raise AirlockError('pdf_unavailable')
+        if backend=='pypdf':
+            import pypdf
+            if pypdf.__version__ != sys.argv[6] or Path(pypdf.__file__).resolve().parent != bundle/'pypdf':
+                raise AirlockError('pdf_unavailable')
+        elif backend not in ('liteparse','docling') or sys.argv[6]!={'liteparse':'2.15.1','docling':'2.133.0'}[backend]:
             raise AirlockError('pdf_unavailable')
         # Actual effective Linux controls, including the finite special /dev mount.
         controls = {'memory.max': str(cap), 'memory.swap.max': '0', 'pids.max': '32',
@@ -3797,7 +3827,14 @@ def pdf_parser_main() -> None:
         data = exact(size)
         if sys.stdin.buffer.read(1):
             raise AirlockError('pdf_bad_chunk')
-        text = extract_pdf_bytes(data, pages, text_cap)
+        if backend=='pypdf':text=extract_pdf_bytes(data,pages,text_cap)
+        else:
+            if sys.argv[9] not in ('pdf','png','jpeg','webp') or any(not re.fullmatch('[0-9]+',v) for v in sys.argv[10:]):
+                raise AirlockError('pdf_unavailable')
+            image_bytes,image_pixels=map(int,sys.argv[10:])
+            if not (1024<=image_bytes<=4194304 and 1024<=image_pixels<=32000000):
+                raise AirlockError('pdf_unavailable')
+            text=extract_document_bytes(data,backend,sys.argv[9],pages,text_cap,image_bytes,image_pixels,bundle)
         if len(text.encode('utf-8')) > text_cap:
             raise AirlockError('pdf_output_limit')
         emit(b'S', text)
@@ -3830,6 +3867,26 @@ def pdf_parser_source() -> bytes:
     return text.encode()
 
 
+def document_parser_source(backend: str) -> bytes:
+    """Generate the fixed native helper from reviewed shipped definitions only."""
+    if backend not in ('liteparse','docling'):raise AirlockError('pdf_unavailable')
+    import ast
+    source=TOOLS_SOURCE.read_text()
+    names={'document_assets','document_image','extract_document_bytes'}
+    nodes=[node for node in ast.parse(source).body if isinstance(node,ast.FunctionDef) and node.name in names]
+    if {node.name for node in nodes}!=names:raise AirlockError('pdf_unavailable')
+    base=pdf_parser_source().decode().split('\n\nif __name__ == "__main__":',1)[0]
+    text=base+'\n\nimport hashlib\nfrom pathlib import Path\nToolContractError=AirlockError\n'
+    text+='DOCUMENT_BACKEND='+repr(backend)+'\n'
+    text+='\n\n'.join(ast.get_source_segment(source,node) for node in nodes)
+    generated=ast.parse(text)
+    extracted=[node for node in generated.body if isinstance(node,ast.FunctionDef) and node.name in names]
+    if [ast.dump(node,include_attributes=False) for node in extracted]!=[
+            ast.dump(node,include_attributes=False) for node in nodes]:raise AirlockError('pdf_unavailable')
+    text+='\n\nif __name__ == "__main__":\n    pdf_parser_main()\n'
+    return text.encode()
+
+
 class PdfCliIdentity(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True, frozen=True)
     pid: int = Field(gt=0)
@@ -3855,6 +3912,9 @@ class PdfJob(BaseModel):
     cpu_seconds: int = Field(ge=1, le=15, strict=True)
     text_bytes: int = Field(ge=1, le=524288, strict=True)
     pages: int = Field(ge=1, le=100, strict=True)
+    media_type: Literal['pdf','png','jpeg','webp'] = 'pdf'
+    image_bytes: int = Field(default=1048576,ge=1024,le=4194304,strict=True)
+    image_pixels: int = Field(default=16000000,ge=1024,le=32000000,strict=True)
 
     @field_validator('format', mode='before')
     @classmethod
@@ -3866,12 +3926,14 @@ class PdfJob(BaseModel):
 
 class PdfParser:
     """One fixed supervisor-owned Linux byte parser; uncertain cleanup withholds text."""
-    def __init__(self, settings: Settings, state: Path, owner: str):
-        if settings.pdf_parser is None:
+    def __init__(self, settings: Settings, state: Path, owner: str, *, spec: PdfParserSpec | None = None):
+        selected = spec or settings.pdf_parser
+        if selected is None:
             raise AirlockError('pdf_unavailable')
-        self.settings, self.spec, self.owner = settings, settings.pdf_parser, owner
-        self.folder = private_directory(state/'pdf-jobs')
-        self.config = private_directory(state/'pdf-docker-config')
+        self.settings, self.spec, self.prepared_spec, self.owner = settings, selected, selected, owner
+        prefix = 'pdf' if selected.backend=='pypdf' else selected.backend
+        self.folder = private_directory(state/(prefix+'-jobs'))
+        self.config = private_directory(state/(prefix+'-docker-config'))
         if any(self.config.iterdir()):
             raise AirlockError('pdf_unavailable')
         self.slot = asyncio.Lock()
@@ -4034,17 +4096,20 @@ class PdfParser:
             verify_asset(asset)
             if overlaps(asset.path.resolve(), INSTALLATION_ROOT) or overlaps(asset.path.resolve(), self.folder.parent):
                 raise AirlockError('pdf_unavailable')
-        if execution and set(spec.bundle.sha256) != {'helper.py', *(
+        if execution and spec.backend=='pypdf' and set(spec.bundle.sha256) != {'helper.py', *(
                 'pypdf/'+str(p.relative_to(Path(importlib.util.find_spec('pypdf').origin).parent))
                 for p in Path(importlib.util.find_spec('pypdf').origin).parent.rglob('*.py'))}:
             raise AirlockError('pdf_unavailable')
-        if execution and (spec.bundle.path/'helper.py').read_bytes() != pdf_parser_source():
-            raise AirlockError('pdf_unavailable')
-        package = Path(importlib.util.find_spec('pypdf').origin).parent
-        if execution and (importlib.metadata.version('pypdf') != spec.pypdf_version or any(
-                hashlib.sha256((package/name.removeprefix('pypdf/')).read_bytes()).hexdigest() != digest
-                for name, digest in spec.bundle.sha256.items() if name.startswith('pypdf/'))):
-            raise AirlockError('pdf_unavailable')
+        if execution:
+            source = pdf_parser_source() if spec.backend=='pypdf' else document_parser_source(spec.backend)
+            if (spec.bundle.path/'helper.py').read_bytes() != source:
+                raise AirlockError('pdf_unavailable')
+            if spec.backend=='pypdf':
+                package = Path(importlib.util.find_spec('pypdf').origin).parent
+                if importlib.metadata.version('pypdf') != spec.pypdf_version or any(
+                        hashlib.sha256((package/name.removeprefix('pypdf/')).read_bytes()).hexdigest() != digest
+                        for name, digest in spec.bundle.sha256.items() if name.startswith('pypdf/')):
+                    raise AirlockError('pdf_unavailable')
         code, output, _ = await self.command(['info', '--format', '{{json .}}'], deadline)
         if code:
             raise AirlockError('pdf_unavailable')
@@ -4118,7 +4183,7 @@ class PdfParser:
     def create_args(self):
         job, spec = self.job, self.spec
         cap = str(job.memory_mb*1024*1024)
-        return ['container','create','--pull=never','--name',job.name,
+        args = ['container','create','--pull=never','--name',job.name,
             '--label','airlock.pdf.owner='+job.owner,'--label','airlock.pdf.job='+job.job_id,
             '--user','65534:65534','--cap-drop','ALL','--security-opt','no-new-privileges=true',
             '--security-opt','seccomp='+str(spec.seccomp.path/'seccomp.json'),
@@ -4129,7 +4194,10 @@ class PdfParser:
             '--mount','type=bind,src='+str(spec.bundle.path.resolve())+',dst=/airlock,readonly',
             '--workdir','/','--entrypoint',spec.python_path,'--interactive',spec.image_id,
             '-I','-B','/airlock/helper.py',str(job.pages),str(job.text_bytes),str(job.memory_mb),
-            str(job.cpu_seconds),spec.python_sha256,spec.pypdf_version,json.dumps(spec.bundle.sha256)]
+            str(job.cpu_seconds),spec.python_sha256,spec.pypdf_version or spec.parser_version,json.dumps(spec.bundle.sha256)]
+        if spec.backend!='pypdf':
+            args.extend([spec.backend,job.media_type,str(job.image_bytes),str(job.image_pixels)])
+        return args
 
     async def start(self):
         try:
@@ -4148,9 +4216,18 @@ class PdfParser:
             stream.set_data(b'BT /F1 12 Tf 10 50 Td (Airlock parser canary) Tj ET')
             page[NameObject('/Contents')] = writer._add_object(stream)
             buffer = io.BytesIO(); writer.write(buffer)
-            for data, expected in ((buffer.getvalue(),'Airlock parser canary'), (b'not-a-pdf',None)):
+            probes = [(buffer.getvalue(),'Airlock parser canary','pdf'), (b'not-a-pdf',None,'pdf')]
+            if self.spec.backend!='pypdf':
+                from PIL import Image, ImageDraw, ImageFont
+                with Image.new('RGB',(800,120),'white') as image:
+                    ImageDraw.Draw(image).text((20,30),'Airlock parser canary 1250.25',
+                        font=ImageFont.load_default(size=32),fill='black')
+                    raster=io.BytesIO();image.save(raster,format='PNG')
+                probes.append((raster.getvalue(),'1250.25','png'))
+            for data, expected, media in probes:
                 task = Task(uuid.uuid4().hex, AskRequest(request='Parser startup probe'), Governance(), 1)
-                read = PdfRead(uuid.uuid4().hex, '0'*64, 1, secrets.token_hex(32))
+                read = PdfRead(uuid.uuid4().hex, '0'*64, 1, secrets.token_hex(32),
+                    tool_name='read_file' if self.spec.backend=='pypdf' else 'read_'+self.spec.backend,media_type=media)
                 task.pdf_read = read
                 try:
                     await self.begin(task,read,len(data))
@@ -4166,7 +4243,9 @@ class PdfParser:
             raise
 
     async def begin(self, task: Task, read: PdfRead, size: int):
-        if not self.ready or self.unavailable or not 1 <= size <= self.settings.max_pdf_bytes:
+        limit = self.settings.max_pdf_bytes if read.media_type=='pdf' else self.settings.max_image_bytes
+        if (not self.ready or self.unavailable or not 1 <= size <= limit
+                or self.spec.backend=='pypdf' and read.media_type!='pdf'):
             raise AirlockError('pdf_unavailable')
         read.deadline = min(time.monotonic()+self.settings.pdf_timeout,
             time.monotonic()+self.settings.max_tool_seconds,
@@ -4188,7 +4267,9 @@ class PdfParser:
                     config_version=read.config_version, name='airlock-pdf-'+job_id,
                     labels={**self.image_labels,'airlock.pdf.owner':self.owner,'airlock.pdf.job':job_id}, spec=self.spec,
                     memory_mb=self.settings.pdf_memory_mb, cpu_seconds=math.ceil(self.settings.pdf_timeout),
-                    text_bytes=self.settings.max_pdf_text_bytes, pages=self.settings.max_pdf_pages)
+                    text_bytes=self.settings.max_pdf_text_bytes, pages=self.settings.max_pdf_pages,
+                    media_type=read.media_type,image_bytes=self.settings.max_image_bytes,
+                    image_pixels=self.settings.max_image_pixels)
                 self.save()
                 read.job_id = job_id
                 code, output, _ = await self.command(self.create_args(), read.deadline)
@@ -4359,7 +4440,7 @@ class PdfParser:
                 except psutil.NoSuchProcess:
                     pass
             await self.cleanup()
-        self.spec = self.settings.pdf_parser
+        self.spec = self.settings.pdf_parser if self.prepared_spec.backend=='pypdf' else self.prepared_spec
 
     async def close(self):
         self.ready = False
@@ -4412,12 +4493,13 @@ async def pdf_child():
 
 async def read_pdf_in_worker(data: bytes, settings: Settings, *, channel: ChildChannel | None = None,
         call_id: str | None = None, grant: str | None = None, task_id: str | None = None,
-        config_version: int | None = None, sequence_locked: bool = False) -> str:
+        config_version: int | None = None, sequence_locked: bool = False, routed: bool = False, media: str = 'pdf') -> str:
     # This child inherits the worker's SRT restrictions. No fresh network or SRT
     # capability is granted. File bytes are streamed through bounded IPC frames.
-    if len(data) > settings.max_pdf_bytes:
+    cap = settings.max_image_bytes if routed and media in ('png','jpeg','webp') else settings.max_pdf_bytes
+    if len(data) > cap:
         raise AirlockError('pdf_input_limit')
-    if settings.pdf_parser is not None:
+    if settings.pdf_parser is not None or routed:
         if channel is None or call_id is None or grant is None or task_id is None or config_version is None:
             raise AirlockError('pdf_unavailable')
         common = {'task_id':task_id,'call_id':call_id,'config_version':config_version,'grant':grant}
@@ -4554,6 +4636,22 @@ async def run_coder(command: dict, channel: ChildChannel, settings: Settings, ro
     tool_boundaries = local_tools.boundaries(settings.extensions)
     verdict = {'value':'not_assessed'}
     deferred_args = {}
+    document_grants = {}
+
+    async def read_document(name,call_id,path,offset,limit):
+        entry=document_grants.get(call_id)
+        if entry is None or entry[0]!=name or name not in local_tools.DOCUMENT_TOOLS:
+            raise ToolFailed('The local document parser is unavailable.')
+        reply=entry[1]
+        suffix=Path(path).suffix.lower()
+        if suffix not in ('.pdf','.png','.jpg','.jpeg','.webp'):
+            raise ToolFailed('The local document format is unsupported.')
+        data=read_media_bytes(root,path,settings.max_pdf_bytes if suffix=='.pdf' else settings.max_image_bytes,
+            scratch=Path(os.environ['TMPDIR']))
+        text=await read_pdf_in_worker(data,settings,channel=channel,call_id=call_id,
+            grant=reply.get('pdf_grant'),task_id=reply.get('task_id'),config_version=reply.get('config_version'),
+            sequence_locked=True,routed=True,media={'.png':'png','.jpg':'jpeg','.jpeg':'jpeg','.webp':'webp'}.get(suffix,'pdf'))
+        return page_document_text(text,offset,limit,label='Document parser text')
 
     def record_verdict(value):
         # No model-generated explanation ever goes to status or audit.
@@ -4569,6 +4667,8 @@ async def run_coder(command: dict, channel: ChildChannel, settings: Settings, ro
         for definition in definitions:
             if definition.name not in settings.enabled_tools:
                 continue
+            if definition.name in local_tools.DOCUMENT_TOOLS and local_tools.DOCUMENT_TOOLS[definition.name] not in settings.document_parsers:
+                continue
             boundary = tool_boundaries[definition.name]
             if definition.name != 'calculate' and policy.decision(boundary) == Mode.DENY:
                 continue
@@ -4582,7 +4682,8 @@ async def run_coder(command: dict, channel: ChildChannel, settings: Settings, ro
     async def execute_tool(ctx, *, call, tool_def, args, handler):
         details = {'name':call.tool_name, 'args':args, 'id':call.tool_call_id,
                    'approved': bool(ctx.tool_call_approved)}
-        pdf_locked = (settings.pdf_parser is not None and call.tool_name == 'read_file'
+        pdf_locked = (call.tool_name in local_tools.DOCUMENT_TOOLS or
+            settings.pdf_parser is not None and call.tool_name == 'read_file'
             and isinstance(args.get('path'),str) and Path(args['path']).suffix.lower() == '.pdf')
         if pdf_locked:
             await channel.lock.acquire()
@@ -4603,6 +4704,8 @@ async def run_coder(command: dict, channel: ChildChannel, settings: Settings, ro
                 channel.lock.release()
             raise ToolFailed('This operation is not permitted by local policy.')
         try:
+            if call.tool_name in local_tools.DOCUMENT_TOOLS:
+                document_grants[call.tool_call_id]=(call.tool_name,reply)
             # Idle/human waits above do not consume this execution deadline.
             async with asyncio.timeout(settings.max_tool_seconds):
                 if call.tool_name == 'read_file':
@@ -4632,6 +4735,7 @@ async def run_coder(command: dict, channel: ChildChannel, settings: Settings, ro
                 raise ToolFailed('Required PDF resource limits could not be applied; the file was not parsed.') from None
             raise ToolFailed('The local file cannot be read in the requested format.') from None
         finally:
+            document_grants.pop(call.tool_call_id,None)
             if pdf_locked:
                 try:
                     await channel._exchange('tool_finished', {'id':call.tool_call_id})
@@ -4661,6 +4765,7 @@ async def run_coder(command: dict, channel: ChildChannel, settings: Settings, ro
         capabilities=[Instrumentation(settings=telemetry().instrument())])
     agent = Agent(PipeModel('worker'), output_type=LocalOutput,
         tools=[local_tools.calculator_tool(settings.max_candidate_chars),
+               *local_tools.document_tools(read_document),
                local_tools.csv_tool(lambda path: read_media_bytes(root, path, settings.max_pdf_bytes,
                    scratch=Path(os.environ['TMPDIR'])),
                    lambda text, offset, limit: page_document_text(text, offset, limit, label='CSV rows'),
@@ -4787,7 +4892,8 @@ class LocalHTTPBoundary:
 
 class WorkspaceRuntime:
     def __init__(self, root: Path, settings: Settings, store: StateStore,
-                 scanner: Scanner, model, launcher, reassembly: Reassembly, pdf_parser: PdfParser | None = None):
+                 scanner: Scanner, model, launcher, reassembly: Reassembly, pdf_parser: PdfParser | None = None,
+                 document_parsers: dict[str, PdfParser] | None = None):
         self.root, self.settings, self.store = root, settings, store
         self.id = store.workspace(root)
         st = root.stat(); self.identity = (st.st_dev, st.st_ino)
@@ -4796,6 +4902,7 @@ class WorkspaceRuntime:
         self.scanner, self.model, self.launcher = scanner, model, launcher
         self.reassembly = reassembly
         self.pdf_parser = pdf_parser
+        self.document_parsers = document_parsers if document_parsers is not None else {}
         self.egress = Egress(self, scanner, reassembly)
         self.approvals = ApprovalBroker()
         self.tasks: dict[str, Task] = {}
@@ -4998,6 +5105,11 @@ class WorkspaceRuntime:
         for approval in list(self.approvals.pending.values()):
             self.approvals.decide(approval.id, False, approval.version)
 
+    def read_parser(self, read: PdfRead | None):
+        if read is None:return None
+        if read.tool_name == 'read_file':return self.pdf_parser
+        return self.document_parsers.get(local_tools.DOCUMENT_TOOLS.get(read.tool_name))
+
     async def worker_message(self, task: Task, frame: dict) -> dict:
         self.revalidate()
         if task.cancelled:
@@ -5005,42 +5117,43 @@ class WorkspaceRuntime:
         op, data = frame.get('op'), frame.get('payload', {})
         policy = effective_policy(task, self)
         read = task.pdf_read
+        parser = self.read_parser(read)
         if read is not None and read.phase != 'finished' and op not in (
                 'pdf_begin','pdf_chunk','pdf_end','tool_finished'):
             raise AirlockError('worker_bad_message')
         if op in ('pdf_begin','pdf_chunk','pdf_end'):
             try:
-                if read is None or self.pdf_parser is None:
+                if read is None or parser is None:
                     raise AirlockError('pdf_unavailable')
                 schema = {'pdf_begin':PdfBegin,'pdf_chunk':PdfChunk,'pdf_end':PdfEnd}[op]
                 value = schema.model_validate(data)
                 if (value.task_id != task.id or value.call_id != read.call_id
                         or value.config_version != self.config_version or value.config_version != read.config_version
                         or not hmac.compare_digest(value.grant,read.grant) or policy.decision('read') == Mode.DENY
-                        or task.current_tool != 'read_file' or task.cancelled):
+                        or task.current_tool != read.tool_name or task.cancelled):
                     raise AirlockError('pdf_unavailable')
                 if op == 'pdf_begin':
                     if read.phase != 'granted':
                         raise AirlockError('pdf_unavailable')
-                    await self.pdf_parser.begin(task,read,value.size)
+                    await parser.begin(task,read,value.size)
                     return {'next_seq':0}
                 if read.phase != 'streaming' or value.seq != read.next_seq:
                     raise AirlockError('pdf_unavailable')
                 if op == 'pdf_chunk':
                     decoded = base64.b64decode(value.data,validate=True)
-                    await self.pdf_parser.chunk(task,read,value.seq,decoded)
+                    await parser.chunk(task,read,value.seq,decoded)
                     return {'next_seq':read.next_seq}
-                text = await self.pdf_parser.finish(task,read)
+                text = await parser.finish(task,read)
                 if self.config_version != read.config_version or task.cancelled or effective_policy(task,self).decision('read') == Mode.DENY:
                     raise AirlockError('pdf_unavailable')
                 return {'text':text}
             except asyncio.CancelledError:
-                if self.pdf_parser is not None and read is not None:
-                    await self.pdf_parser.abort(task)
+                if parser is not None and read is not None:
+                    await parser.abort(task)
                 raise
             except Exception as error:
-                if self.pdf_parser is not None and read is not None:
-                    await self.pdf_parser.abort(task)
+                if parser is not None and read is not None:
+                    await parser.abort(task)
                 allowed = {'pdf_memory_limit','pdf_resource_limit_unavailable','pdf_input_limit',
                     'pdf_truncated','pdf_bad_chunk','unsupported_file','pdf_encrypted','pdf_page_limit',
                     'pdf_output_limit','pdf_no_text','pdf_unavailable'}
@@ -5060,6 +5173,10 @@ class WorkspaceRuntime:
                     or not 0 < len(call) <= 256 or len(json_bytes(args)) > 1048576):
                 raise AirlockError('invalid_tool_call')
             boundary = names[name]
+            if name in local_tools.DOCUMENT_TOOLS and (
+                    local_tools.DOCUMENT_TOOLS[name] not in self.settings.document_parsers
+                    or local_tools.DOCUMENT_TOOLS[name] not in self.document_parsers):
+                return {'allow':False} if op == 'approve_tool' else {'decision':'deny'}
             extension = next((item for item in self.settings.extensions if item.name == name), None)
             if extension is not None:
                 try:
@@ -5096,17 +5213,20 @@ class WorkspaceRuntime:
             if allowed:
                 task.current_tool = name; task.activity('tool')
             result = {'decision':'allow' if allowed else 'deny'}
-            if (allowed and self.settings.pdf_parser is not None and name == 'read_file'
-                    and isinstance(args.get('path'),str) and Path(args['path']).suffix.lower() == '.pdf'):
-                task.pdf_read = PdfRead(call,fingerprint,self.config_version,secrets.token_hex(32))
+            media = {'.pdf':'pdf','.png':'png','.jpg':'jpeg','.jpeg':'jpeg','.webp':'webp'}.get(
+                Path(args['path']).suffix.lower()) if isinstance(args.get('path'),str) else None
+            if allowed and (name in local_tools.DOCUMENT_TOOLS and media is not None or
+                    self.settings.pdf_parser is not None and name == 'read_file' and media == 'pdf'):
+                task.pdf_read = PdfRead(call,fingerprint,self.config_version,secrets.token_hex(32),
+                    tool_name=name,media_type=media)
                 result.update(pdf_grant=task.pdf_read.grant,task_id=task.id,config_version=self.config_version)
             return result
         if op == 'tool_finished':
             if task.pdf_read is not None:
                 if not isinstance(data,dict) or set(data) != {'id'} or data['id'] != task.pdf_read.call_id:
                     raise AirlockError('worker_bad_message')
-                if self.pdf_parser is not None and task.pdf_read.phase != 'finished':
-                    await self.pdf_parser.abort(task)
+                if parser is not None and task.pdf_read.phase != 'finished':
+                    await parser.abort(task)
                 task.pdf_read = None
             task.current_tool = None; task.activity('agent')
             return {}
@@ -5159,7 +5279,7 @@ class WorkspaceRuntime:
             if self.worker is None or self.worker.process.returncode is not None:
                 await self.new_worker()
             # Exactly one run per worker, no hidden filesystem prescan.
-            options = {} if self.settings.pdf_parser is None else {'frame_limit':lambda:
+            options = {} if self.settings.pdf_parser is None and not self.settings.document_parsers else {'frame_limit':lambda:
                 90*1024 if task.pdf_read is not None and task.pdf_read.phase != 'finished' else MAX_FRAME}
             reply = await self.worker.transact({'op':'run','task_id':task.id,'ask':task.request.model_dump(mode='json')},
                 lambda frame: self.worker_message(task, frame), **options)
@@ -5193,8 +5313,9 @@ class WorkspaceRuntime:
                 await watch
             self.approvals.cancel_task(task.id)
             try:
-                if self.pdf_parser is not None and task.pdf_read is not None:
-                    await self.pdf_parser.abort(task)
+                parser = self.read_parser(task.pdf_read)
+                if parser is not None:
+                    await parser.abort(task)
             except BaseException as error:
                 record_diagnostic(task.id, 5, error)
                 raise
@@ -5576,6 +5697,7 @@ class Supervisor:
         self.registration = asyncio.Lock()
         self.shared_settings = self.model = self.scanner = self.launcher = self.reassembly = None
         self.pdf_parser = None
+        self.document_parsers = {}
         self.shared_closing = False
         self.shutdown = asyncio.Event()
         self.socket = self.state/'control.sock'
@@ -5611,6 +5733,13 @@ class Supervisor:
                         first_error = error
                 else:
                     setattr(self, name, None)
+        for name, component in list(self.document_parsers.items()):
+            try:
+                await component.close()
+            except BaseException as error:
+                if first_error is None:first_error = error
+            else:
+                del self.document_parsers[name]
         if first_error is not None:
             raise first_error
         self.launcher = self.shared_settings = None
@@ -5648,9 +5777,11 @@ class Supervisor:
             settings = calibrated_settings(settings)
             if settings.calibration and overlaps(root, settings.calibration.resolve()):
                 raise AirlockError('trusted_config_in_workspace')
-            if settings.pdf_parser is not None and any(overlaps(root,path.resolve()) for path in (
-                    settings.pdf_parser.cli, settings.pdf_parser.bundle.path, settings.pdf_parser.seccomp.path,
-                    Path(settings.pdf_parser.daemon_endpoint.removeprefix('unix://')))):
+            routes = [*settings.document_parsers.values()]
+            if settings.pdf_parser is not None:routes.append(settings.pdf_parser)
+            if any(overlaps(root,path.resolve()) for spec in routes for path in (
+                    spec.cli, spec.bundle.path, spec.seccomp.path,
+                    Path(spec.daemon_endpoint.removeprefix('unix://')))):
                 raise AirlockError('trusted_config_in_workspace')
             if self.shared_settings is not None:
                 excluded = {'governance','preset'}
@@ -5664,6 +5795,12 @@ class Supervisor:
                     if settings.pdf_parser is not None:
                         self.pdf_parser = PdfParser(settings,self.state,self.store.opaque('pdf-owner','installation'))
                         await self.pdf_parser.start()
+                    parser_slot = self.pdf_parser.slot if self.pdf_parser is not None else asyncio.Lock()
+                    for name, spec in settings.document_parsers.items():
+                        parser = PdfParser(settings,self.state,self.store.opaque('pdf-owner',name),spec=spec)
+                        self.document_parsers[name] = parser
+                        parser.slot = parser_slot
+                        await parser.start()
                     self.model = ModelService(settings)
                     self.scanner = ScannerService(settings, self.launcher, self.model)
                     self.reassembly = Reassembly(self.store, settings)
@@ -5675,7 +5812,7 @@ class Supervisor:
             runtime = None
             try:
                 runtime = WorkspaceRuntime(root, settings, self.store, self.scanner, self.model,
-                                           self.launcher, self.reassembly, self.pdf_parser)
+                                           self.launcher, self.reassembly, self.pdf_parser, self.document_parsers)
                 self.runtimes[runtime.id] = runtime
                 await runtime.start()
                 return runtime

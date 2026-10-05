@@ -120,7 +120,11 @@ An optional explicitly prepared `pdf_parser` uses a fixed local Linux byte parse
 
 Preparation must pin the local Unix endpoint and daemon ID/version/kernel, absolute Docker CLI/hash, existing immutable Linux ARM64 image and Python executable/hash, exact locked pypdf version/source files, and the reviewed syscall policy. Explicitly generate `helper.py` with `pdf_parser_source()` from current root code, copy only locked pypdf `.py` files into the narrow read-only bundle, and hash its complete file set into `AssetSpec`. Keep bundle/policy outside source, workspace and runtime state. Store the resulting `PdfParserSpec` only in trusted local preparation/configuration; regenerate compatible measured calibration and obtain exact startup acceptance before activating it. Existing source-bound profiles cannot authorize a changed helper. No new dependency or maintained second parser module is needed.
 
-PDF reads include ordinary page text and a distinct JSON section for exact qualified AcroForm text fields, including empty/missing values. Field-only nonempty text is readable; blank forms, encrypted/image-only documents, duplicate/malformed fields and XFA can be refused. OCR and visual document understanding are not provided. Input/page/text/deadline/hard memory limits stay separate, and cleanup uncertainty withholds parser text.
+Ordinary `read_file` PDF reads include page text and exact qualified AcroForm
+text fields, including empty/missing values. This reader does not perform OCR;
+image-only/encrypted PDFs and duplicate/malformed fields or XFA can be refused.
+Input/page/text/deadline/hard memory limits stay separate, and cleanup uncertainty
+withholds parser text.
 
 `read_csv` reads comma-delimited UTF8 files as string-valued rows, with the original
 row text and physical line ranges. It preserves quoted commas/newlines, empty
@@ -128,7 +132,18 @@ cells, leading zeros and decimal signs; it does not interpret headers, amounts
 or formulas. A UTF8 BOM is retained in original text and excluded from the first
 cell. Zero-based offset/limit pages logical rows. Existing read approval and
 release rules apply; invalid, oversized or unreadable rows give a fixed local
-error. PDF/image OCR and table adapters are still in development.
+error.
+
+`read_liteparse` and `read_docling` are separately governed PDF/image parser
+tools. They appear only when explicitly prepared trusted `document_parsers`
+entries exist and the tools are enabled. They use pinned local English OCR
+assets in a confined Linux child; no tool installs packages or downloads models.
+PNG/JPEG/WebP inputs retain original digest, dimensions and EXIF orientation.
+Parsed text, cells and page/box provenance remain private and require the same
+separate release approval. Missing assets or cleanup uncertainty withhold text.
+LiteParse's tested scans preserve the tested amounts, but did not produce table
+blocks. Docling model acquisition and the full tax workflow remain pending;
+these tools are not yet accepted for tax use. See VALIDATION.md.
 
 Form JSON puts each ordinary field on its own line for bounded offset/limit reads. A single escaped field entry larger than the existing 60000-character read window remains explicitly unreadable through that reader; the full extraction still retains it within the complete byte cap.
 

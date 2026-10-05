@@ -141,7 +141,14 @@ read_file  write_file  edit_file  list_files  grep  shell
 
 Delegation is disabled. Repository instructions are not automatically promoted into trusted system instructions. Coder supplies its normal bounded output, argument repair, and context-management machinery. Airlock uses Pydantic hooks for local approval and exact-call validation rather than duplicating the native filesystem tools.
 
-Airlock additionally registers a native `calculate` tool for exact plain-decimal addition, subtraction and multiplication, and a governed `read_csv` tool preserving CSV string rows and source text. `Settings.enabled_tools` selects among these eight built-ins; worker preparation and owner model/tool boundaries reject disabled names. Startup selections apply to that start; trusted TOML supplies defaults across starts. Calculation uses admitted-task authorization without filesystem or shell grants, retaining tool budgets, deduplication, audit and cancellation. Its eventual response still passes disclosure checks and release governance.
+Airlock additionally registers `calculate` for exact plain-decimal arithmetic,
+`read_csv` for string rows/source text, and `read_liteparse`/`read_docling` for
+prepared local document parsing. `Settings.enabled_tools` selects these ten
+built-ins; missing prepared document routes stay hidden and the owner denies
+unavailable routes. Startup selections apply to that start; trusted TOML supplies
+defaults across starts. Calculation retains admitted-task authorization, budgets,
+deduplication, audit and cancellation without filesystem or shell grants. Every
+eventual response still passes disclosure checks and release governance.
 
 Tools execute sequentially. Exact approvals bind the tool name, validated arguments, task, and configuration version, and cannot be replayed. Read, write, and shell policies are independent. Native shell work remains confined by SRT even when a command launches another program.
 
@@ -205,6 +212,20 @@ physical source text/line ranges; the BOM remains in source text as an encoding
 marker. There is no header inference, amount conversion or formula execution.
 The existing text byte cap and zero-based logical-row paging bound its output.
 Exact tool approval is independent of information-release authorization.
+
+Named document tools take the same path/offset/limit interface and support PDFs
+and bounded single-frame PNG/JPEG/WebP. Trusted `document_parsers` entries select
+exact LiteParse2.15.1 or Docling2.133.0 bundles and assets; callers cannot select
+options or download URLs. Both follow exact read approval and the owned Linux
+byte protocol above. All configured parsers share one execution slot and retain
+original job pins for recovery. No text returns before successful exit/cleanup.
+Images are EXIF-normalized into in-memory PDFs with original digest/dimensions
+and orientation/150-DPI provenance. Outputs preserve raw text, string cells and
+page/box records without inferring absent tables. Local English OCR assets are
+checked before library calls; Docling also requires pinned layout/table assets.
+Missing/changed assets, reported partial failures and resource limits fail closed.
+These adapters grant no release permission. See VALIDATION.md for measured
+accuracy and unresolved deployment readiness.
 
 ## 8. Agent health and shared inference
 

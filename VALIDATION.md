@@ -4,6 +4,56 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+The final locked/offline core suite passed **457 tests** on source SHA256
+`2592f4d0b1c17fe6856338515e1618f5b9d583e5a6577a07b61dae7ca0e31c06`
+and test SHA256
+`f7cba91bd3cb89928b0710970303a8f9cf561ab4d6e38d2eb2e4b2512486897a`.
+Independent fresh-eyes review found no remaining concrete defect after the
+bounded-wait and explicit zero-model-call assertions were corrected.
+
+**Known-child cleanup now continues after watcher/discovery failure.**
+ProcessTree.terminate preserves its first ordinary error while attempting the
+existing bounded termination/wait/kill/survivor verification of known identities.
+Successful child exit does not clear uncertainty: SandboxProcess.close still
+fails and retains profile, registry and scratch. Repeated close retries teardown
+without silently replacing the original owner. This independently confirmed
+source defect does not establish the cause of the earlier native cleanup failure.
+Focused regressions passed (9): watcher/discovery/secondary-error precedence,
+identical exceptions and repeated attempts, ownership retention, existing
+gone/zombie/live/denied cases, plus real marker discovery and actual child exit
+with an injected failed watcher. Fresh review caught an unbounded child wait;
+the final test requires exit within five seconds and retains fallback cleanup.
+
+**Pending manual requests survive client disconnect and remain cancellable.**
+The actual subprocess stdio bridge, authenticated HTTP MCP, runtime consumer,
+manual request approval, SQLite and local control socket were exercised against
+isolated synthetic fixture provisioning. Disconnect left approval pending;
+reconnect/retry retained the same task ID and unchanged work counters. MCP stop
+cancelled only the first task; the queued second task reached its own approval.
+Actual Textual mouse clicks stopped it and displayed both original requests in
+history. Both committed receipts were cancelled/null; no approvals remained.
+Public CLI subprocess ps and status by path/ID selected the correct runtimes
+without changing configuration/tasks. Screen detachment left the runtime ready.
+The actual public workspace command also attached through an owned pseudo-terminal,
+displayed the pending task, and exited successfully on q without changing its
+approval, configuration or runtime. This used a byte-identical private source copy
+with no provisioning manifest: the repo's retained manifest correctly rejected
+changed source with asset_hash_mismatch and was preserved unchanged. An initial
+PTY test stopped draining screen output during exit and timed out; continuous
+draining corrected the harness, without changing q behavior or deadlines.
+Model requests, tool calls and token usage were all zero; no worker was created.
+No history was deleted. The focused bridge/CLI/UI check passed.
+
+This uncovered a real screen-layout defect: the default full-width Input pushed
+the adjacent Stop task button beyond a 120-column screen. Existing inline CSS
+now allocates Horizontal Inputs the remaining row width. The regression uses
+real mouse clicks, rather than direct button-handler calls. Fixture provisioning
+does not establish real scanner/SRT startup, installed-plugin activation, active
+model/tool cancellation, native protocol-task cancellation or full tax readiness.
+Earlier native failures and evidence remain unchanged. Restricted suite attempts
+failed at macOS process inspection/local socket PermissionErrors; the suite must
+run with those OS permissions. No tests or trust boundaries were weakened.
+
 **The one-task cleanup observation closed cleanly, but the artifact still failed.**
 Reviewed runner `089b61f9` executed the identical missing-value request on unchanged
 source `1540bb34`, with the actually measured current profile and no corpus

@@ -2366,23 +2366,38 @@ class ProcessTree:
     async def terminate(self):
         self.closed = True
         self.watcher.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
+        error = None
+        try:
             await self.watcher
-        self.discover()
-        targets = list(self.known.values())
-        for process in reversed(targets):
-            with contextlib.suppress(psutil.Error):
-                if process.is_running():
-                    process.terminate()
-        _, alive = await asyncio.to_thread(psutil.wait_procs, targets, timeout=2)
-        for process in alive:
-            with contextlib.suppress(psutil.Error):
-                process.kill()
-        _, survivors = await asyncio.to_thread(psutil.wait_procs, alive, timeout=2)
-        for process in survivors:
-            with contextlib.suppress(psutil.NoSuchProcess):
-                if process.is_running() and process.status() != psutil.STATUS_ZOMBIE:
-                    raise AirlockError('process_cleanup_failed')
+        except asyncio.CancelledError:
+            pass
+        except Exception as exc:
+            error = exc
+        try:
+            self.discover()
+        except Exception as exc:
+            if error is None:
+                error = exc
+        try:
+            targets = list(self.known.values())
+            for process in reversed(targets):
+                with contextlib.suppress(psutil.Error):
+                    if process.is_running():
+                        process.terminate()
+            _, alive = await asyncio.to_thread(psutil.wait_procs, targets, timeout=2)
+            for process in alive:
+                with contextlib.suppress(psutil.Error):
+                    process.kill()
+            _, survivors = await asyncio.to_thread(psutil.wait_procs, alive, timeout=2)
+            for process in survivors:
+                with contextlib.suppress(psutil.NoSuchProcess):
+                    if process.is_running() and process.status() != psutil.STATUS_ZOMBIE:
+                        raise AirlockError('process_cleanup_failed')
+        except Exception as exc:
+            if error is None:
+                error = exc
+        if error is not None:
+            raise error
 
 
 class SandboxProcess:
@@ -5752,7 +5767,7 @@ def make_tui(state: Path, target: str):
     class AirlockApp(App):
         TITLE = 'Airlock'
         CSS = '''Screen {layout:vertical;} #summary {height:auto;padding:1;} DataTable {height:8;}
-        #review {height:12;} #settings {height:10;} Horizontal {height:3;} #notice {height:auto;}
+        #review {height:12;} #settings {height:10;} Horizontal {height:3;} Horizontal Input {width:1fr;} #notice {height:auto;}
         #financial_controls {display:none;height:18;} #financial_context {height:3;} #occurrences {height:5;}'''
         BINDINGS = [('q','quit','Detach'), ('r','refresh','Refresh')]
         def __init__(self):

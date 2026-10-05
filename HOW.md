@@ -3733,6 +3733,74 @@ arithmetic or tax readiness; those live gates remain separate.
   immutable/global/fixture snapshots; a successful probe cannot explain the
   earlier intermittent error or establish model-task cleanup correctness.
 
+## Pending approval disconnect and cancellation contract checks
+
+Data model: two synthetic request IDs and exact raw requests, existing task/
+approval/SQLite receipts and bounded counters in an isolated fixture workspace.
+Keep a second workspace for isolation and the existing completed local receipt.
+
+API contract: use the actual subprocess stdio bridge, authenticated HTTP MCP,
+runtime consumer/manual request authorization and local control socket. Disconnect
+after submission while request approval waits; reconnect and retry identical ID
+without creating work. Run real public CLI ps and status by path/ID against this
+isolated supervisor; require correct JSON runtime selection and unchanged
+configuration/task IDs. Launch the public workspace command in an owned local
+pseudo-terminal against the already-running fixture; observe the pending task
+in its real Textual screen, send q, and require bounded successful exit without
+changing runtime/configuration/approval. Capture only synthetic terminal bytes;
+close both PTY descriptors and reap the exact CLI child on any failure. No
+startup screen/settings acceptance or new runtime is authorized by this probe.
+Use a byte-identical private copy of root airlock.py for attachment: the repo's
+retained prepared manifest intentionally binds an older source and correctly
+rejects changed source. Do not rewrite/delete it or bypass its digest checks.
+The isolated attachment copy has no provisioning manifest; it cannot establish
+installed-plugin activation or acceptance of actual scanner settings.
+Stop the first task through MCP, then the next through
+Textual Stop task. View their history through Textual; detach leaves runtime ready.
+No approval is granted, no worker model/tool request may occur, and no history is
+deleted. Fixture scanner/runtime provisioning remains synthetic; this proves
+transport and approval-state integration, not native scanner/SRT startup or active
+model/tool cancellation.
+
+Location: extend the existing test.py bridge integration. In make_tui's existing
+inline CSS, give Horizontal Input the remaining row width (1fr), rather than its
+default full-parent width that pushes the adjacent Stop/Delete buttons outside
+the screen. No widget/API/data changes. Record evidence in VALIDATION.md.
+
+Tests: observe genuine request approval before disconnect; preserve exact task ID,
+pending approval and counters after reconnect/retry; assert committed cancelled/
+null receipts and removal of only the stopped task's approval. The queued task
+survives first cancellation and reaches its own approval. Textual history contains
+both original requests. Mouse clicks must reach Stop task and View history at
+120 columns; do not substitute direct handler calls. Other workspace remains untouched; close bridge/control/
+runtime/store through existing bounded cleanup.
+
+## Preserve watcher failure while tearing down known children
+
+Data model: keep the existing ProcessTree watcher, known process identities and
+closed flag. Retain the first ordinary exception locally during termination;
+no new persistent fields or ownership changes.
+
+API contract: terminate still cancels/awaits its watcher, discovers children,
+terminates, waits, kills and verifies survivors. A failed watcher or discovery
+must not skip teardown of already-known identities. Raise the identical first
+exception after the bounded teardown attempt, even when all children exit.
+Secondary cleanup failure must not replace that error. Cancellation semantics
+remain unchanged. SandboxProcess.close remains failed and retains profile,
+registry and scratch when tree cleanup is uncertain; repeated close retries
+known-child teardown without declaring uncertainty resolved.
+
+Location: ProcessTree.terminate in root airlock.py; focused regressions in
+test.py; executed evidence in VALIDATION.md. No dependencies or native assets
+change. This is independent of the unexplained retained native failure.
+
+Tests: failed watcher and failed discovery each still terminate known children
+and run both waits; repeated termination preserves exception identity and
+repeats teardown; secondary wait failure preserves the primary error. Verify
+SandboxProcess retains ownership files and stays unclosed. Preserve existing
+gone/zombie/live/denied survivor tests; run focused and full locked suites and
+fresh-eyes review before committing.
+
 ## Observe cleanup during one unchanged local worker task
 
 ### Data model

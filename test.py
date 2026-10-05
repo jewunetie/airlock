@@ -215,7 +215,8 @@ async def test_boundary_nullable_uid_does_not_read_environment(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_boundary_marked_child_discovery_and_cleanup():
+@pytest.mark.parametrize('watcher_failure', [False, True])
+async def test_boundary_marked_child_discovery_and_cleanup(watcher_failure):
     marker = a.secrets.token_hex(32)
     child = await asyncio.create_subprocess_exec(sys.executable, '-I', '-B', '-c',
         'import time; time.sleep(60)', env={**a.os.environ, 'AIRLOCK_JOB': marker})
@@ -224,14 +225,26 @@ async def test_boundary_marked_child_discovery_and_cleanup():
         tree.known.clear()  # Positive control specifically for marker discovery.
         tree.discover()
         assert child.pid in tree.known
-        await tree.terminate()
-        await child.wait()
+        if watcher_failure:
+            tree.watcher.cancel()
+            with a.contextlib.suppress(asyncio.CancelledError):
+                await tree.watcher
+            error = RuntimeError('synthetic watcher failure')
+            async def failed():
+                raise error
+            tree.watcher = asyncio.create_task(failed())
+            await asyncio.sleep(0)
+            with pytest.raises(RuntimeError) as caught:
+                await tree.terminate()
+            assert caught.value is error
+        else:
+            await tree.terminate()
+        await asyncio.wait_for(child.wait(), 5)
         assert not a.psutil.pid_exists(child.pid)
     finally:
         tree.closed = True
         tree.watcher.cancel()
-        with a.contextlib.suppress(asyncio.CancelledError):
-            await tree.watcher
+        await asyncio.gather(tree.watcher, return_exceptions=True)
         if child.returncode is None:
             child.kill()
             await child.wait()
@@ -270,15 +283,55 @@ async def test_boundary_final_survivor_status_race(monkeypatch, status):
 
 
 @pytest.mark.asyncio
-async def test_boundary_watcher_failure_remains_failure():
+@pytest.mark.parametrize('failure', ['watcher', 'discovery', 'secondary'])
+async def test_boundary_watcher_failure_remains_failure(monkeypatch, tmp_path, failure):
     tree = object.__new__(a.ProcessTree)
     tree.closed = False
+    error = RuntimeError('synthetic watcher failure')
+    events = []
+    class Process:
+        returncode = 0
+        def is_running(self):
+            return True
+        def terminate(self):
+            events.append('terminate')
+        def kill(self):
+            events.append('kill')
+    process = Process()
+    tree.known = {12345: process}
+    def discover():
+        events.append('discover')
+        if failure == 'discovery':
+            raise error
+    tree.discover = discover
     async def failed():
-        raise RuntimeError('synthetic watcher failure')
-    tree.watcher = asyncio.create_task(failed())
+        raise error
+    tree.watcher = asyncio.create_task(asyncio.sleep(60) if failure == 'discovery' else failed())
     await asyncio.sleep(0)
-    with pytest.raises(RuntimeError, match='synthetic watcher failure'):
-        await tree.terminate()
+    def wait(targets, timeout):
+        events.append('wait')
+        assert timeout == 2
+        if failure == 'secondary':
+            raise ValueError('secondary cleanup failure')
+        return targets, []
+    monkeypatch.setattr(a.psutil, 'wait_procs', wait)
+    for _ in range(2):
+        with pytest.raises(RuntimeError) as caught:
+            await tree.terminate()
+        assert caught.value is error
+    expected = ['discover', 'terminate', 'wait']
+    if failure != 'secondary':
+        expected.append('wait')
+    assert events == expected * 2
+    profile, registry, scratch = (tmp_path / name for name in ('profile', 'registry', 'scratch'))
+    profile.write_text('owned profile')
+    registry.write_text('owned identity')
+    scratch.mkdir()
+    owner = a.SandboxProcess(process, profile, scratch=scratch, registry=registry)
+    owner.tree = tree
+    with pytest.raises(a.AirlockError, match='process_cleanup_failed'):
+        await owner.close()
+    assert not owner.closed and profile.exists() and registry.exists() and scratch.is_dir()
 
 
 def boundary_pdf_bytes():
@@ -1963,6 +2016,108 @@ async def test_codex_stdio_bridge_selected_folder_and_attach_only():
                 assert not other.runtime.tasks
                 assert (await client.call_tool('ask', args)).data['task_id'] == task.id
                 assert (await client.call_tool('status', {'task_id': task.id})).data['result'] == result
+            # Genuine manual authorization blocks before worker creation/inference.
+            f.runtime.governance = f.runtime.governance.model_copy(update={'request': a.Mode.MANUAL})
+            f.runtime.consumer = asyncio.create_task(f.runtime.consume())
+            requests = [{'request': 'Synthetic pending request '+str(i), 'request_id': 'pending-'+str(i)} for i in range(2)]
+            async def pending(task_id):
+                for _ in range(1000):
+                    if any(row['task_id'] == task_id and row['kind'] == 'request'
+                           for row in f.runtime.approvals.safe_snapshot()):
+                        return
+                    await asyncio.sleep(0.005)
+                pytest.fail('Manual request approval did not appear')
+            async with Client(transport, mode='legacy', timeout=20) as client:
+                first = (await client.call_tool('ask', requests[0])).data['task_id']
+                await pending(first)
+                second = (await client.call_tool('ask', requests[1])).data['task_id']
+                before = (f.runtime.tasks[first].model_calls, f.runtime.tasks[first].tool_calls,
+                          f.runtime.tasks[first].total_tokens)
+            assert f.runtime.tasks[first].state not in a.TERMINAL
+            await pending(first)
+            version = f.runtime.config_version
+            for args in (['ps'], ['status', str(f.root)], ['status', f.runtime.id]):
+                cli = await asyncio.create_subprocess_exec(sys.executable, '-I', '-B',
+                    str(Path(a.__file__).resolve()), *args, env=env,
+                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                try:
+                    stdout, stderr = await asyncio.wait_for(cli.communicate(), 20)
+                    assert cli.returncode == 0, stderr.decode()
+                    view = a.json.loads(stdout)
+                    if args == ['ps']:
+                        assert {row['id'] for row in view['runtimes']} == {f.runtime.id, other.runtime.id}
+                    else:
+                        assert view['id'] == f.runtime.id
+                finally:
+                    if cli.returncode is None:
+                        cli.kill()
+                        await cli.wait()
+            assert f.runtime.config_version == version and set(f.runtime.tasks) == {first, second}
+            import pty
+            attach_source = home/'airlock.py'
+            a.atomic_private_write(attach_source, Path(a.__file__).read_bytes())
+            assert attach_source.read_bytes() == Path(a.__file__).read_bytes()
+            master, slave = pty.openpty()
+            attach = None
+            try:
+                a.os.set_blocking(master, False)
+                attach = await asyncio.create_subprocess_exec(sys.executable, '-I', '-B',
+                    str(attach_source), str(f.root), env={**env, 'TERM': 'xterm-256color'},
+                    stdin=slave, stdout=slave, stderr=slave)
+                terminal = bytearray()
+                async with asyncio.timeout(20):
+                    while first.encode() not in terminal:
+                        try:
+                            terminal.extend(a.os.read(master, 65536))
+                        except BlockingIOError:
+                            pass
+                        assert attach.returncode is None, terminal.decode(errors='replace')
+                        await asyncio.sleep(0.01)
+                a.os.write(master, b'q')
+                async with asyncio.timeout(5):
+                    while attach.returncode is None:
+                        try:
+                            terminal.extend(a.os.read(master, 65536))
+                        except BlockingIOError:
+                            pass
+                        await asyncio.sleep(0.01)
+                assert await asyncio.wait_for(attach.wait(), 5) == 0
+            finally:
+                if attach is not None and attach.returncode is None:
+                    attach.kill()
+                    await attach.wait()
+                a.os.close(master)
+                a.os.close(slave)
+            assert f.runtime.config_version == version and set(f.runtime.tasks) == {first, second}
+            assert not f.runtime.closing
+            await pending(first)
+            async with Client(transport, mode='legacy', timeout=20) as client:
+                assert (await client.call_tool('ask', requests[0])).data['task_id'] == first
+                assert (f.runtime.tasks[first].model_calls, f.runtime.tasks[first].tool_calls,
+                        f.runtime.tasks[first].total_tokens) == before
+                stopped = (await client.call_tool('stop', {'task_id': first})).data['result']
+                assert stopped['state'] == 'cancelled' and stopped['response'] is None
+                await pending(second)
+                assert not any(row['task_id'] == first for row in f.runtime.approvals.safe_snapshot())
+            from textual.widgets import Input, TextArea
+            app = a.make_tui(state, f.runtime.id)
+            async with app.run_test(size=(120, 65)) as pilot:
+                app.query_one('#task_id', Input).value = second
+                await pilot.click('#cancel')
+                await pilot.pause()
+                assert f.store.final(second, f.runtime.id)['state'] == 'cancelled'
+                assert f.store.final(second, f.runtime.id)['response'] is None
+                assert not f.runtime.approvals.safe_snapshot()
+                await pilot.click('#history')
+                await pilot.pause()
+                history = app.query_one('#review', TextArea).text
+                assert all(item['request'] in history for item in requests)
+                await pilot.press('q')
+            assert f.runtime.state == 'READY' and not f.runtime.closing
+            assert f.runtime.worker is None and not other.runtime.tasks
+            assert all(f.runtime.tasks[tid].model_calls == 0 and f.runtime.tasks[tid].tool_calls == 0
+                       and f.runtime.tasks[tid].total_tokens == 0
+                       for tid in (first, second))
             supervisor.runtimes.clear()
             with pytest.raises(a.AirlockError, match='runtime_not_running'):
                 await a.bridge(str(f.root), state)

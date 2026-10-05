@@ -4,6 +4,18 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+### Independent required tax-contract verification, 2026-10-05
+
+On unchanged production source at e24079c, the locked focused run passes
+**118 checks, 478 deselected**, no failures:
+`uv run --locked python -B -m pytest -q test.py -k 'financial or csv or decimal or r9_shared'`.
+Log: `/private/tmp/airlock-tax-independent-final-20261005.log`.
+This verifies retained financial golden totals/local artifacts, exact decimal and
+CSV string/source preservation, selected-release policy and retry/shared-history
+contracts. Coder model replies and release scanners in these checks are fixtures;
+this does not establish live selected-field approval/denial, scanner accuracy or
+table fidelity. No source fix or broader privacy permission is inferred.
+
 ### Native CLI identity capture fix, 2026-10-05
 
 A live SRT/Gemma run confirmed an exited Docker CLI at strict identity capture:

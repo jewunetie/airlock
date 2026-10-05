@@ -3970,7 +3970,10 @@ class PdfParser:
         if time.monotonic() >= deadline:
             raise TimeoutError()
         verify_digest(self.spec.cli, self.spec.cli_sha256)
-        pending = asyncio.create_task(asyncio.create_subprocess_exec(str(self.spec.cli), '--host', self.spec.daemon_endpoint,
+        # Hold the PID until its creation time is recorded, including fast CLI exits.
+        gate = "import os,sys; token=os.read(0,1); sys.exit(125) if token!=b'\\0' else os.execv(sys.argv[1],sys.argv[1:])"
+        pending = asyncio.create_task(asyncio.create_subprocess_exec(sys.executable, '-I', '-B', '-c', gate,
+            str(self.spec.cli), '--host', self.spec.daemon_endpoint,
             *args, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE, env={'PATH':'/usr/bin:/bin', 'HOME':str(self.config),
                 'DOCKER_CONFIG':str(self.config), 'LANG':'C', 'LC_ALL':'C'},
@@ -4000,7 +4003,23 @@ class PdfParser:
                 self.save(phase='uncertain', creation_uncertain=self.job.creation_uncertain or self.job.phase == 'creating')
             raise
         self.pending_spawns.discard(pending)
-        self.record_cli(process, record)
+        try:
+            async with asyncio.timeout_at(deadline):
+                self.record_cli(process, record)
+                verify_digest(self.spec.cli, self.spec.cli_sha256)
+                if time.monotonic() >= deadline:
+                    raise TimeoutError()
+                process.stdin.write(b'\0')
+                await process.stdin.drain()
+        except BaseException:
+            self.unavailable = True
+            process.stdin.close()
+            if process.returncode is None:
+                with contextlib.suppress(ProcessLookupError):
+                    process.kill()
+            if self.job is not None:
+                self.save(phase='uncertain', creation_uncertain=self.job.creation_uncertain or self.job.phase == 'creating')
+            raise
         return process
 
     def record_cli(self, process, record):

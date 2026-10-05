@@ -3556,6 +3556,101 @@ def pdf_route_correction_job(parser):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize('payload',[b'',b'\x00PDF\xff\noriginal input'])
+async def test_pdf_cli_identity_precedes_fast_exit_and_preserves_input(tmp_path,monkeypatch,payload):
+    parser=a.PdfParser(pdf_route_settings(tmp_path),tmp_path/'state','b'*64)
+    pdf_route_correction_job(parser)
+    cli=tmp_path/'fast-cli'
+    marker=tmp_path/'executed'
+    script=f'#!{sys.executable}\nimport os,sys\nassert sys.argv[1:]==["--host",{parser.spec.daemon_endpoint!r},"synthetic"]\nopen({str(marker)!r},"w").write("executed")\nos.write(2,str(os.getpid()).encode())\nos.write(1,sys.stdin.buffer.read())\n'
+    cli.write_text(script);cli.chmod(0o700)
+    assert cli.read_text()==script
+    parser.spec=parser.spec.model_copy(update={'cli':cli,'cli_sha256':a.hashlib.sha256(cli.read_bytes()).hexdigest()})
+    original=parser.record_cli
+    def delayed_record(process,record):
+        a.time.sleep(.05)
+        assert process.returncode is None and a.psutil.pid_exists(process.pid) and not marker.exists()
+        original(process,record)
+    monkeypatch.setattr(parser,'record_cli',delayed_record)
+    try:
+        process=await parser.spawn_cli(['synthetic'],a.time.monotonic()+3)
+        identity=parser.job.cli_processes[0]
+        assert identity.pid==process.pid and identity.create_time>0
+        output,error=await a.asyncio.wait_for(process.communicate(payload),3)
+        assert process.returncode==0 and output==payload and error==str(identity.pid).encode() and marker.read_text()=='executed'
+        saved=a.PdfJob.model_validate_json((parser.folder/(parser.job.job_id+'.json')).read_bytes())
+        assert saved.cli_processes==[identity]
+        await parser.reap_cli(a.time.monotonic()+1)
+        assert not parser.unavailable
+    finally:
+        await parser.reap_cli(a.time.monotonic()+1)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('fault',['identity','deadline','changed_cli','save'])
+async def test_pdf_cli_gate_refuses_unrecorded_or_expired_execution(tmp_path,monkeypatch,fault):
+    parser=a.PdfParser(pdf_route_settings(tmp_path),tmp_path/'state','b'*64)
+    pdf_route_correction_job(parser)
+    marker=tmp_path/'executed';cli=tmp_path/'refused-cli'
+    script=f'#!{sys.executable}\nopen({str(marker)!r},"w").write("bad")\n'
+    cli.write_text(script);cli.chmod(0o700);assert cli.read_text()==script
+    parser.spec=parser.spec.model_copy(update={'cli':cli,'cli_sha256':a.hashlib.sha256(cli.read_bytes()).hexdigest()})
+    original=parser.record_cli
+    def record(process,save):
+        if fault=='identity':
+            def denied(pid):raise a.psutil.AccessDenied(pid)
+            monkeypatch.setattr(a.psutil,'Process',denied)
+        original(process,save)
+        if fault=='deadline':a.time.sleep(.1)
+        if fault=='changed_cli':cli.write_text(cli.read_text()+'# changed while held\n')
+    monkeypatch.setattr(parser,'record_cli',record)
+    previous=(parser.folder/(parser.job.job_id+'.json')).read_bytes()
+    if fault=='save':
+        def failed_save(*args,**kwargs):raise OSError('synthetic persistence failure')
+        monkeypatch.setattr(a,'atomic_private_write',failed_save)
+    with pytest.raises((a.AirlockError,TimeoutError,OSError)):
+        await parser.spawn_cli(['synthetic'],a.time.monotonic()+(.08 if fault=='deadline' else 3))
+    process,handle=parser.cli_handles[0]
+    await a.asyncio.wait_for(process.wait(),1)
+    assert process.returncode!=0 and not marker.exists() and parser.unavailable
+    assert parser.job.phase=='uncertain' and parser.job.creation_uncertain
+    if fault=='identity':
+        assert handle is None and parser.job.cli_processes==[]
+        with pytest.raises(a.AirlockError,match='^pdf_unavailable$'):
+            await parser.reap_cli(a.time.monotonic()+1)
+    else:
+        assert parser.job.cli_processes[0].pid==process.pid
+        await parser.reap_cli(a.time.monotonic()+1)
+        if fault=='save':assert (parser.folder/(parser.job.job_id+'.json')).read_bytes()==previous
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('fault',[OSError,a.asyncio.CancelledError])
+async def test_pdf_cli_gate_release_failure_retains_owned_identity(tmp_path,monkeypatch,fault):
+    parser=a.PdfParser(pdf_route_settings(tmp_path),tmp_path/'state','b'*64)
+    pdf_route_correction_job(parser)
+    original=a.asyncio.create_subprocess_exec;children=[]
+    async def spawn(*args,**kwargs):
+        process=await original(*args,**kwargs);children.append(process)
+        async def failed_drain():raise fault()
+        monkeypatch.setattr(process.stdin,'drain',failed_drain)
+        return process
+    monkeypatch.setattr(a.asyncio,'create_subprocess_exec',spawn)
+    monkeypatch.setattr(a,'verify_digest',lambda *args:None)
+    with pytest.raises(fault):
+        await parser.spawn_cli(['synthetic'],a.time.monotonic()+3)
+    process=children[0]
+    await a.asyncio.wait_for(process.wait(),1)
+    assert process.returncode is not None and parser.unavailable
+    assert parser.job.phase=='uncertain' and parser.job.creation_uncertain
+    identity=parser.job.cli_processes[0]
+    assert identity.pid==process.pid and identity.create_time>0
+    saved=a.PdfJob.model_validate_json((parser.folder/(parser.job.job_id+'.json')).read_bytes())
+    assert saved.cli_processes==[identity] and saved.phase=='uncertain'
+    await parser.reap_cli(a.time.monotonic()+1)
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize('mode',['deadline','cancel','cleanup_deadline','unknown_clock'])
 async def test_pdf_route_correction_delayed_spawn(tmp_path,monkeypatch,mode):
     parser=a.PdfParser(pdf_route_settings(tmp_path),tmp_path/'state','b'*64)
@@ -3564,8 +3659,7 @@ async def test_pdf_route_correction_delayed_spawn(tmp_path,monkeypatch,mode):
     original=a.asyncio.create_subprocess_exec
     async def delayed(*args,**kwargs):
         await gate.wait()
-        process=await original(sys.executable,'-c','import time; time.sleep(60)',
-            stdin=a.asyncio.subprocess.PIPE,stdout=a.asyncio.subprocess.PIPE,stderr=a.asyncio.subprocess.PIPE)
+        process=await original(*args,**kwargs)
         children.append(process);appeared.set();return process
     monkeypatch.setattr(a.asyncio,'create_subprocess_exec',delayed)
     monkeypatch.setattr(a,'verify_digest',lambda *args:None)

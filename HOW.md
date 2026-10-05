@@ -2,6 +2,45 @@
 
 ## Docling/LiteParse preparation and required document scope
 
+### Capture native CLI identity before execution
+
+Data: existing PdfCliIdentity PID/create_time and PdfJob ownership remain exact.
+A trusted Python child waits for one NUL byte before exec of the pinned CLI;
+exec retains its PID and creation time. Remaining stdin bytes belong to the CLI.
+API: PdfParser.spawn_cli keeps its arguments/result/errors and deadline; record
+and persist identity before releasing the child. Missing identity, failed unlock,
+deadline or cancellation retains fail-closed owned cleanup and recovery. No
+unknown-clock exception or weaker ownership rule. Location: airlock.py, test.py,
+HOW/VALIDATION and existing private diagnostic harness. Tests: delayed identity
+observation with an immediately exiting real CLI, exact argv/stdin forwarding,
+persisted identity, held CLI hash revalidation, identity/persistence refusal,
+post-recording drain failure/cancellation, bounded late-spawn/cleanup, full suite and
+strict native owner/live worker reruns. Preserve global services and settings.
+
+### Private live worker/model acceptance checks
+
+Data: reuse the synthetic scan and exact pinned native parser bundle, current
+prepared SRT/model/scanner assets, existing AskRequest/Task/LocalOutput and owner
+approval/release contracts. Use a fresh private workspace/history only. Preserve
+resident model/service identities and global configuration. An all-local task has
+no disclosure request; selected release uses only explicit synthetic requested
+fields and separately tests approval/denial under privacy enforcement.
+
+API: run production SRT worker entry and owner/model methods with the already
+resident pinned local model, after actual model/memory inventory. Do not load a
+different model, install assets, accept a calibration profile or activate a
+workspace. Local diagnostic method checks before startup acceptance do not prove
+production startup. Keep exact operator policy and grants, scanner errors as
+withholding, existing budgets and same-owner cleanup. Record actual output/tool
+behavior and failures; do not substitute scripted replies for live evidence.
+
+Location: private Python harness, synthetic files, artifacts, state and evidence
+under /private/tmp; HOW/VALIDATION record scope/results. No global edits. Tests:
+real worker direct/child/egress probe controls, task entry and native tools,
+unchanged inputs, exact local amounts/totals/source context, empty all-local
+outbound response, exact selected approval/denial and fail-closed scanner behavior,
+and worker/parser/model-client cleanup with original resident services preserved.
+
 ### Shipped parser selection and owner integration
 
 Data: retain the existing optional pypdf route and add trusted

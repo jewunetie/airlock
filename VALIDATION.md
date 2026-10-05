@@ -4,6 +4,43 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+### Native CLI identity capture fix, 2026-10-05
+
+A live SRT/Gemma run confirmed an exited Docker CLI at strict identity capture:
+PID98629, returncode0, NoSuchProcess during read_liteparse/pdf_begin. Evidence:
+`/private/tmp/airlock-live-document-worker-c6bf6438a82c45888c41ebd996a51121/evidence.json`.
+This establishes that run's race, not the earlier unattributed failure's cause.
+The CLI now waits on an unbuffered one-byte gate until its exact PID/create-time
+is recorded/persisted and its pinned bytes rechecked. Exec retains the identity;
+remaining stdin is unchanged. Deadline, refusal, uncertainty and cleanup remain
+strict. No unknown-identity exception or ownership policy change was introduced.
+
+The final locked suite passes **596 checks**, eight existing warnings, no failures
+or skips: `/private/tmp/airlock-cli-gate-final-20261005.log`. Regressions exercise
+delayed observation/fast exit, same PID, exact argv/binary stdin, held CLI mutation,
+identity/persistence refusal, deadline and post-registration release cancellation/
+drain failure. Existing late-spawn assertions now exercise the held child itself.
+Fresh independent review found no remaining source/test blocker.
+Source SHA256: `6809bf1a7c48881ffa85a630b3c155fa9e6238c12d838ff6645a1a188ab64ba0`;
+tests SHA256: `45e0e11979b72aed061fc65077c56d615f2993fec1899da200070500a6fc8950`.
+
+The final-source strict native owner/startup/20-CLI control and scripted Coder
+private artifact pass with total985.10, unchanged scan, empty outbound response,
+no retained jobs/live CLI and clean close. Evidence:
+`/private/tmp/airlock-strict-document-owner-577fb941e0b34b1ab1cfb33757613b25/evidence.json`.
+Wheel/sdist exact module/source bytes and private installed import/tool inventory/
+CLI help pass in `/private/tmp/airlock-cli-gate-build-20261005` and
+`/private/tmp/airlock-cli-gate-installed-20261005`.
+
+A live worker rerun successfully completes read_liteparse begin/chunk/end without
+identity errors and closes worker/parser/model clients cleanly, but the third
+model reply times out under the diagnostic60-second cutoff, before any artifact:
+`/private/tmp/airlock-live-document-worker-c67f100230e24d5fac61182d678690c0/evidence.json`.
+That run predates the added final held-CLI hash recheck. A final-source diagnostic
+with the existing prepared180-second model timeout is separate evidence. Neither
+run accepts a profile or activates global settings. Live artifact/selected release,
+table fidelity and Docling acquisition/native fit remain open.
+
 ### Named document tools and owned parser integration, 2026-10-05
 
 The final locked suite passes **588 core checks**, with eight existing provider

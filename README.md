@@ -1,6 +1,6 @@
 # Airlock
 
-A private local workspace agent with a separate disclosure boundary. Cloud assistants submit work through `ask`, inspect it through `status`, and cancel it through `stop`. Production behavior lives in one file, `airlock.py`.
+A private local workspace agent with a separate disclosure boundary. Cloud assistants submit work through `ask`, inspect it through `status`, and cancel it through `stop`. Supervision lives in `airlock.py`; local tools live in `airlock_tools.py`.
 
 **Development release.** The root redesign has durable retry identity, contextual release approvals, a configurable storage cap, and its own tests, packaging, and CI. Current executed evidence is recorded in [VALIDATION.md](VALIDATION.md). Real scanner accuracy and OS confinement still require acceptance with reviewed local assets and calibration.
 
@@ -25,6 +25,42 @@ After explicit history deletion, opaque ID/payload fingerprints remain. Replayin
 The worker uses the native Coder tools `read_file`, `write_file`, `edit_file`, `list_files`, `grep`, and `shell`, inside the Sandbox Runtime. OS capabilities and local governance control access; a caller's request cannot grant permissions. Privacy scanning runs on candidate disclosures, with enforce, warn, and off modes. In enforce mode, scanner failure or an ordinary privacy finding withholds the answer. Exact selected financial fields have the additional local verification flow below.
 
 The native `calculate` tool performs exact decimal addition, subtraction and multiplication without monetary rounding. It takes plain decimal strings and needs no file or command approval; task admission and disclosure checks still apply. All seven tools are enabled by default. Select enabled tools on the startup screen for this start, or save defaults across starts in trusted TOML configuration, for example `enabled_tools = ["read_file", "calculate"]`. An empty list disables all worker tools. Disabling a named tool does not remove filesystem capabilities available through another enabled tool such as `shell`.
+
+You can register your own tools in trusted local TOML, outside the workspace.
+Keep their owned Python files outside workspace/state, without symlinks, hard
+links or group/other write permissions. For example, an operator file can export:
+
+```python
+async def echo(context: str) -> str:
+    return context
+```
+
+Register its absolute path and actual SHA256 (`shasum -a 256 /absolute/operator-tools.py`):
+
+```toml
+enabled_tools = ["read_file", "calculate", "custom_echo"]
+
+[[extensions]]
+name = "custom_echo"
+boundary = "read"
+module = "/absolute/operator-tools.py"
+sha256 = "REPLACE_WITH_ACTUAL_64_CHARACTER_SHA256"
+handler = "echo"
+description = "Return the full supplied context locally."
+parameters = { type = "object", properties = { context = { type = "string" } }, required = ["context"], additionalProperties = false }
+```
+
+Handlers receive validated keyword arguments and return a bounded string to the
+private local model. Names cannot replace built-ins. Declare read, write or shell;
+the corresponding existing policy governs every call, including manual review.
+Import code runs only after approval. Only the built-in calculator is exempt from
+operation approval. Extensions are trusted operator code inside the worker's
+existing sandbox, and must use already prepared dependencies. Airlock does not
+install/download their dependencies or add runtime grants. Plain schemas support types,
+properties/items, required/enum, length and numeric bounds; references, regex and
+branching schemas are refused. Changed code needs a new explicit hash and restart;
+configuration changes also require a matching calibration profile. Shipped-module
+changes invalidate prepared manifests and profiles rather than accepting old ones.
 
 A manual release review shows the original request, disclosure purpose, workspace, effective policy/version, exact proposed answer, and full findings. A vote applies to that proposal once. Changed decision context invalidates the vote. Approval is a local operation; the cloud caller cannot answer it.
 

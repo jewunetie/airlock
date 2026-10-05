@@ -27,6 +27,7 @@ dependencies = [
     "presidio-analyzer>=2.2.364,<2.3",
     "pillow>=12.3,<13",
     "textual>=8.2.8,<8.3",
+    "jsonschema>=4.26,<5",
 ]
 
 [project.urls]
@@ -40,13 +41,12 @@ airlock = "airlock:main"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-# airlock is one module, not a package: this tells hatchling to build a
-# wheel around airlock.py directly instead of expecting a directory.
+# Ship the supervisor and its explicit local tool module, without historical code.
 [tool.hatch.build.targets.wheel]
-only-include = ["airlock.py"]
+only-include = ["airlock.py", "airlock_tools.py"]
 
 [tool.hatch.build.targets.sdist]
-only-include = ["airlock.py", "pyproject.toml", "README.md", "LICENSE"]
+only-include = ["airlock.py", "airlock_tools.py", "pyproject.toml", "README.md", "LICENSE"]
 
 # Reads __version__ out of airlock.py instead of duplicating it here, so
 # there is exactly one version number in the repository, not two that can

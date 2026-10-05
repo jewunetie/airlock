@@ -1,5 +1,68 @@
 # Airlock promotion and hardening HOW-spec
 
+The approved tool-module section supersedes earlier single-module location/build
+statements; production supervision stays in airlock.py.
+
+## Approved tool module and operator extensions
+
+Data: ship `airlock_tools.py` alongside the root module. Keep the existing native
+Coder tools and decimal semantics. Trusted Settings gains `extensions`, a tuple
+of frozen declarations: unique `name`, literal `boundary` read/write/shell,
+absolute `module` Path, lowercase SHA256, exported async `handler` name, bounded
+literal `description`, and bounded object `parameters` JSON Schema. Schema keywords
+are limited to plain types/properties/items, required/enum, length/item/property
+and numeric bounds plus descriptive metadata; no regex, branching or recursive
+validation can stall the supervisor on model-controlled input. Schemas have at
+most256 nodes/depth16 including enum literals; arguments at most65536 nodes/depth32. No schema
+references, remote resolution, workspace registration or built-in replacement.
+Enabled names must be built-ins or declared extensions. Declarations preserve
+raw semantic argument fields; there is no inferred permission from arguments.
+
+API: the supervisor reads declarations as data, never imports extension code.
+Validate schemas/arguments locally with the installed JSON Schema validator.
+Worker construction creates schema wrappers without importing executable code.
+Only an approved invocation verifies and executes exact pinned bytes from an
+owned, non-symlink regular single-link file outside workspace/state and resolves
+its async handler. Successful imports are cached only for that task. The handler
+takes validated keyword arguments and returns a
+bounded string privately. Fixed local errors replace exception text. Import and
+execution occur only within worker SRT grants; declaration categories select
+existing read/write/shell governance, not narrower syscall isolation. No extension
+receives calculate's admitted-task exemption. All enabled/name/schema checks,
+exact approvals, configuration fingerprints, deduplication, budgets, deadlines,
+cancellation, tool_finished and final privacy/release checks remain applicable.
+Airlock does not automatically install/download extension dependencies or add
+runtime reads; already prepared libraries remain accessible. Owner-side
+process deadlines and cancellation must cover blocking imports/handlers, beyond
+the cooperative async timeout.
+
+Bind both shipped modules to source/prepared/calibration/restart identity and
+extension declarations to calibration/configuration identity. Load the sibling
+module by its exact source-relative path under Python -I, without adding cwd or
+workspace to sys.path. Reverify shipped bytes before child launch and prepared
+manifest acceptance. Give SRT exact read-only module grants; user modules never
+gain their parent directory. Missing/changed/unsafe modules fail closed. Existing
+old single-module prepared manifests become incompatible; no automatic activation
+or alteration of global profiles/runtime settings is authorized.
+
+Location: new airlock_tools.py contains extra native tools and extension models,
+validation/loading/factory. Root airlock.py retains supervisor/Coder integration
+and shared error/lifecycle enforcement. test.py contains regressions; pyproject,
+PEP723 and uv.lock declare the already installed JSON Schema dependency through
+uv. Wheel/sdist/CI include exactly the two shipped Python modules. ARCHITECTURE,
+README and VALIDATION describe the new contract, usage and executed evidence.
+Parser-specific code and installation remain separate pending the format answer.
+
+Tests: genuine separately registered async tool execution with actual Coder;
+manual exact-call approval/replay and denied/disabled/unknown tools; malformed
+arguments and forged model schema rejected before execution; duplicate/reserved
+names; module digest changes and workspace shadow modules refused; no supervisor
+import; fixed errors, bounded output, budget and cancellation accounting. Exercise
+isolated direct-source and copied two-file launches, changed shipped-module
+rejection, prepared/calibration bindings, full existing core checks and built
+wheel contents/installed isolated import. Native confinement/model/parser accuracy
+are not established by these synthetic checks. Fresh-eyes review is required.
+
 This specification defines the authorized promotion of `new_design` to the repository root. Production behavior stays in `airlock.py`. `ARCHITECTURE.md` remains the authority for capability isolation, outbound-only scanning, fallible model-supplied sources, and explicit release governance. The existing implementation and its tests are recoverable from checkpoint `26d93ec`; the original redesign is checkpoint `1bd2999`.
 
 ## Data model

@@ -17,6 +17,268 @@ from pydantic import ValidationError
 import airlock as a
 
 
+def extension_spec(directory, *, code=None, **overrides):
+    module = directory/'operator_tool.py'
+    module.write_text(code or 'async def echo(context: str) -> str:\n    return context\n')
+    module.chmod(0o600)
+    return a.local_tools.ExtensionSpec(**{'name':'custom_echo', 'boundary':'read', 'module':module.resolve(),
+        'sha256':a.hashlib.sha256(module.read_bytes()).hexdigest(), 'handler':'echo',
+        'description':'Return the complete supplied semantic context locally.',
+        'parameters':{'type':'object', 'properties':{'context':{'type':'string'}},
+                      'required':['context'], 'additionalProperties':False}, **overrides})
+
+
+@pytest.mark.parametrize('fault', ['duplicate', 'reserved', 'unknown', 'ref', 'dynamic_ref', 'recursive_ref', 'open_schema', 'regex', 'branch', 'enum'])
+def test_extension_registration_rejects_invalid_contract(tmp_path, fault):
+    extension = extension_spec(tmp_path)
+    with pytest.raises((ValidationError, a.local_tools.ToolContractError, ValueError)):
+        if fault == 'duplicate':a.Settings(extensions=(extension, extension))
+        elif fault == 'unknown':a.Settings(enabled_tools=('unknown',))
+        else:
+            data = extension.model_dump()
+            if fault == 'reserved':data['name'] = 'calculate'
+            elif fault == 'open_schema':data['parameters']['additionalProperties'] = True
+            elif fault == 'regex':data['parameters']['properties']['context']['pattern']='(a+)+$'
+            elif fault == 'branch':data['parameters']['allOf']=[{'type':'object'}]
+            elif fault == 'enum':data['parameters']['properties']['context']={'type':'array','items':{'enum':list(range(5000))}}
+            else:data['parameters'][{'ref':'$ref','dynamic_ref':'$dynamicRef','recursive_ref':'$recursiveRef'}[fault]] = 'https://invalid.test/schema'
+            a.local_tools.ExtensionSpec(**data)
+
+
+def test_extension_nested_enum_preserves_semantic_context(tmp_path):
+    value={'label':'original intent','raw':'Complete semantic context'}
+    extension=extension_spec(tmp_path,parameters={'type':'object','additionalProperties':False,
+        'properties':{'context':{'type':'array','items':{'enum':[value]}}},'required':['context']})
+    a.local_tools.validate_arguments(extension,{'context':[value]})
+    with pytest.raises(a.local_tools.ToolContractError,match='extension_invalid_arguments'):
+        a.local_tools.validate_arguments(extension,{'context':[{'label':'original intent','raw':'changed'}]})
+
+
+@pytest.mark.parametrize('fault', ['changed', 'workspace', 'symlink', 'hardlink', 'writable'])
+def test_extension_module_refused_before_execution(tmp_path, fault):
+    workspace = tmp_path/'workspace';workspace.mkdir()
+    marker = tmp_path/'executed'
+    extension = extension_spec(tmp_path, code=f'from pathlib import Path\nPath({str(marker)!r}).write_text("bad")\nasync def echo(context):\n    return context\n')
+    if fault == 'changed':extension.module.write_text(extension.module.read_text()+'# changed\n')
+    if fault == 'workspace':workspace = tmp_path
+    if fault == 'symlink':
+        link = tmp_path/'linked.py';link.symlink_to(extension.module)
+        extension = extension.model_copy(update={'module':link})
+    if fault == 'hardlink':a.os.link(extension.module, tmp_path/'hardlinked.py')
+    if fault == 'writable':extension.module.chmod(0o666)
+    with pytest.raises(a.local_tools.ToolContractError):
+        a.local_tools.extension_tools((extension,), root=workspace, max_chars=100)
+    assert not marker.exists()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('fault', ['arguments', 'private_error', 'result', 'cancel'])
+async def test_extension_private_errors_validation_and_cancellation(tmp_path, fault):
+    from pydantic_ai.exceptions import ToolFailed
+    code = ('async def echo(context):\n    raise ValueError("private filename secret")\n' if fault == 'private_error'
+            else 'async def echo(context):\n    return "x"*101\n' if fault == 'result'
+            else 'import asyncio\nasync def echo(context):\n    await asyncio.sleep(30)\n    return context\n' if fault == 'cancel' else None)
+    extension = extension_spec(tmp_path, code=code)
+    tool, = a.local_tools.extension_tools((extension,), root=tmp_path/'workspace', max_chars=100)
+    if fault == 'arguments':
+        with pytest.raises(ToolFailed, match='^Invalid arguments for the configured local tool.$'):
+            await tool.args_validator(None, context=4)
+    elif fault == 'cancel':
+        execution = asyncio.create_task(tool.function(context='raw semantic context'))
+        await asyncio.sleep(0);execution.cancel()
+        with pytest.raises(asyncio.CancelledError):await execution
+    else:
+        with pytest.raises(ToolFailed, match='^The configured local tool failed.$'):
+            await tool.function(context='raw semantic context')
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('boundary', ['read', 'write', 'shell'])
+async def test_extension_owner_approval_deny_replay_and_budget(tmp_path, boundary):
+    extension = extension_spec(tmp_path, boundary=boundary)
+    f = Fixture(tmp_path, a.Governance(request='allow', read='manual', write='manual', shell='manual',
+                                     write_visibility='visible', shell_visibility='visible'))
+    f.runtime.settings = f.settings.model_copy(update={'extensions':(extension,), 'enabled_tools':('custom_echo',)})
+    task = f.task();message = {'name':'custom_echo', 'args':{'context':'Full original context'}, 'id':'extension-1'}
+    approval = None
+    try:
+        assert (await f.runtime.worker_message(task, {'op':'tool_check','payload':message}))['decision']=='manual'
+        approval = asyncio.create_task(f.runtime.worker_message(task, {'op':'approve_tool','payload':message}))
+        while not f.runtime.approvals.pending:await asyncio.sleep(0)
+        vote = next(iter(f.runtime.approvals.pending.values()))
+        assert vote.content['args'] == message['args'] and vote.content['name']=='custom_echo'
+        assert f.runtime.approvals.decide(vote.id, True, vote.version)
+        assert (await approval)['allow']
+        assert (await f.runtime.worker_message(task, {'op':'tool_check','payload':{**message,'approved':True}}))['decision']=='allow'
+        assert task.tool_calls==1
+        assert (await f.runtime.worker_message(task, {'op':'tool_check','payload':{**message,'approved':True}}))['decision']=='deny'
+        for name, args in [('unknown',message['args']),('calculate',{}),('custom_echo',{'context':False})]:
+            with pytest.raises(a.AirlockError):
+                await f.runtime.worker_message(task, {'op':'tool_check','payload':{**message,'name':name,'args':args,'id':'new'}})
+        f.runtime.update_governance({**f.runtime.governance.model_dump(), boundary:'deny'}, f.runtime.config_version)
+        assert (await f.runtime.worker_message(task, {'op':'tool_check','payload':{**message,'id':'denied'}}))['decision']=='deny'
+        task.tool_calls=f.runtime.settings.max_tool_calls
+        with pytest.raises(a.AirlockError, match='tool_budget_exhausted'):
+            await f.runtime.worker_message(task, {'op':'tool_check','payload':{**message,'id':'budget'}})
+    finally:
+        if approval is not None:approval.cancel();await asyncio.gather(approval,return_exceptions=True)
+        f.store.close()
+
+
+def test_two_module_source_binding_and_isolated_copy(tmp_path):
+    for name in ('airlock.py','airlock_tools.py'):
+        (tmp_path/name).write_bytes((Path(a.__file__).parent/name).read_bytes())
+    assert a.source_digest(tmp_path)==a.SOURCE_DIGEST
+    manifest = a.PreparedRuntime(format=1, source_sha256=a.SOURCE_DIGEST, packages={}, settings={})
+    a.atomic_private_write(tmp_path/'runtime.manifest.json', manifest.model_dump_json().encode())
+    assert a.prepared_settings(tmp_path)=={'extra_runtime_reads':[]}
+    result = subprocess.run([sys.executable,'-I','-B',str(tmp_path/'airlock.py'),'--help'],
+                            capture_output=True, text=True, timeout=30)
+    assert result.returncode==0 and '--config' in result.stdout
+    (tmp_path/'airlock_tools.py').write_text((tmp_path/'airlock_tools.py').read_text()+'\n# changed\n')
+    assert a.source_digest(tmp_path)!=a.SOURCE_DIGEST
+    with pytest.raises(a.AirlockError, match='asset_hash_mismatch'):a.prepared_settings(tmp_path)
+    sentinel=tmp_path/'executed'
+    (tmp_path/'airlock_tools.py').write_text(f'from pathlib import Path\nPath({str(sentinel)!r}).write_text("bad")\n')
+    failed=subprocess.run([sys.executable,'-I','-B',str(tmp_path/'airlock.py'),'--help'],
+                          capture_output=True,text=True,timeout=30)
+    assert failed.returncode != 0 and failed.stdout=='' and failed.stderr=='Airlock: tools_source_changed\n'
+    assert not sentinel.exists()
+
+
+def test_extension_configuration_is_data_and_binds_calibration(tmp_path):
+    marker=tmp_path/'executed'
+    extension=extension_spec(tmp_path, code=f'from pathlib import Path\nPath({str(marker)!r}).write_text("bad")\nasync def echo(context):\n    return context\n')
+    settings=a.Settings(extensions=(extension,), enabled_tools=('custom_echo',))
+    assert not marker.exists() and settings.extensions[0].parameters['properties']['context']['type']=='string'
+    assert a.calibration_binding(settings)!=a.calibration_binding(a.Settings())
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('mode', ['deny', 'disabled', 'manual_deny'])
+async def test_extension_actual_coder_denied_import_has_no_side_effect(tmp_path, monkeypatch, mode):
+    from pydantic_ai.messages import ModelResponse, ToolCallPart
+    scratch=tmp_path/'scratch';scratch.mkdir();monkeypatch.setenv('TMPDIR',str(scratch))
+    marker=scratch/'executed'
+    extension=extension_spec(tmp_path,code=f'from pathlib import Path\nPath({str(marker)!r}).write_text("bad")\nasync def echo(context):\n    return context\n')
+    policy=a.Governance(request='allow',read='manual' if mode=='manual_deny' else 'deny' if mode=='deny' else 'allow')
+    f=Fixture(tmp_path,policy)
+    settings=a.Settings(governance=policy,extensions=(extension,),enabled_tools=() if mode=='disabled' else ('custom_echo',))
+    f.runtime.settings=settings;task=f.task()
+    class Channel:
+        requests=0
+        async def call(self,op,data):
+            assert not marker.exists()
+            if op=='policy':return {'policy':policy.model_dump(mode='json')}
+            if op=='model':
+                self.requests+=1
+                visible={item['name'] for item in data['parameters']['function_tools']}
+                assert visible==({'custom_echo'} if mode=='manual_deny' else set())
+                part=(ToolCallPart('custom_echo',{'context':'Raw context'},tool_call_id='custom-1') if self.requests==1 else
+                    ToolCallPart(data['parameters']['output_tools'][0]['name'],{'response':'','protected_sources':[]}))
+                return {'response':a.TypeAdapter(ModelResponse).dump_python(ModelResponse(parts=[part]),mode='json')}
+            if op=='approve_tool':
+                waiting=asyncio.create_task(f.runtime.worker_message(task,{'op':op,'payload':data}))
+                try:
+                    while not f.runtime.approvals.pending:await asyncio.sleep(0)
+                    vote=next(iter(f.runtime.approvals.pending.values()))
+                    assert not marker.exists() and f.runtime.approvals.decide(vote.id,False,vote.version)
+                    return await waiting
+                finally:waiting.cancel();await asyncio.gather(waiting,return_exceptions=True)
+            if op=='tool_check':return await f.runtime.worker_message(task,{'op':op,'payload':data})
+            if op=='guard':return {'decision':'allow'}
+            if op in ('trajectory','tool_finished'):return {}
+            pytest.fail(op)
+    try:
+        result=await a.run_coder({'ask':{'request':'Use only the locally approved tool','disclosure_request':None}},Channel(),settings,f.root)
+        assert result['response']=='' and not marker.exists() and task.tool_calls==0
+    finally:f.store.close()
+
+
+def test_extension_srt_grants_exact_module_and_rejects_state(tmp_path):
+    extension=extension_spec(tmp_path)
+    workspace=tmp_path/'workspace';workspace.mkdir()
+    launcher=object.__new__(a.SRTLauncher)
+    launcher.settings=a.Settings(extensions=(extension,),enabled_tools=('custom_echo',))
+    launcher.state=tmp_path/'state';launcher.state.mkdir()
+    launcher.source=Path(a.__file__).resolve()
+    profile=launcher.profile(workspace)
+    assert str(extension.module) in profile['filesystem']['allowRead']
+    assert str(extension.module) in profile['filesystem']['denyWrite']
+    assert str(extension.module.parent) not in profile['filesystem']['allowRead']
+    assert str(a.TOOLS_SOURCE) in profile['filesystem']['allowRead']
+    assert str(extension.module) not in launcher.profile(None)['filesystem']['allowRead']
+    unsafe=extension_spec(launcher.state)
+    launcher.settings=a.Settings(extensions=(unsafe,),enabled_tools=('custom_echo',))
+    with pytest.raises(a.AirlockError,match='extension_unsafe_module'):launcher.profile(workspace)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('fault', ['disabled', 'schema', 'valid'])
+async def test_extension_model_boundary_requires_operator_schema(tmp_path, ollama_budget_transport, fault):
+    extension=extension_spec(tmp_path)
+    settings=a.Settings(extensions=(extension,), enabled_tools=() if fault=='disabled' else ('custom_echo',))
+    service=ollama_budget_service(settings)
+    payload=ollama_budget_payload(tools=True)
+    definition=payload['parameters']['function_tools'][0]
+    definition['name']='custom_echo'
+    definition['parameters_json_schema']=extension.parameters if fault!='schema' else {'type':'object'}
+    task=a.Task('synthetic',a.AskRequest(request='Retain semantic context'),settings.governance,1)
+    try:
+        if fault=='valid':assert 'response' in await service.request(payload,task)
+        else:
+            with pytest.raises(a.AirlockError,match='unknown_tool' if fault=='disabled' else 'extension_schema_changed'):
+                await service.request(payload,task)
+            assert not ollama_budget_transport[0] and task.model_calls==0
+    finally:await service.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('phase', ['import', 'handler'])
+@pytest.mark.parametrize('operation', ['deadline', 'cancel'])
+async def test_extension_blocking_code_owner_terminates_descendant(tmp_path, phase, operation):
+    workspace=tmp_path/'workspace';workspace.mkdir()
+    ready=tmp_path/'ready'
+    blocking=('import subprocess, sys, time\nfrom pathlib import Path\n'
+              'child=subprocess.Popen([sys.executable,"-c","import time; time.sleep(60)"])\n'
+              f'Path({str(ready.with_suffix(".part"))!r}).write_text(str(child.pid))\n'
+              f'Path({str(ready.with_suffix(".part"))!r}).replace({str(ready)!r})\n'
+              'time.sleep(60)\n')
+    code=blocking+'async def echo(context):\n    return context\n' if phase=='import' else (
+        'async def echo(context):\n'+''.join('    '+line+'\n' for line in blocking.splitlines())+'    return context\n')
+    extension=extension_spec(tmp_path,code=code)
+    script=('import asyncio, runpy\n'
+        f'a=runpy.run_path({str(Path(a.__file__).resolve())!r})\n'
+        f'e=a["local_tools"].ExtensionSpec(**{extension.model_dump(mode="json")!r})\n'
+        f'tool,=a["local_tools"].extension_tools((e,),root=a["Path"]({str(workspace)!r}),max_chars=100)\n'
+        'asyncio.run(tool.function(context="Private semantic context"))\n')
+    marker=a.secrets.token_hex(32)
+    process=await asyncio.create_subprocess_exec(sys.executable,'-I','-B','-c',script,
+        stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE,
+        env={**a.clean_environment(),'AIRLOCK_JOB':marker},start_new_session=True)
+    profile=tmp_path/'profile';profile.write_text('owned synthetic profile')
+    owner=a.SandboxProcess(process,profile,marker=marker)
+    running=None
+    try:
+        async with asyncio.timeout(20):
+            while not ready.exists():
+                assert process.returncode is None
+                await asyncio.sleep(.02)
+        descendant=a.psutil.Process(int(ready.read_text()))
+        assert descendant.is_running() and descendant.ppid()==process.pid
+        if operation=='deadline':
+            with pytest.raises(TimeoutError):await owner.transact({'op':'synthetic'},timeout=.05)
+        else:
+            running=asyncio.create_task(owner.transact({'op':'synthetic'},timeout=30))
+            await asyncio.sleep(.02);running.cancel()
+            with pytest.raises(asyncio.CancelledError):await running
+        assert owner.closed and process.returncode is not None and not profile.exists()
+        assert not descendant.is_running() or descendant.status()==a.psutil.STATUS_ZOMBIE
+    finally:
+        if running is not None:running.cancel();await asyncio.gather(running,return_exceptions=True)
+        await owner.close()
+
+
 def ollama_budget_payload(role='worker', tools=False):
     from pydantic_ai.messages import ModelMessagesTypeAdapter, ModelRequest, UserPromptPart
     from pydantic_ai.models import ModelRequestParameters
@@ -1441,7 +1703,7 @@ def test_packaging_and_runtime_import_contracts():
     assert sorted(inline['dependencies']) == sorted(project['project']['dependencies'])
     assert inline['requires-python'] == project['project']['requires-python']
     assert project['project']['scripts'] == {'airlock': 'airlock:main'}
-    assert project['tool']['hatch']['build']['targets']['wheel']['only-include'] == ['airlock.py']
+    assert project['tool']['hatch']['build']['targets']['wheel']['only-include'] == ['airlock.py', 'airlock_tools.py']
     assert a.VERSION == a.__version__
     assert not a.missing_dependencies()
     # Resolve lazy imports too; syntax compilation cannot catch deleted/moved names.
@@ -1464,7 +1726,7 @@ def test_source_cli_help_and_fixed_invalid_command():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('manual', [False, True])
-@pytest.mark.parametrize('tool', ['read_file', 'calculate'])
+@pytest.mark.parametrize('tool', ['read_file', 'calculate', 'custom_echo'])
 async def test_actual_coder_tools_and_approval_hook_contract(tmp_path, manual, tool, monkeypatch):
     from pydantic import TypeAdapter
     from pydantic_ai.messages import ModelResponse, ToolCallPart
@@ -1476,6 +1738,12 @@ async def test_actual_coder_tools_and_approval_hook_contract(tmp_path, manual, t
     policy = a.Governance(request='allow', read='deny' if tool == 'calculate' else 'manual' if manual else 'allow', write='allow', shell='allow',
                           write_visibility='visible', release='auto')
     fixture = Fixture(tmp_path, policy)
+    import_marker=scratch/'imported'
+    if tool == 'custom_echo':
+        extension = extension_spec(tmp_path,code=f'from pathlib import Path\nPath({str(import_marker)!r}).write_text("approved import")\nasync def echo(context):\n    return context\n')
+        fixture.settings = fixture.settings.model_copy(update={'extensions':(extension,),
+            'enabled_tools':(*a.DEFAULT_TOOLS, extension.name)})
+        fixture.runtime.settings = fixture.settings
     task = fixture.task()
     class Channel:
         def __init__(self):
@@ -1485,6 +1753,7 @@ async def test_actual_coder_tools_and_approval_hook_contract(tmp_path, manual, t
         async def call(self, op, value):
             self.calls.append((op, value))
             if op == 'policy':
+                if self.model_calls==0:assert not import_marker.exists()
                 return {'policy': policy.model_dump(mode='json')}
             if op == 'model':
                 self.model_calls += 1
@@ -1492,16 +1761,19 @@ async def test_actual_coder_tools_and_approval_hook_contract(tmp_path, manual, t
                 params = value['parameters']
                 self.visible_tools = {tool['name'] for tool in params['function_tools']}
                 if self.model_calls == 1:
-                    args = {'operation':'subtract', 'left':'-10.05', 'right':'5.00'} if tool == 'calculate' else {'path':str(document)}
+                    args = ({'operation':'subtract', 'left':'-10.05', 'right':'5.00'} if tool == 'calculate'
+                            else {'context':'Semantic context retained'} if tool == 'custom_echo' else {'path':str(document)})
                     part = ToolCallPart(tool, args, tool_call_id='read-1')
                 else:
-                    assert ('-15.05' if tool == 'calculate' else 'Synthetic local file read positive control') in str(value['messages'])
+                    expected = '-15.05' if tool == 'calculate' else 'Semantic context retained' if tool == 'custom_echo' else 'Synthetic local file read positive control'
+                    assert expected in str(value['messages'])
                     part = ToolCallPart(params['output_tools'][0]['name'],
                                         {'response': 'Synthetic result', 'protected_sources': []})
                 return {'response': TypeAdapter(ModelResponse).dump_python(ModelResponse(parts=[part]), mode='json')}
             if op == 'tool_check':
                 return await fixture.runtime.worker_message(task, {'op':op, 'payload':value})
             if op == 'approve_tool':
+                assert not import_marker.exists()
                 pending = asyncio.create_task(fixture.runtime.worker_message(task, {'op':op, 'payload':value}))
                 while not fixture.runtime.approvals.pending:
                     await asyncio.sleep(0)
@@ -1516,13 +1788,15 @@ async def test_actual_coder_tools_and_approval_hook_contract(tmp_path, manual, t
             pytest.fail(f'Unexpected boundary {op}')
     channel = Channel()
     result = await a.run_coder({'ask': {'request': 'Read the synthetic file', 'disclosure_request': 'Synthetic result'}},
-                               channel, a.Settings(governance=policy), tmp_path)
+                               channel, fixture.settings, fixture.root if tool == 'custom_echo' else tmp_path)
     assert result == {'response': 'Synthetic result', 'protected_sources': []}
-    assert channel.visible_tools == (a.TOOL_NAMES - a.READ_TOOLS if tool == 'calculate' else a.TOOL_NAMES)
+    assert import_marker.exists() == (tool == 'custom_echo')
+    assert channel.visible_tools == (a.TOOL_NAMES - a.READ_TOOLS if tool == 'calculate'
+                                     else a.TOOL_NAMES | {'custom_echo'} if tool == 'custom_echo' else a.TOOL_NAMES)
     assert channel.model_calls == 2
     checks = [value for op, value in channel.calls if op == 'tool_check']
     approvals = [value for op, value in channel.calls if op == 'approve_tool']
-    needs_approval = manual and tool == 'read_file'
+    needs_approval = manual and tool != 'calculate'
     assert len(approvals) == int(needs_approval)
     assert [value['approved'] for value in checks] == ([False, True] if needs_approval else [False])
     assert [value for op, value in channel.calls if op == 'tool_finished'] == [{'id': 'read-1'}]
@@ -1919,6 +2193,7 @@ async def test_malformed_profile_cannot_be_accepted_in_startup_screen(tmp_path):
 def test_provisioning_manifest_cannot_accept_settings(tmp_path):
     source = tmp_path/'airlock.py'
     source.write_bytes(Path(a.__file__).read_bytes())
+    (tmp_path/'airlock_tools.py').write_bytes(a.TOOLS_SOURCE.read_bytes())
     manifest = a.PreparedRuntime(format=1, source_sha256=a.SOURCE_DIGEST, packages={},
         settings={'calibration_acceptance':'a'*64})
     a.atomic_private_write(tmp_path/'runtime.manifest.json', manifest.model_dump_json().encode())
@@ -2283,6 +2558,7 @@ async def test_codex_stdio_bridge_selected_folder_and_attach_only():
             import pty
             attach_source = home/'airlock.py'
             a.atomic_private_write(attach_source, Path(a.__file__).read_bytes())
+            a.atomic_private_write(home/'airlock_tools.py', a.TOOLS_SOURCE.read_bytes())
             assert attach_source.read_bytes() == Path(a.__file__).read_bytes()
             master, slave = pty.openpty()
             attach = None
@@ -2368,6 +2644,7 @@ def test_storage_limit_configuration_and_reopen(tmp_path, monkeypatch):
     prepared = a.private_directory(tmp_path/'prepared')
     source = prepared/'airlock.py'
     a.atomic_private_write(source, Path(a.__file__).read_bytes())
+    a.atomic_private_write(prepared/'airlock_tools.py', a.TOOLS_SOURCE.read_bytes())
     manifest = a.PreparedRuntime(format=1, source_sha256=a.SOURCE_DIGEST,
         packages={'psutil': a.importlib.metadata.version('psutil')}, settings={'max_state_bytes': cap*2})
     a.atomic_private_write(prepared/'runtime.manifest.json', manifest.model_dump_json().encode())

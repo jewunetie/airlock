@@ -23,7 +23,7 @@ jobs:
       - name: Retry, release, storage, Coder, CLI and MCP contracts
         run: uv run --locked python -B -m pytest -q test.py
 
-      - name: Build the single-module distribution
+      - name: Build the supervisor and local tools distribution
         run: |
           uv build --out-dir dist
           uv run --locked python - <<'PYTHON'
@@ -32,7 +32,7 @@ jobs:
           from tarfile import open as open_tar
           wheel, = Path('dist').glob('airlock-*.whl')
           with ZipFile(wheel) as archive:
-              assert [name for name in archive.namelist() if name.endswith('.py')] == ['airlock.py']
+              assert sorted(name for name in archive.namelist() if name.endswith('.py')) == ['airlock.py', 'airlock_tools.py']
           sdist, = Path('dist').glob('airlock-*.tar.gz')
           with open_tar(sdist) as archive:
               assert not any('new_design/' in name for name in archive.getnames())

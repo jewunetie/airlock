@@ -9,8 +9,9 @@ User-facing behaviour belongs in README.md. Do not repeat it here.
 ## Active redesign
 
 The root redesign is authoritative: read `ARCHITECTURE.md` and the four-part
-`HOW.md` before changing behavior. Production logic remains in `airlock.py`,
-with PEP 723 dependencies; tests remain in `test.py`. `new_design` is a
+`HOW.md` before changing behavior. Production supervision remains in `airlock.py`,
+with PEP 723 dependencies; local tool definitions and operator extensions live
+in the explicitly approved `airlock_tools.py`. Tests remain in `test.py`. `new_design` is a
 historical reference, not a second shipped implementation. Both earlier
 implementations and their tests are preserved in Git checkpoints.
 
@@ -18,8 +19,12 @@ Use `uv sync --locked` and `uv run --locked python -B -m pytest -q test.py`.
 Keep the inline/project dependencies equal and change dependencies through
 `uv`; commit the generated `uv.lock` for reproducible CI. `__version__` in
 the source drives package metadata. Build with `uv build` and inspect archive
-contents: explicit paths must ship only the root module, not similarly named
+contents: explicit paths must ship only the two root modules, not similarly named
 historical files. Optional runtime imports must resolve with locked packages.
+The root embeds the exact tools-module digest and checks it before execution.
+Update that pin when the tools module changes. Combined source identity binds
+both modules; old prepared manifests/calibration do not silently carry forward.
+User extension code loads only in an approved worker call, never in the owner.
 
 Core tests use synthetic data and scripted model replies, with actual SQLite,
 Coder, and MCP. They do not establish real scanner accuracy, calibration,

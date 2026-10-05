@@ -6,7 +6,7 @@ Airlock lets a cloud assistant delegate work to a private local workspace withou
 
 Authorization determines which operations are permitted. The sandbox determines what a process can reach. Privacy checks and release governance determine what information may leave.
 
-Airlock runs on one user's macOS or Linux computer. Production application logic lives in `airlock.py`; dependencies, model assets, configuration, tests, documentation, and development tools are separate.
+Airlock runs on one user's macOS or Linux computer. Production supervision lives in `airlock.py`; local tools and explicit extension registration live in `airlock_tools.py`. Dependencies, model assets, configuration, tests, documentation, and development tools are separate.
 
 ## 2. Components
 
@@ -144,6 +144,22 @@ Delegation is disabled. Repository instructions are not automatically promoted i
 Airlock additionally registers a native `calculate` tool for exact plain-decimal addition, subtraction and multiplication. `Settings.enabled_tools` selects among these seven built-ins; worker preparation and owner model/tool boundaries reject disabled names. Startup selections apply to that start; trusted TOML supplies defaults across starts. Calculation uses admitted-task authorization without filesystem or shell grants, retaining tool budgets, deduplication, audit and cancellation. Its eventual response still passes disclosure checks and release governance.
 
 Tools execute sequentially. Exact approvals bind the tool name, validated arguments, task, and configuration version, and cannot be replayed. Read, write, and shell policies are independent. Native shell work remains confined by SRT even when a command launches another program.
+
+Trusted local configuration may explicitly register additional Python tools by
+unique name, read/write/shell boundary, absolute module path, SHA256, exported
+async handler, description and bounded plain argument schema. Built-in replacement
+and schema references/regex/composition are refused. The supervisor validates
+metadata and arguments without importing user code. Only an approved worker call
+loads exact pinned bytes outside workspace/state; disabled/denied/pending tools
+execute no import code. Installed dependencies remain accessible under existing
+SRT grants; there is no automatic install, download or expanded read grant.
+Registered code is operator-trusted executable code, with the worker's existing
+OS capabilities; category declarations do not create narrower syscall isolation.
+Only the built-in calculator has admitted-task authorization. Imports and handlers
+retain owner process deadlines/cancellation, accounting and final release checks.
+Both shipped modules bind preparation/calibration/restart identity; extension
+metadata binds configuration/calibration. A changed tool module is rejected before
+execution through the root's embedded pin, including under Python -I.
 
 ### Boundary contracts
 

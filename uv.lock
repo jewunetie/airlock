@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -32,6 +32,7 @@ dependencies = [
     { name = "fastmcp-tasks" },
     { name = "filelock" },
     { name = "httpx" },
+    { name = "jsonschema" },
     { name = "opentelemetry-sdk" },
     { name = "pillow" },
     { name = "platformdirs" },
@@ -60,6 +61,7 @@ requires-dist = [
     { name = "fastmcp-tasks", specifier = ">=4.0.10,<4.1" },
     { name = "filelock", specifier = ">=3.32.3,<4" },
     { name = "httpx", specifier = ">=0.28.1,<0.29" },
+    { name = "jsonschema", specifier = ">=4.26,<5" },
     { name = "opentelemetry-sdk", specifier = ">=1.45,<1.46" },
     { name = "pillow", specifier = ">=12.3,<13" },
     { name = "platformdirs", specifier = ">=4.12.1,<5" },

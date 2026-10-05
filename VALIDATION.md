@@ -4,6 +4,53 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+### Operator tool module and extension contracts, 2026-10-04
+
+The approved independent tool slice passes **525 locked core checks**, with eight
+existing OpenAI-provider HTTP-client deprecation warnings and no skips/failures in
+the final recorded run. Source SHA256 is
+`0f5af1faf02b0213b4e9bdda70a4c2d069fdddb8766ba6619e9ea3690c505ec1`;
+tools module SHA256 (also its embedded pre-execution pin) is
+`4b88c43cebe3ff08ed7ed0b08c2262b6f39d08bff49db962fa9dae21ebf23771`;
+test SHA256 is `4cb1ecd85561c7e2b6c25f032f0d70b69a7b76f1ba9326819ec26bca8bc689e4`.
+Recorded output is `/private/tmp/airlock-tools-full-8e4dbde6.log`.
+
+Actual Coder with scripted local-model replies runs a separately registered tool,
+retains raw semantic context and exact manual arguments, and loads its import-time
+sentinel only after approval. Denied, disabled and manually declined calls execute
+no import code. Owner checks cover all three boundaries, replay, disabled/unknown
+names, invalid arguments and budgets; model boundaries reject forged schemas.
+Changed/symlink/hard-linked/writable/workspace modules are refused before import.
+Oversized enums, references, regex and branching schemas are rejected; a valid
+nested literal enum preserves context. Fixed private failures and output bounds
+retain cancellation. Real blocking import/handler subprocesses and descendants
+are terminated by existing owner deadline/cancellation paths. Those process tests
+do not execute SRT and establish no native OS confinement claim; SRT profile tests
+check exact read-only module grants and workspace/state overlap refusal.
+
+The wheel and sdist contain exactly airlock.py and airlock_tools.py, with exact
+source bytes and the existing entry point. An isolated temporary wheel install
+passes -I import, source binding, calculator and CLI checks. Copied-source tests
+include rejection of a changed tools module before its sentinel can execute.
+Prepared manifests and calibration bind both shipped modules; extension metadata
+is included in calibration. Existing global prepared settings, profiles, plugin
+binding, model and services have not been activated or changed.
+
+Fresh static review corrected import-before-approval and enum-work amplification;
+the final rereview found no remaining actionable defect in this diff. Earlier
+runs exposed two corrected test-observer issues (non-atomic ready publication and
+an assertion also firing after an approved import). A subsequent full run had
+intermittent process-observation and existing financial-evidence failures; their
+six isolated cases passed, then the recorded full run above passed without
+concurrent build/install work. Their intermittent causes are not established;
+no production safeguard or assertion was relaxed.
+
+Docling/LiteParse adapters, OCR/table accuracy and their native confined execution
+are **not implemented or validated by this checkpoint**. The first supported
+document-format/OCR scope remains a pending question in Airlock Project Status.
+Old single-module prepared manifests/calibration are incompatible with this source;
+these checks do not accept or replace any real scanner profile.
+
 On 2026-10-04, the configurable Gemma context backend passed **487 locked/offline
 core tests** on source SHA256
 `4cd37657a8c4865b5ebc3df287c51fb72922cdedceb71d3d89e7ced6179e184a`

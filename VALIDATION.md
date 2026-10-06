@@ -132,6 +132,37 @@ No writable scratch or increased budget was
 added; those would be separate explicit configuration decisions. Table loading
 and fidelity remain unproved. Original baseline evidence is retained.
 
+### Private paired exact-model import and temporary-path trace, 2026-10-06
+
+Both freshly reviewed cases import only the pinned Heron configuration's exact
+RTDetrV2ForObjectDetection class, with no weights or document input. Complete
+bundle/index/image/policy pins, physical512MiB/no swap, CPU15/PID32/FSIZE0,
+private-AS isolation and OPENBLAS_NUM_THREADS=1 remain equal. Baseline fails with
+FileNotFoundError in tempfile.gettempdir. Its full trace identifies torchvision
+roi_align importing torch._dynamo.package, whose import-time DynamoCache calls
+cache_dir_utils.cache_dir/default_cache_dir. Evidence:
+`/private/tmp/airlock-docling-fit-9cea3a44c8784e95a8ff69cef0f4e508.json`.
+The caught failure produces controller exit0, which is not import success.
+PeakRSS362000384 bytes; CPU10.465461 user plus2.492390 system seconds.
+
+The paired variant sets only cached stdlib tempfile.tempdir to the existing
+read-only /airlock bundle. It gets beyond gettempdir, then fails with PermissionError
+at os.makedirs('/airlock/torchinductor_nobody', exist_ok=True). Full trace and
+terminal telemetry survive: peakRSS361693184 bytes, CPU11.590877 user plus3.006195
+system seconds. Native terminal exit137, OOMKilled:false and no controller timeout;
+the final kill cause is not established. Evidence:
+`/private/tmp/airlock-docling-fit-4158cc028c904fd599626fe59d3acaae.json`.
+Both memory.events reports have oom0/oom_kill0, and independently verified exact
+owned-container absence passes. Neither import succeeds; original failures remain.
+
+Read-only inspection of the pinned Torch implementation shows cache_dir calls
+os.makedirs(exist_ok=True), while DiskDynamoStore.__init__ only stores a path.
+Serialized-cache reads/writes occur in separate methods. The missing directory
+does not establish that writable runtime scratch is necessary: an empty prepared
+read-only hierarchy remains an untested possibility. No serialized cache was
+loaded, runtime write grant added, dependency patched, budget increased or
+production setting changed. Model/table fit remains unproved.
+
 ### Independent required tax-contract verification, 2026-10-05
 
 On unchanged production source at e24079c, the locked focused run passes

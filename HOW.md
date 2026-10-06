@@ -338,6 +338,25 @@ other original confinement/pins/env1/private-AS delta, exact fixture preserved,
 signal handler registration under existing seccomp, complete original baseline
 retained and exact owned-container absence. No table-ready or minimumRAM inference.
 
+### Private paired model-class temporary-path isolation
+
+Data: pinned Heron config declares RTDetrV2ForObjectDetection/model_type rt_detr_v2.
+Retain original exception evidence4de30c, complete bundle/index/image/policy pins,
+physical512MiB/no-swap/CPU15/PID32/FSIZE0/private-AS/env1 route. No weights or
+document input in either fresh native process.
+API: baseline imports the exact Transformers model class with full traceback.
+Variant adds only stdlib tempfile.tempdir='/airlock', the existing pinned read-only
+absolute bundle; assert the cached setting is effective. Do not replace gettempdir,
+stub imports, permit writes or add mounts. Preserve all subsequent real errors and
+write failures, CPU/RSS/memory.events, timeout streams/state and exact owned absence.
+An import pass does not establish model/table fit or authorize this production use.
+Location: one private /private/tmp runner invoked for baseline and variant, unique
+evidence; HOW/VALIDATION only.
+Tests: config architecture equality, exact paired pins/confinement, effective cached
+path only in variant, original module bytes preserved, full exception chain and
+missing terminal output explicit. Same-reviewer fresh review precedes execution.
+No new resource budget, physical write grant, library patch or production setting.
+
 ### Proposed bounded native asset manifest transport contract
 
 Data: preparation adds asset-manifest.json, a bounded4MiB strict JSON mapping of

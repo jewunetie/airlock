@@ -4,6 +4,44 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+### Diagnosed macOS environment lookup correction, 2026-10-06
+
+The first current-source selected-field run passes all three case assertions:
+actual local-model approval releases exact wages/net_total JSON, denial withholds
+output, and a direct identifier proposal is blocked before a vote. Each workspace
+closes with empty worker jobs. Overall acceptance fails when the shared scanner
+closes; original passive observations capture SystemError from proc_environ with
+direct PermissionError/EACCES context after sysctl(KERN_PROCARGS2) reports errno0.
+Evidence:
+`/private/tmp/airlock-live-selected-gemma-shipped-f1e0b2c4ce2b4152ae15eef37ebedfde/evidence.json`.
+This capture diagnoses that scanner-close failure, not the earlier PNG failure.
+
+[Upstream PR2854](https://github.com/giampaolo/psutil/pull/2854) confirms the exact
+psutil7.2.2 error; its fix is in8.0 development outside the locked compatible range.
+The minimal local adapter translates only that exact Darwin message/direct errno13
+context to AccessDenied at process-environment marker lookup. Existing denied
+lookups, UID gates, ancestry, known identities, watcher/wait/survivor errors and
+retained uncertain ownership keep their behavior. No dependency or global patch
+is introduced. Six variants and unchanged failure controls pass16focused checks;
+fresh reviews find no actionable source defect. The wrong-message regression was
+strengthened to retain the original PermissionError context independently.
+The final locked suite passes **611 checks**, eight existing warnings, no failures
+or skips: `/private/tmp/airlock-process-environment-final-core-20261006.log`.
+
+The corrected-source actual selected-flow repeat passes all three cases and
+overall acceptance, including scanner/model/runtime closure, empty owned jobs and
+source/global/service/model preservation. Cleanup observations are empty; original
+failed evidence is preserved. Evidence:
+`/private/tmp/airlock-live-selected-gemma-shipped-3f7a9ca22bdd4faeafa4234ecce539b9/evidence.json`.
+Combined source:
+`0aa948c0a918c9267fa7103344ce5ed4f01db7cda416199833e777e1f8866cc7`.
+This is a private synthetic method check, with no profile acceptance or global
+activation. It uses the earlier plain scan/artifact; the complete ruled-table
+creation-to-selected-release workflow is not established by this separate check.
+Exact two-module source/wheel bytes, private installed import and CLI help pass
+under `/private/tmp/airlock-process-environment-build-20261006/` and
+`/private/tmp/airlock-process-environment-installed-20261006/`.
+
 ### Corrected admission and selected-file proofs, 2026-10-06
 
 The narrow host-admission correction removes only the unagreed total-RAM fraction;
@@ -51,6 +89,19 @@ and shared-service preservation. No observation faults occurred. Evidence:
 `/private/tmp/airlock-live-document-worker-53f5ac5d5fb1461d93b7f1794b3450e8/evidence.json`.
 The earlier failure remains unattributed; one successful repeat does not establish
 model reliability. Native table-label failures remain separate and unchanged.
+
+The separate current-source PNG worker reads through the actual confined parser,
+writes the exact15CSVcells and source/page provenance, and reaches guard/trajectory.
+Worker closure then raises process_cleanup_failed at SandboxProcess.close; final
+runtime closure also fails and retains its exact worker registry. Parser and model
+close, empty parser handles/jobs and shared-service preservation pass. Evidence:
+`/private/tmp/airlock-live-document-worker-16fdbaba2f874fcaa58483f746d79763/evidence.json`.
+The overall workflow fails; correct physical files do not replace its failed
+completion/cleanup result. A later read-only exact-marker process inventory finds
+no observed match and reports AccessDenied observation classes, without capturing
+the underlying cleanup exception. This does not explain the earlier failure or
+prove successful same-owner closure. Original registry, scratch and evidence are
+preserved; no orphan recovery or deletion is performed.
 
 ### Human choices and implementation defaults, 2026-10-06
 
@@ -114,7 +165,8 @@ shared service preservation pass. Evidence:
 Subsequent available-host-memory observations are below the existing25% admission
 threshold; the failed startup did not record its original memory value, so its
 precise cause is not attributed. No admission limit or shared process is changed.
-Exact worker CSV/provenance and current-source selected release remain pending.
+At that checkpoint exact worker CSV/provenance and selected release remained
+pending. The newer executed results above supersede that checkpoint's status.
 
 ### Approved private Gemma clarification and selected release, 2026-10-05
 

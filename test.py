@@ -476,6 +476,37 @@ async def test_boundary_nullable_uid_does_not_read_environment(monkeypatch):
     assert tree.known == {}
 
 
+@pytest.mark.parametrize('variant',['captured','message','missing','context','errno','platform'])
+def test_boundary_process_environment_denial_wrapper(monkeypatch,variant):
+    from types import SimpleNamespace
+    error=SystemError('<built-in function proc_environ> returned a result with an exception set')
+    error.__context__=PermissionError(a.errno.EACCES,'synthetic denial')
+    if variant=='message':error.args=('unrelated failure',)
+    if variant=='missing':error.__context__=None
+    if variant=='context':error.__context__=RuntimeError('unrelated context')
+    if variant=='errno':error.__context__=PermissionError(a.errno.EIO,'different error')
+    class Process:
+        pid=12345
+        info={'uids':SimpleNamespace(real=a.os.getuid())}
+        def environ(self):raise error
+    denied=Process()
+    marked=SimpleNamespace(pid=12346,info=denied.info,environ=lambda:{'AIRLOCK_JOB':'synthetic-marker'})
+    tree=object.__new__(a.ProcessTree)
+    tree.known,tree.marker={},'synthetic-marker'
+    monkeypatch.setattr(a.psutil,'process_iter',lambda attrs:[denied,marked])
+    with monkeypatch.context() as patch:
+        patch.setattr(a.sys,'platform','linux' if variant=='platform' else 'darwin')
+        if variant=='captured':
+            with pytest.raises(a.psutil.AccessDenied) as caught:a.process_environment(denied)
+            assert caught.value.__cause__ is error
+            tree.discover()
+            assert tree.known=={marked.pid:marked}
+            assert a.process_environment(marked)=={'AIRLOCK_JOB':'synthetic-marker'}
+        else:
+            with pytest.raises(SystemError) as caught:tree.discover()
+            assert caught.value is error and tree.known=={}
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize('watcher_failure', [False, True])
 async def test_boundary_marked_child_discovery_and_cleanup(watcher_failure):

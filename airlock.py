@@ -42,6 +42,7 @@ from collections import Counter, deque
 import dataclasses
 from decimal import Decimal, localcontext
 import enum
+import errno
 import hashlib
 import hmac
 import importlib.metadata
@@ -2394,6 +2395,19 @@ def clean_environment() -> dict[str, str]:
             'TOKENIZERS_PARALLELISM': 'false', 'OMP_NUM_THREADS': '1'}
 
 
+def process_environment(process: psutil.Process) -> dict[str, str]:
+    """Return process environment; normalize only psutil's known macOS denial bug."""
+    try:
+        return process.environ()
+    except SystemError as error:
+        if (sys.platform == 'darwin'
+                and str(error) == '<built-in function proc_environ> returned a result with an exception set'
+                and isinstance(error.__context__, PermissionError)
+                and error.__context__.errno == errno.EACCES):
+            raise psutil.AccessDenied(process.pid) from error
+        raise
+
+
 class ProcessTree:
     """Track identities, not bare PIDs. Handles native Coder detached sessions.
 
@@ -2415,7 +2429,7 @@ class ProcessTree:
         # Native shell helpers may detach/reparent before the next ancestry poll.
         for process in psutil.process_iter(['pid', 'uids']):
             with contextlib.suppress(psutil.Error, OSError):
-                if process.info['uids'] is not None and process.info['uids'].real == os.getuid() and process.environ().get('AIRLOCK_JOB') == self.marker:
+                if process.info['uids'] is not None and process.info['uids'].real == os.getuid() and process_environment(process).get('AIRLOCK_JOB') == self.marker:
                     self.known[process.pid] = process
 
     async def watch(self):
@@ -2657,7 +2671,7 @@ async def cleanup_orphan_jobs(state: Path):
         matches = []
         for process in psutil.process_iter(['pid','uids']):
             with contextlib.suppress(psutil.Error):
-                if process.info['uids'] is not None and process.info['uids'].real == os.getuid() and process.environ().get('AIRLOCK_JOB') == marker:
+                if process.info['uids'] is not None and process.info['uids'].real == os.getuid() and process_environment(process).get('AIRLOCK_JOB') == marker:
                     matches.append(process)
         if matches:
             tree = ProcessTree(matches[0].pid, marker)

@@ -470,6 +470,45 @@ no prompt/schema/budget change. Location: derived private temporary runner/evide
 Tests: source/helper pins, exact original failed evidence preserved, cap and observer
 failure do not replace execution results; absent/failing final receipt remains failed.
 
+### Normalize the diagnosed macOS process-environment error
+
+Data: existing psutil process identities/environment mapping; no new retained
+state. API: process_environment(process) returns its original mapping unchanged;
+only Darwin's exact proc_environ SystemError with direct PermissionError/EACCES
+context becomes psutil.AccessDenied. All other errors propagate unchanged. Use it
+only for marker inventory in ProcessTree.discover and registered orphan recovery;
+existing denied-environment handling, ancestry, watcher/terminate/wait/survivor
+verification and retained uncertain ownership remain binding. Upstream PR2854
+confirms the captured psutil7.2.2 bug; its fix is in8.0 development, outside the
+locked compatible range, so no unreleased dependency or global patch is introduced.
+Location: root airlock.py shared environment adapter, test.py; HOW/VALIDATION.
+Tests: exact captured wrapper becomes AccessDenied and subsequent marked process
+is still discovered; wrong message/context/errno/platform propagate the original
+error. Existing watcher/survivor/retained-owner tests, full locked suite, fresh
+review and actual current-source selected flow/shutdown follow. Preserve failed
+PNG/scanner evidence; do not attribute the earlier PNG cause to this later capture.
+
+One current-source PNG verification retains the same natural request, assets,
+settings and strict artifact/receipt/cleanup assertions. Data: bounded passive
+discover/terminate exception class, errno and source frames in private evidence.
+API: observe original ProcessTree methods within the private test process and
+forward outcomes unchanged; observation errors invalidate completeness. Location:
+derived /private/tmp runner/evidence only. Tests: exact15cells/provenance, actual
+parser/tool completion, null receipt and all closures/empty owned state; no
+unrelated service changes. A new failure remains failed, not a resource sweep.
+
+### Private failed-PNG inspection
+
+Private failed-PNG inspection: data is the exact retained job marker, owned process
+PID/create-time/status and bounded observation error classes, plus unchanged local
+artifact bytes. API: read the retained registry and psutil process inventory;
+report only exact AIRLOCK_JOB matches and fixed observation errors. No termination,
+orphan recovery, state deletion or speculative cause attribution. Location: private
+inline diagnostic and original evidence directory; HOW/VALIDATION record outcomes.
+Tests: marker must be64lowercase hex and match the registry; never expose unrelated
+environment values, preserve original failure/evidence and shared services. A clear
+later inventory does not establish successful same-owner cleanup at failure time.
+
 ### Selected-file proofs tolerate unrelated ancestor entries
 
 Data: each ancestor retains device/inode/type/mode/uid/gid identity; selected files

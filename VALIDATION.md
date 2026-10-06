@@ -116,6 +116,22 @@ independently checked against their original SHA256 values after these diagnosti
 and remain unchanged. No production address-space policy changed or settings
 activated. Neither native route has passed the required complete-table golden.
 
+One reviewed private causal repeat sets softCPU14/hard15 with no physical or hard
+CPU increase. The SIGXCPU handler records layout_model_loading at userCPU11.513079
+and systemCPU2.444373 seconds, peakRSS492609536 bytes; cgroup memory.events reports
+max6526 but oom0/oom_kill0. It returns to original execution. A subsequent native
+exception reports FileNotFoundError: no usable temporary directory in the read-only
+container; final observed peakRSS494157824 bytes. The process then exits137 with
+OOMKilled:false. Start completed without controller timeout and the container was
+already exited before cleanup; exact absence passes. Evidence:
+`/private/tmp/airlock-docling-fit-4de30c088dfe4696a274b43259276804.json`.
+This establishes that the repeat reached its soft CPU limit and independently
+observes a temporary-directory requirement, not the exact final kill cause,
+the cause of the preceding run or a minimum successful resource budget.
+No writable scratch or increased budget was
+added; those would be separate explicit configuration decisions. Table loading
+and fidelity remain unproved. Original baseline evidence is retained.
+
 ### Independent required tax-contract verification, 2026-10-05
 
 On unchanged production source at e24079c, the locked focused run passes

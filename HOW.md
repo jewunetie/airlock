@@ -321,6 +321,23 @@ all effective confinement checks, original evidence/files preserved, exact owned
 absence required even after timeout/failure. No real documents, global activation,
 new physicalRAM/CPU allowance or shipped code/configuration edit.
 
+### Private hard-CPU-limit causal telemetry
+
+Data: retain exact layout-stage exit137 baseline60e9d3c, same frozen PDF and
+complete image/helper/bundle/model/syscall pins. Same physical512MiB/no-swap and
+hardCPU15; private softCPU14 adds one early SIGXCPU observation, not more CPU.
+API: register a signal handler to flush current phase, actual user/system CPU,
+RSS/virtual size and cgroup memory.events when observable; return to original
+execution and preserve the15-second hard cutoff. Telemetry faults are explicit
+completeness failures and cannot authorize success. Retain timeout partial streams
+and exact terminal state before cleanup; distinguish controller timeout/kill from
+native termination. No new resource allowance or production setting.
+Location: one private /private/tmp runner/evidence; HOW/VALIDATION only.
+Tests: fresh same-reviewer review; verified effective soft14/hard15 CPU and all
+other original confinement/pins/env1/private-AS delta, exact fixture preserved,
+signal handler registration under existing seccomp, complete original baseline
+retained and exact owned-container absence. No table-ready or minimumRAM inference.
+
 ### Proposed bounded native asset manifest transport contract
 
 Data: preparation adds asset-manifest.json, a bounded4MiB strict JSON mapping of

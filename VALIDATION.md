@@ -58,6 +58,17 @@ incorrectly compared Docker's normalized seccomp JSON with its source path and
 refused before starting; that failure and successful cleanup remain recorded in
 `/private/tmp/airlock-docling-import-fit-20261005.json`.
 
+A freshly reviewed paired repeat verifies OPENBLAS_NUM_THREADS=1 in the effective
+container environment; the installed Torch/NumPy/SciPy OpenBLAS binaries contain
+that variable and configuration symbols. Identical index/image/syscall pins and
+limits again reach torch_import, then exit1 with the same OpenBLAS allocation
+failure and OOMKilled:false. Immediately before import, observed virtual size is
+40496KiB and RSS33864KiB; these are not peak import memory. Exact owned-container
+absence passes. Evidence:
+`/private/tmp/airlock-docling-fit-8a83b6d42d794255bac4adb8c0dd6755.json`.
+The single-thread setting alone does not resolve the dependency failure. No
+production environment, asset, resource limit or document input changed.
+
 ### Independent required tax-contract verification, 2026-10-05
 
 On unchanged production source at e24079c, the locked focused run passes

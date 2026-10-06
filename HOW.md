@@ -249,7 +249,25 @@ RSS and OOM state; do not equate this diagnostic with shipped-parser startup or
 table extraction. Preparation may replace only the owned bundle's empty uv .lock
 with an identical safe-mode copy, avoiding mutation of a hardlinked source lock.
 
-### Proposed bounded native asset manifest transport
+### Private paired OpenBLAS thread diagnostic
+
+Data: retain the original dependency-fit evidence7492bf and identical complete
+bundle/index/image/syscall pins. One private repeat adds only the environment
+OPENBLAS_NUM_THREADS=1, after verifying that the installed OpenBLAS binary
+recognizes that variable. Existing512MiB/15CPU/PID/FSIZE0 limits remain fixed.
+API: reuse the dependency-only no-document probe and exact owned cleanup. Record
+the installed library/configuration, effective environment, flushed import phases,
+observed RSS/virtual size and terminal exception/exit/OOM where available. Missing
+terminal observations remain missing; neither OOMKilled:false nor successful
+imports imply memory sufficiency for model/table work. Preserve baseline evidence
+and all source/global/service settings; no production environment or bounds change.
+Location: one private /private/tmp runner and unique evidence; HOW/VALIDATION only.
+Tests: verify variable support from installed bytes, exact paired pins/environment
+and unchanged effective confinement; original baseline retained, owned container
+absence required. Fresh review of exact delta before execution. No document input,
+download or global activation. A failure remains a separate measured blocker.
+
+### Proposed bounded native asset manifest transport contract
 
 Data: preparation adds asset-manifest.json, a bounded4MiB strict JSON mapping of
 every other bundle file to its SHA256. Existing AssetSpec.sha256 still includes

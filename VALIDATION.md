@@ -69,6 +69,53 @@ absence passes. Evidence:
 The single-thread setting alone does not resolve the dependency failure. No
 production environment, asset, resource limit or document input changed.
 
+The reviewed dependency-only virtual-address isolation repeat omits only the
+probe's RLIMIT_AS assignment (inherited -1/-1), while retaining physical cgroup
+512MiB/no swap, CPU15/PID32/FSIZE0 and all previous confinement/pins/env1.
+Torch2.13.0+cpu and DocumentConverter import successfully, exit0, no stderr,
+OOMKilled:false and exact owned absence. After Torch import VmSize is816064KiB
+and RSS246712KiB; peak process RSS across both imports is377925632 bytes.
+Evidence: `/private/tmp/airlock-docling-fit-e2c48f4731c14d0280a84cca658e11d2.json`.
+The paired results identify the additional512MiB virtual-address ceiling as an
+import blocker, without requiring higher physical RAM for these imports. No
+production limit changed. Model loading, document/table fidelity and shipped
+manifest transport remain separate unverified gates.
+
+### Native LiteParse ruled-table goldens, 2026-10-06
+
+Two frozen synthetic table cases execute the unchanged shipped parser owner and
+helper under original512MiB/15CPU limits. Both strict complete-matrix assertions
+fail. Digital PDF produces one actual table with correct four data rows, exact
+signs/amounts/leading-zero references and cell bboxes, but its three header cells
+are empty. Independent page text/text-item records contain those header labels.
+The matching150DPI PNG produces no actual table block. No expected values or
+success assertions were relaxed. Both owners close with empty job/CLI/spawn/
+reaper/pipe state; fixture and complete prepared-bundle preservation pass.
+Evidence and bounded raw NDJSON:
+`/private/tmp/airlock-liteparse-table-54b2ddd5f4624f03b047cba32da12802/`.
+PDF SHA256 `570884d5549d5045541310b6e154284da66eb72a70e8a20d3470cfb173f160d9`;
+PNG SHA256 `9d862a9bbf4a7eb6c30a0e799f4a15312d9dea2b76d15828a3a935ae8fd44d8b`.
+This parser-only diagnostic does not use a worker/model or release data. Table
+fidelity remains a blocker despite the prior successful plain scan/local artifact.
+
+### Private Docling frozen-table/model fit, 2026-10-06
+
+The same frozen digital PDF is passed to the existing pinned helper in the reviewed
+private AS-isolated/env1 route, with physical512MiB/no swap, CPU15/PID32/FSIZE0
+and all confinement/pins retained. Factory observers forward original arguments,
+results and exceptions while flushing layout/table-model stages. Imports pass;
+the last checkpoint is layout_model_loading, observed RSS425240KiB and
+VmHWM434504KiB. The process exits137, Docker reports OOMKilled:false and no stderr;
+layout completion, table-model loading and extraction are not observed. A specific
+kill cause or required RAM/CPU minimum cannot be established from these values.
+Owned-container absence passes. Evidence:
+`/private/tmp/airlock-docling-fit-60e9d3c319c04d2c9ad5d03099831769.json`.
+No further model-fit retry or physicalRAM/CPU increase is authorized by this result.
+Production source/tools/tests and prepared-settings/calibration/plugin bytes were
+independently checked against their original SHA256 values after these diagnostics
+and remain unchanged. No production address-space policy changed or settings
+activated. Neither native route has passed the required complete-table golden.
+
 ### Independent required tax-contract verification, 2026-10-05
 
 On unchanged production source at e24079c, the locked focused run passes

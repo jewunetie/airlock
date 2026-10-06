@@ -267,6 +267,60 @@ and unchanged effective confinement; original baseline retained, owned container
 absence required. Fresh review of exact delta before execution. No document input,
 download or global activation. A failure remains a separate measured blocker.
 
+### Private virtual-address-limit isolation
+
+Data: retain both original512MiB-address-space import failures and identical
+bundle/index/image/syscall pins. One private dependency-only repeat keeps
+OPENBLAS_NUM_THREADS=1 and physical cgroup512MiB/no-swap, CPU15/PID32/FSIZE0.
+API: omit only the probe's RLIMIT_AS assignment; record its inherited effective
+value before import. All other confinement checks remain. Flush phase/RSS/virtual
+size, preserve partial stdout/stderr on TimeoutExpired and exact owned state
+before cleanup where observable; preserve original exceptions and evidence.
+No document input, production policy/environment edit or higher physical cap.
+Location: one private /private/tmp runner/evidence, HOW/VALIDATION only.
+Tests: fresh review, exact paired pins/environment/effective inherited AS and
+unchanged physical/confinement controls, original evidence retained, exact owned
+absence required. Import success is not model/table fit or shipped readiness;
+failures and unavailable observations stay explicit.
+
+### Native LiteParse ruled-table golden diagnostic
+
+Data: synthetic one-page three-column table (Item, Amount, Reference), four rows
+Wages1250.25/001234, Expenses(250.10)/000042, Adjustment-15.05/000007,
+Net985.10/000009. Generate a ruled digital PDF and matching150DPI PNG privately.
+Retain fixture digests and full bounded parser output/cell/page/bbox provenance.
+API: use unchanged actual PdfParser.start/begin/chunk/finish/close with pinned
+LiteParse2.15.1 helper/dependencies/image/OCR/policy and original512MiB/15CPU
+bounds. This parser-only diagnostic is not a governed worker or live release test.
+Require exact complete table matrix, allowing header as the table header or first
+row, with actual table cells/bboxes; plain text matches alone do not pass. Record
+each case failure without skipping the other; no limits or fixtures adjusted to
+pass. Exact owned cleanup and original prepared bytes remain required.
+Location: one private /private/tmp runner/fixtures/evidence; HOW/VALIDATION only.
+Tests: fixture PDF validity/header, exact row strings/signs/leading zeros, real
+native startup and table assertions for both input media, input/pin preservation,
+no retained jobs/live CLI after close. Fresh review before execution. No model
+loading, dependency download, production configuration change or global activation.
+
+### Private Docling model and frozen-table fit
+
+Data: same frozen digital table PDF570884d5 and exact golden matrix from the
+LiteParse diagnostic, complete Docling bundle/index/model/OCR pins. Carry only
+the proven private inherited-AS/env1 diagnostic delta; physical512MiB/no-swap,
+CPU15/PID32/FSIZE0/network/IPC/readonly/seccomp controls remain unchanged.
+API: invoke the existing pinned helper extract_document_bytes inside that native
+container; no fallback or downloads. Passive factory wrappers print before/after
+layout/table-model creation while forwarding arguments/results/exceptions unchanged.
+Retain imported/configuration/model/extraction stages, RSS/virtual observations,
+bounded table cell rows/columns/bboxes/provenance, exit/OOM and timeout partial
+streams. Exact matrix/signs/leading-zero references required; fail and stop if
+models do not fit. Success is private feasibility, not a production policy change.
+Location: one private /private/tmp runner/evidence, HOW/VALIDATION only.
+Tests: fresh same-reviewer review, immutable fixture/helper/fullbundle/policy pins,
+all effective confinement checks, original evidence/files preserved, exact owned
+absence required even after timeout/failure. No real documents, global activation,
+new physicalRAM/CPU allowance or shipped code/configuration edit.
+
 ### Proposed bounded native asset manifest transport contract
 
 Data: preparation adds asset-manifest.json, a bounded4MiB strict JSON mapping of

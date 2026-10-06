@@ -357,6 +357,16 @@ path only in variant, original module bytes preserved, full exception chain and
 missing terminal output explicit. Same-reviewer fresh review precedes execution.
 No new resource budget, physical write grant, library patch or production setting.
 
+One final private variant retains cached tempfile.tempdir='/airlock' and adds only
+the supported environment TORCHINDUCTOR_CACHE_DIR='/airlock', verified in both
+effective container environment and child. Existing directory and complete file
+pins remain unchanged; no cache files, weights or documents are loaded. The same
+exact-class import, full traceback, CPU/RSS/memory.events, timeout/state and owned
+absence assertions apply. Location: one derived private /private/tmp runner and
+evidence, HOW/VALIDATION only. Fresh same-reviewer review before execution; stop
+after this outcome, no path guessing or resource sweep. All write attempts remain
+subject to original read-only filesystem/FSIZE0/seccomp controls.
+
 ### Proposed bounded native asset manifest transport contract
 
 Data: preparation adds asset-manifest.json, a bounded4MiB strict JSON mapping of

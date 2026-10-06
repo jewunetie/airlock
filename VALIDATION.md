@@ -163,6 +163,18 @@ read-only hierarchy remains an untested possibility. No serialized cache was
 loaded, runtime write grant added, dependency patched, budget increased or
 production setting changed. Model/table fit remains unproved.
 
+The final freshly reviewed supported-cache variant adds only effective
+TORCHINDUCTOR_CACHE_DIR=/airlock while retaining the cached read-only tempfile
+path and all paired pins/limits. It reaches exact_model_class_import, then exits137
+with OOMKilled:false and empty stderr. No final exception, import-pass assertion,
+CPU/RSS/memory.events report survives. Controller start returns without timeout;
+exact owned-container absence passes. Evidence:
+`/private/tmp/airlock-docling-fit-f9f81ba675274463aafc5325fd4e0a7e.json`.
+This outcome is inconclusive about subsequent cache requirements and final kill
+cause; absence of an error trace is not import success. No writes, cache files,
+weights, documents or increased budgets were introduced. Stop this path series;
+preserve the earlier failures and do not infer a minimum successful resource cap.
+
 ### Independent required tax-contract verification, 2026-10-05
 
 On unchanged production source at e24079c, the locked focused run passes

@@ -460,6 +460,49 @@ Tests: verify every old asset hash before immutable copying, helper/source equal
 strict PDF and PNG matrix independently, real tool-use positive controls and all
 owner closures. Native table-label goldens remain unchanged and independent.
 
+One unchanged-request causal repeat retains the failed completed artifacts and
+UnexpectedModelBehavior outcome. Data: bounded actual model-role/reply records,
+at most16calls and512KiB per record in private synthetic evidence. API: a passive
+worker_message observer forwards original model results/errors unchanged, records
+observation faults separately and invalidates diagnostic completeness. Same natural
+request, model/parser/settings/limits and exact artifact/receipt/cleanup assertions;
+no prompt/schema/budget change. Location: derived private temporary runner/evidence.
+Tests: source/helper pins, exact original failed evidence preserved, cap and observer
+failure do not replace execution results; absent/failing final receipt remains failed.
+
+### Selected-file proofs tolerate unrelated ancestor entries
+
+Data: each ancestor retains device/inode/type/mode/uid/gid identity; selected files
+retain complete existing device/inode/size/mtime/ctime snapshots and exact digests.
+API: financial_file_proofs checks the descriptor and nofollow path against this
+directory identity tuple, rather than unrelated directory entry count/timestamps.
+Every selected-file byte/change/ownership/link check and final workspace identity
+remains binding; replacing a path or changing permissions/ownership still refuses.
+Location: airlock.py proof reader; test.py deterministic sibling-creation
+and ancestor-replacement/mode-change regressions; HOW/ARCHITECTURE/VALIDATION.
+Tests: create unrelated private ancestor sibling during actual read and require
+unchanged exact proof; replacement or mode change during read must refuse, as must
+existing file-change/symlink tests. Preserve original full-suite failure separately:
+its precise cause is unobserved. Fresh security review precedes the source edit;
+focused/full locked tests and actual release checks follow without weaker assertions.
+
+### Correct the unagreed host-memory percentage gate
+
+The direct human correction on October6 rejects imposing unagreed constraints.
+The25% reserve first appeared in implementation04ddb0f; our HOW is not evidence
+of human consent. Remove that additional percentage gate, not enforced controls.
+Data: no entity/field/type changes; existing pdf_memory_mb and available bytes.
+API: PdfParser.begin refuses pdf_unavailable below twice the configured cap;
+total host memory is not an admission factor. Preserve locks, deadlines, exact
+pins, ownership/cleanup and all hard kernel memory/CPU/FSIZE/PID/sandbox limits.
+Location: airlock.py one predicate, test.py parametrized scripted lifecycle,
+ARCHITECTURE/HOW current admission contract and VALIDATION executed evidence.
+Tests:2*cap-1 refuses without CLI creation;2*cap and2*cap+1 complete positive
+output even below25%totalRAM, with exact memory/swap/CPU/FSIZE/PID/quota/network/
+read-only flags and empty owned state. Full suite, fresh review, packaging and
+actual frozen-table worker tests follow. Preserve prior failure and all assets;
+no model/global activation or production budget expansion follows this correction.
+
 ### Proposed bounded native asset manifest transport contract
 
 Data: preparation adds asset-manifest.json, a bounded4MiB strict JSON mapping of
@@ -1336,8 +1379,8 @@ allowing its route to exceed verified geometry: input 16,777,216 bytes, extracte
 UTF-8 text 524,288 bytes, 100 pages, 15-second parse deadline and 512 MiB AS.
 Reject prepared values exceeding these ceilings; smaller limits apply exactly.
 Cgroup memory equals AS and memory-swap equals memory; PID ceiling 32, CPU quota
-0.5, FSIZE zero. Do not replace AS with cgroups or RSS sampling. Require >=25%
-host free memory and at least twice the configured cap available before starting
+0.5, FSIZE zero. Do not replace AS with cgroups or RSS sampling. Require
+at least twice the configured cap available before starting
 one job; this admission gate is distinct from enforcement. One supervisor-wide
 parser slot bounds concurrent containers and host byte buffers.
 

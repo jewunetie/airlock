@@ -200,6 +200,10 @@ Text uses Coder's native reader. A small same-name adapter supports bounded PDF 
 
 PNG, JPEG, and WebP inputs require an image-capable configured local model. Image bytes travel to that model, not to the cloud. Unsupported models or formats produce a bounded tool error rather than fabricated image understanding.
 
+Native parser admission requires at least twice its configured memory cap available
+on the host. It does not reserve a percentage of total host RAM. Admission is
+separate from the enforced per-job resource and sandbox limits below.
+
 By default PDFs are parsed in a short-lived, resource-limited subprocess that inherits SRT and refuses unavailable hard limits. An explicitly prepared `pdf_parser` selects the fixed supervisor-owned Linux byte route, with no native fallback or automatic Docker start/install/pull. Its exact CLI/daemon/image/helper/package/policy pins, effective settings and positive/negative parser canaries must pass before readiness. Every job retains hard AS up to512MiB, CPU up to15seconds, FSIZE0, finite cgroup/PID/CPU/swap and pipe bounds, no networking, non-root identity and a read-only narrow bundle. Smaller configured limits remain binding.
 
 Input is chunked over private read-bound pipes under the existing channel lock. Exact grants, sequence/size/configuration checks and matching completion prevent replay or replacement. No text returns before input EOF, full bounded terminal stdout EOF, successful exit and verified exact owned container removal/independent absence. Owner-only `pdf-jobs` records retain original pins/IDs/complete image-plus-owner labels for recovery; uncertain creation or cleanup withholds text and disables the configured route. Recovery never enumerates unrelated daemon objects.
@@ -301,6 +305,11 @@ HMAC identifies the same normalized text, not semantically equivalent wording. T
 After restart, raw source strings are absent from memory. When a source is supplied again, its stable HMAC reconnects it to existing history. Unknown historical sources do not block the workspace while waiting to be supplied again. This is an explicit limit on cross-restart detection, not recovery of source text from a hash.
 
 ## 11. Governance and release transaction
+
+Selected-file proofs retain every ancestor's device/inode, type, permissions and
+ownership through descriptor and nofollow-path checks. Unrelated directory entry
+changes do not invalidate those identities. Selected files still require unchanged
+complete size/time metadata and exact digests; replacement or mutation refuses.
 
 Request admission, read/write/shell execution, and final release use `deny / manual / auto / allow`. Tool visibility uses `hidden / visible`. Privacy uses `enforce / warn / off`.
 

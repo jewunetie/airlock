@@ -980,7 +980,7 @@ def financial_file_proofs(root: Path, identity: tuple[int, int], refs: list[str]
         info = os.fstat(fd)
         if not stat.S_ISDIR(info.st_mode) or owned and info.st_uid != os.getuid():
             raise OSError()
-        directories.append((parent,name,fd,metadata(info)))
+        directories.append((parent,name,fd,(info.st_dev,info.st_ino,info.st_mode,info.st_uid,info.st_gid)))
         return fd
     try:
         if not root.is_absolute() or any(part in ('.','..') for part in root.parts):
@@ -1023,8 +1023,9 @@ def financial_file_proofs(root: Path, identity: tuple[int, int], refs: list[str]
                 raise OSError()
             result[ref] = (before,digest.hexdigest())
         for parent,name,fd,before in directories:
-            if metadata(os.fstat(fd)) != before or metadata(os.stat(name,dir_fd=parent,follow_symlinks=False)) != before:
-                raise OSError()
+            for info in (os.fstat(fd),os.stat(name,dir_fd=parent,follow_symlinks=False)):
+                if (info.st_dev,info.st_ino,info.st_mode,info.st_uid,info.st_gid) != before:
+                    raise OSError()
         return result
     except (OSError,ValueError,AttributeError,NotImplementedError):
         raise AirlockError('financial_evidence_unavailable') from None
@@ -4280,7 +4281,7 @@ class PdfParser:
                 if self.unavailable:
                     raise AirlockError('pdf_unavailable')
                 memory = psutil.virtual_memory()
-                if memory.available < 2*self.settings.pdf_memory_mb*1024*1024 or memory.available/memory.total < .25:
+                if memory.available < 2*self.settings.pdf_memory_mb*1024*1024:
                     raise AirlockError('pdf_unavailable')
                 await self.pins(read.deadline)
                 job_id = uuid.uuid4().hex

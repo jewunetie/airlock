@@ -3333,6 +3333,34 @@ else:raise RuntimeError(args)
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize('extra',[-1,0,1])
+async def test_pdf_route_byte_memory_admission(scripted_pdf_parser,monkeypatch,extra):
+    parser,task,read,state,_,transcript=scripted_pdf_parser
+    cap=parser.settings.pdf_memory_mb*1024*1024
+    monkeypatch.setattr(a.psutil,'virtual_memory',lambda:type('Memory',(),{'available':2*cap+extra,'total':64*1024**3})())
+    try:
+        if extra<0:
+            with pytest.raises(a.AirlockError,match='^pdf_unavailable$'):
+                await parser.begin(task,read,3)
+            assert not transcript.exists() and not state.exists()
+        else:
+            await parser.begin(task,read,3)
+            await parser.chunk(task,read,0,b'pdf')
+            assert 'Synthetic parser result' in await parser.finish(task,read)
+            commands=[a.json.loads(line) for line in transcript.read_text().splitlines()]
+            create=commands[0]
+            assert create[create.index('--memory')+1]==str(cap)
+            assert create[create.index('--memory-swap')+1]==str(cap)
+            limits=[create[i+1] for i,value in enumerate(create) if value=='--ulimit']
+            assert limits==['cpu=2:2','fsize=0:0']
+            assert create[create.index('--pids-limit')+1]=='32' and create[create.index('--cpus')+1]=='0.5'
+            assert create[create.index('--network')+1]=='none' and '--read-only' in create
+        assert parser.job is None and not parser.slot.locked() and not list(parser.folder.iterdir())
+    finally:
+        await parser.close()
+
+
+@pytest.mark.asyncio
 async def test_pdf_route_scripted_lifecycle_positive(scripted_pdf_parser):
     parser,task,read,state,_,transcript=scripted_pdf_parser
     await parser.begin(task,read,3)
@@ -4136,6 +4164,51 @@ def test_r9_anchored_proofs_and_cleanup(tmp_path,monkeypatch,fault):
         assert closed==list(reversed(opened))
         if fault in ('leaf_symlink','parent_symlink','hardlink','fifo','ownership','directory_ownership',
                      'identity','aggregate','path','relative_root'):assert not reads
+
+
+@pytest.mark.parametrize('mutation',['sibling','mode','replacement','uid','gid'])
+def test_r9_ancestor_identity_and_unrelated_entries(tmp_path,monkeypatch,mutation):
+    from types import SimpleNamespace
+    parent=tmp_path/'parent';parent.mkdir(mode=0o700)
+    root=parent/'workspace';root.mkdir(mode=0o700)
+    selected=root/'source.txt';selected.write_bytes(b'Wages 1250.25\n')
+    identity=(root.stat().st_dev,root.stat().st_ino);ancestor=parent.stat().st_ino
+    real_open,real_close,real_read,real_stat=a.os.open,a.os.close,a.os.read,a.os.fstat
+    opened=[];closed=[];changed=False
+    def traced_open(*args,**kwargs):
+        fd=real_open(*args,**kwargs);opened.append(fd);return fd
+    def traced_close(fd):closed.append(fd);return real_close(fd)
+    def traced_stat(fd):
+        info=real_stat(fd)
+        if changed and info.st_ino==ancestor and mutation in ('uid','gid'):
+            fields={name:getattr(info,name) for name in ('st_dev','st_ino','st_mode','st_uid','st_gid')}
+            fields['st_'+mutation]+=1
+            return SimpleNamespace(**fields)
+        return info
+    def traced_read(fd,size):
+        nonlocal changed
+        result=real_read(fd,size)
+        if result and not changed:
+            changed=True
+            if mutation=='sibling':(parent/'unrelated.txt').write_text('Unrelated synthetic entry')
+            if mutation=='mode':parent.chmod(0o500)
+            if mutation=='replacement':parent.rename(tmp_path/'retained');parent.mkdir(mode=0o700)
+        return result
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(a.os,'open',traced_open);patch.setattr(a.os,'close',traced_close)
+            patch.setattr(a.os,'read',traced_read);patch.setattr(a.os,'fstat',traced_stat)
+            if mutation=='sibling':
+                proof=a.financial_file_proofs(root,identity,['source.txt'],1000)
+                assert proof['source.txt'][1]==a.hashlib.sha256(b'Wages 1250.25\n').hexdigest()
+            else:
+                with pytest.raises(a.AirlockError,match='^financial_evidence_unavailable$'):
+                    a.financial_file_proofs(root,identity,['source.txt'],1000)
+            assert changed and closed==list(reversed(opened))
+    finally:
+        parent.chmod(0o700)
+    source=(tmp_path/'retained/workspace/source.txt') if mutation=='replacement' else selected
+    assert source.read_bytes()==b'Wages 1250.25\n'
 
 
 @pytest.mark.asyncio

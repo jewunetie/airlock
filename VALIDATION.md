@@ -4,6 +4,83 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+### Corrected admission and selected-file proofs, 2026-10-06
+
+The narrow host-admission correction removes only the unagreed total-RAM fraction;
+available bytes must still be at least twice the parser cap. Three byte-boundary
+tests pass with unchanged hard memory/swap/CPU/FSIZE/PID/quota/network/read-only
+flags. The initial full run retains1failure/599passes at an existing financial
+proof test before its fault injection; the isolated failed case passes. Logs:
+`/private/tmp/airlock-byte-admission-core-20261006.log` and
+`/private/tmp/airlock-byte-admission-failed-case-20261006.log`.
+
+A separate deterministic unchanged-function diagnostic proves unrelated sibling
+creation can cause financial_evidence_unavailable while ancestor inode and selected
+file metadata/bytes remain unchanged. Its positive baseline returns the exact
+digest. Evidence:
+`/private/tmp/airlock-ancestor-9f6964371468494da59e8859cae86da2/evidence.json`.
+This establishes a false-refusal pathway; the original suite failure's exact cause
+was not captured and remains unattributed.
+
+The reviewed minimal correction compares directory device/inode/mode/uid/gid via
+both descriptors and nofollow paths. Complete selected-file metadata and digests
+remain unchanged. New real sibling/mode/replacement and simulated uid/gid cases
+verify positive output or refusal, exact unchanged source and reversed descriptor
+closure. All22focused checks pass; the full locked suite passes **605 checks**,
+eight existing warnings, no failures/skips:
+`/private/tmp/airlock-admission-ancestor-core-20261006.log`.
+Fresh independent security/spec reviews find no actionable defect. Exact two-module
+source/wheel archives, private install, source-byte comparison, import and isolated
+installed CLI help pass under
+`/private/tmp/airlock-admission-ancestor-build-20261006/` and
+`/private/tmp/airlock-admission-ancestor-installed-20261006/`.
+Combined source:
+`bd1e0bd2d097a339e955999c17515655e1ec5453c3700ef683ecbfe03b203401`.
+
+The corrected-admission actual PDF worker produces every frozen15CSVcell exactly
+and provenance {"page":1,"source":"table.pdf"}, but the final task fails with
+component_unavailable. The child diagnostic is UnexpectedModelBehavior at agent.run
+after10model/7tool calls; no guard frame reached the owner. All owner closures,
+empty handles/jobs and shared service preservation pass. Evidence:
+`/private/tmp/airlock-live-document-worker-279cac0234b74058a5850e34a679af29/evidence.json`.
+Physical artifact correctness is not completed workflow acceptance. A bounded
+passive model-reply repeat retains the original request/schema/budgets/assertions;
+the current-source repeat passes with5model/4tool calls, completed receipt, exact
+15cells and provenance, no released response, empty owned state, all owner closures
+and shared-service preservation. No observation faults occurred. Evidence:
+`/private/tmp/airlock-live-document-worker-53f5ac5d5fb1461d93b7f1794b3450e8/evidence.json`.
+The earlier failure remains unattributed; one successful repeat does not establish
+model reliability. Native table-label failures remain separate and unchanged.
+
+### Human choices and implementation defaults, 2026-10-06
+
+The human objected to unagreed constraints. The25%host-RAM gate entered code in
+04ddb0f; an agent-authored HOW does not establish consent. The available original
+root conversation search found no specific human approval for that percentage.
+The correction removes it while retaining the twice-cap admission check and
+enforced resource/confinement controls. This does not establish individual human
+approval for every remaining numeric limit.
+
+Consequential implementation choices with no individually verified human quote:
+
+- Native parser ceilings512MiB physical/virtual memory and15seconds, CPU quota0.5,
+  PID32,16MiB input/100pages/512KiB text and twice-cap host admission.
+- Default1MiB/16million-pixel images,32model/64tool calls,200000totaltokens and
+  1800second task budget; candidate/request/source/graph bounds in Settings.
+- English OCR, single-frame PNG/JPEG/WebP, UTF8commaCSV; selected financial
+  publication is plain two-decimal text or flat ASCII-label decimal-string JSON.
+- Liquid context scanner and qwen3:8b worker defaults, exact preparation/source/
+  calibration binding and fixed health probes. A tested private Gemma route does
+  not automatically change those defaults or constitute operator acceptance.
+
+These are reviewable engineering choices, not separately agreed product rules.
+Explicit user choices include configurable1GBstorage with explicit deletion,
+optional request_id and protected opaque retry records, workspace startup/editable
+privacy rules, manual approval within those rules, removing headless startup and
+ending repeat fragment blocks for fully shared verified financial values.
+The audit does not authorize removing unrelated security controls. Native table
+labels and a usable worker reconstruction are now tested as separate outcomes.
+
 ### Docling nested-text preservation, 2026-10-06
 
 The minimal adapter fix uses supported traverse_pictures=True, retaining original

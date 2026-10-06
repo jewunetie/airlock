@@ -42,6 +42,19 @@ Exact two-module source/wheel bytes, private installed import and CLI help pass
 under `/private/tmp/airlock-process-environment-build-20261006/` and
 `/private/tmp/airlock-process-environment-installed-20261006/`.
 
+The one corrected-source PNG verification passes with11model/8tool calls. Actual
+read_liteparse/pdf_end succeeds; all15CSVcells, printed signs/parentheses and
+leading-zero references match, with source table.png/page1 provenance. The final
+task is completed/none/null; runtime/parser/model close, empty jobs/handles and
+shared-service preservation pass. Passive cleanup/observation error arrays are
+empty. Evidence:
+`/private/tmp/airlock-live-document-worker-eac2c54dfe4440dca0700349e1ae6821/evidence.json`.
+This establishes that synthetic local image workflow on current source. It does
+not identify the earlier PNG failure's cause, establish native table-label
+fidelity, combine table creation and selected release in one retained workspace,
+or accept a calibration profile. Dummy plugin startup still needs the operator's
+workspace scanner choice and a freshly tested current-source compatible profile.
+
 ### Corrected admission and selected-file proofs, 2026-10-06
 
 The narrow host-admission correction removes only the unagreed total-RAM fraction;

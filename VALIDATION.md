@@ -22,8 +22,55 @@ service/model preservation pass. Evidence:
 `/private/tmp/airlock-live-selected-gemma-clarified-e67aa7212f174a81b0881792e2a12677/evidence.json`,
 SHA256 `c20eb61562988247af7710263083e35a1567fc0d391addd4d1f1b454534a7da8`.
 These are synthetic private diagnostic results, not broad field accuracy or
-operator UI acceptance. Production prompt, default Liquid backend and global
-settings remain unchanged; the reviewed minimal source patch awaits approval.
+operator UI acceptance. At that checkpoint the production prompt, default Liquid
+backend and global settings were unchanged. The reviewed minimal source patch received direct
+human approval on October6 and is applied; current-source verification follows.
+
+### Approved shipped Gemma clarification, 2026-10-06
+
+The implementation owner verified the original human "unblock all that and finish
+this up" reply and preceding two-action scope in Airlock Project Status. The exact
+reviewed patch changes only the uncertainty instruction and strengthens existing
+calibration-contract/outgoing-request tests. Six rule meanings, evidence/schema
+validation, uncertainty/error withholding, default Liquid backend and global
+settings remain unchanged. Old calibration acceptance cannot transfer.
+
+The full locked suite passes **596 checks**, with eight existing deprecation
+warnings and no failures/skips. Log:
+`/private/tmp/airlock-gemma-shipped-core-20261006.log`.
+Source/wheel builds, exact two-module archive/source-byte inspection, private
+wheel installation/import and isolated installed CLI help pass. Artifacts:
+`/private/tmp/airlock-gemma-build-20261006/` and
+`/private/tmp/airlock-gemma-installed-20261006/`.
+Combined source identity is
+`4579e72a5beb50407981e86aeb30efb93d449e28ae5717d8c19cee77178a1e69`.
+Fresh read-only reviews of the narrow source/test diff find no concrete defects.
+Current-source actual scanner/SRT selected approve/deny verification is recorded
+below; packaging/core tests do not establish scanner accuracy.
+
+The first current-source live attempt stopped before any case: scanner startup
+retained all required detectors unavailable. Model health passed; owner/scanner/
+model cleanup and source/global/service/model preservation passed, with no retained
+jobs. Failure evidence remains at
+`/private/tmp/airlock-live-selected-gemma-shipped-409008c791e74b49849658d28e408483/evidence.json`.
+Its hidden startup exception was not captured, so the cause remains unresolved.
+A reviewed causal repeat passively captures spawn/transact exceptions while
+forwarding original results/errors; it does not bypass health/canary failures.
+
+The current-source causal repeat passes actual ScannerService health and all
+three controls. Real SRT/Coder/resident Gemma approve returns exactly
+`{"net_total":"985.10","wages":"1250.25"}` after verified financial selection;
+actual deny returns withheld/local_decision with no response. The direct actual
+scanner/Egress identifier control withholds for privacy before any vote. Each
+worker case uses3 model/2 tool calls. All runtime/scanner/model closes, empty jobs
+and source/global/service/model preservation pass. Passive startup/cleanup error
+observations are empty, so the earlier startup failure is not attributed or fixed.
+Evidence:
+`/private/tmp/airlock-live-selected-gemma-shipped-bc98a3ad9dcb4e85a921945a635c616e/evidence.json`,
+SHA256 `99c39c14e4c32aa8799102715b3480ee32fa215d4fb4f7bce4d78a11fdba1808`.
+This verifies the shipped prompt on synthetic method-level workflows without
+runtime prompt replacement. No global calibration acceptance/backend activation,
+operator UI acceptance or representative privacy accuracy follows.
 
 The earlier private run retained an owned job after process_cleanup_failed before
 the approval vote. Existing cleanup_orphan_jobs safely reconciled that exact job;
@@ -174,6 +221,57 @@ This outcome is inconclusive about subsequent cache requirements and final kill
 cause; absence of an error trace is not import success. No writes, cache files,
 weights, documents or increased budgets were introduced. Stop this path series;
 preserve the earlier failures and do not infer a minimum successful resource cap.
+
+### Approved one-off Docling feasibility trial, 2026-10-06
+
+Direct human approval covers this private synthetic2GiB/no-swap, hardCPU60-second
+trial, not new production limits/defaults. Host available memory19716702208 bytes
+passes the twice-cap/25-percent admission check. Exact pins/nonroot/read-only/
+networknone/FSIZE0/PID32/cpu0.5 and effective physical/CPU controls are verified;
+private RLIMIT_AS isolation and supported read-only cache path remain explicit.
+
+Imports and layout_model_loaded pass. table_model_loading fails with
+ModuleNotFoundError: cv2; the full native exception trace is retained. Peak process
+RSS591589376 bytes, CPU16.284461 user plus3.571320 system seconds, memory.events
+all zero, OOMKilled:false. The caught exception returns native0, which is not a
+successful table result. Exact owned-container absence and original service
+identity preservation pass. Evidence:
+`/private/tmp/airlock-docling-fit-de5bd76561de407c8ed179e3eea251f7.json`.
+No image run follows the failed PDF, and no further budget sweep is performed.
+
+Pinned docling-ibm-models4.0.3 metadata declares optional opencv-python-headless
+>=4.6.0.66,<5.0.0.0; the prepared docling-slim models-local extra selects the base
+package without either OpenCV extra. Its tableformer tf_predictor imports cv2
+unconditionally. The prepared dependency closure is incomplete for table loading.
+This is a preparation defect, not permission to disable tables or weaken their
+golden. The failure itself does not authorize automatic runtime downloads or a
+production dependency change. Layout loading did not require writable runtime
+cache in this trial; full pipeline scratch requirements remain unproved.
+
+Trusted preparation repair adds only the declared compatible headless OpenCV
+wheel4.14.0.94 (36.3MiB acquisition) to a fresh private bundle, without replacing
+original NumPy2.5.3 or any prior dependency/model file. All original25217 file
+digests are preserved;105 added read-only files have a complete new manifest.
+Preparation evidence:
+`/private/tmp/airlock-docling-cv2-301457a16a7a47188bc04050ee5b082f/preparation-evidence.json`.
+New manifest SHA256
+`80b17f382ab230467df1c2e0a0cac66633cb864bb0bdae319684820a4071cc47`.
+Fresh reviews of preparation and the corrected-bundle runner find no remaining
+concrete defects. The corrected dependency trial retains the same frozen golden
+and2GiB/60CPU budget; no source/default/global dependency change follows from
+private preparation, and the original failed result is retained.
+
+Corrected-dependency native trial loads both layout and table models and reaches
+synthetic_table_extracted, then fails the unchanged complete-matrix golden because
+no table item is present in the helper projection. PeakRSS1215049728 bytes,
+CPU24.166504 user plus4.812584 system seconds, memory.events all zero and
+OOMKilled:false. Original read-only cache/confinement remain; owned absence and
+service preservation pass. Evidence:
+`/private/tmp/airlock-docling-fit-bc13d4ce57604206ae34069027fc79cb.json`.
+Native0 reflects a caught assertion, not table success. Stderr includes an OSD
+failure warning; conversion returns through the existing helper. No PNG run follows
+the failed PDF. A bounded raw-record diagnostic is separate from this failed
+golden; model loading/resource fit alone does not establish table fidelity.
 
 ### Independent required tax-contract verification, 2026-10-05
 

@@ -183,7 +183,12 @@ proof checks, preserved source digests and no global acceptance. Fresh review be
 execution. Passing synthetic method/task evidence is not field accuracy, interactive
 operator acceptance, production activation or permission to ship the prompt.
 
-### Proposed minimal shipped clarification, pending source-change approval
+### Approved minimal shipped clarification
+
+Direct human approval in Airlock Project Status at12:21EDT October6 says
+"unblock all that and finish this up" after the two pending actions were explicitly
+listed: this exact source patch and the one-off2GiB/60CPU private Docling trial.
+The implementation owner verified the original message and preceding scope.
 
 Data: same six ContextDecision rules/verdicts/quotes/explanations; no new fields.
 API: replace only the uncertainty sentence in CONTEXT_PROMPT with the exact tested
@@ -197,8 +202,24 @@ uncertain replies remain failures; old versus changed contract calibration bindi
 differ. Preserve all existing strict parser/health/release tests, full locked suite,
 fresh review/build/archive/installed import checks. Actual private complete-scanner/
 SRT selected approval and denial evidence above is required before recommending
-the source change. This section is a concrete proposal, not authorization to edit
-production; save a reviewable private patch first, then seek direct human approval.
+the source change. Apply the previously reviewed exact private patch; no global
+backend/profile activation or new runtime defaults are authorized.
+
+Post-patch live verification reuses the same frozen selected approve/deny and
+identifier controls through actual ScannerService/SRT/resident Gemma. Data and
+API remain as in the private complete-scanner diagnostic; assert the shipped
+prompt equals the frozen candidate, without replacing any prompt/contract at
+runtime. Bind evidence and preservation to current source hashes; global settings,
+calibration acceptance, plugin and original services/assets remain unchanged.
+Location: one derived private /private/tmp runner/evidence and HOW/VALIDATION.
+Tests: existing actual scanner startup health, exact selected JSON approval,
+denial with no response, identifier refusal before vote, original fixture checks,
+source/global/service/model preservation and all same-owner closes. No global
+acceptance or activation claim; run after isolated Docling container cleanup.
+If startup is unavailable before cases, retain the failed evidence and add passive
+private spawn/transact exception tracing that forwards original results/errors
+unchanged; repeat once to expose the exact hidden startup failure. This grants
+no canary bypass or changed scanner health, profile or approval behavior.
 
 ### Shipped parser selection and owner integration
 
@@ -366,6 +387,47 @@ absence assertions apply. Location: one derived private /private/tmp runner and
 evidence, HOW/VALIDATION only. Fresh same-reviewer review before execution; stop
 after this outcome, no path guessing or resource sweep. All write attempts remain
 subject to original read-only filesystem/FSIZE0/seccomp controls.
+
+### Approved one-off private Docling feasibility budget
+
+Data: original frozen5x3 ruled PDF and exact signed amounts/leading-zero strings,
+full pinned helper/model/dependency/index/image/syscall bytes. Preserve all prior
+512MiB/15CPU failures. Private trial uses physical2GiB/no swap and hardCPU60s,
+not a minimum or shipped default. No RLIMIT_AS assignment in this private child;
+read-only filesystem/FSIZE0/networknone/nonroot/PID32/cpu0.5 remain binding.
+API: existing helper.extract_document_bytes plus passive model-stage observers,
+cached tempfile.tempdir=/airlock and supported TORCHINDUCTOR_CACHE_DIR=/airlock;
+no library stubs, weights downloads, writable scratch or serialized cache loads.
+Before launch require current available host RAM >= twice the trial cap and >=25%
+of total; snapshot original model/service identities and check preservation after.
+Retain full traceback/CPU/RSS/memory.events, partial timeout streams and state,
+exact container-label/image ownership and independent cleanup absence.
+Location: one derived private /private/tmp runner and unique evidence; HOW and
+VALIDATION only. Tests: fresh same-reviewer review, actual effective limits/pins,
+strict complete15-cell matrix with valid unique indices/unit spans/provenance/
+bboxes, exact original fixture bytes. One trial, no budget sweep; only if PDF
+passes may the same frozen PNG run within identical budget/restrictions. Failure
+or absent terminal assertion remains failure, not table readiness. No production
+source/resource/global settings change is authorized by this diagnostic.
+
+Confirmed preparation repair: the pinned docling-ibm-models4.0.3 Tableformer
+requires cv2, supplied by its declared opencv-python-headless>=4.6.0.66,<5 extra.
+Data: retain original failure/bundle, acquire only a compatible Linuxarm64/Python13
+wheel using uv into a new private target, no dependency replacements or weights.
+Record resolved version and complete SHA256 mapping; construct a fresh private
+bundle using unchanged original pinned files plus the exact added package files.
+API: preparation only, never runtime acquisition. Reject path/file overlap,
+symlinks and unsafe permissions, verify unchanged old mapping and full new fileset
+before import. Same frozen PDF (then PNG only on PDF success),2GiB/60CPU bounds,
+supported read-only cache, admission/services/owned cleanup and strict golden.
+Location: private /private/tmp preparation/runner/evidence, HOW/VALIDATION only.
+Tests: all original pins unchanged, exact added metadata version/extra compatibility,
+full new asset digests and finite corrected-dependency repeat; no budget sweep,
+runtime network/scratch or production dependency/default changes.
+If extraction completes but the strict matrix fails, preserve that failure and
+capture the bounded original helper records in one passive repeat with identical
+bundle/options/golden/budgets. Do not alter document/model/table options or expected
+cells; raw records distinguish a missing table from an adapter/projection mistake.
 
 ### Proposed bounded native asset manifest transport contract
 

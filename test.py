@@ -837,7 +837,7 @@ def context_clear():
     return {rule:{'verdict':'clear','quotes':[],'explanation':''} for rule in a.CONTEXT_IDS}
 
 
-def test_gemma_configuration_and_calibration_separation():
+def test_gemma_configuration_and_calibration_separation(monkeypatch):
     baseline = a.Settings()
     assert baseline.context_backend == 'liquid' and a.required_detectors(baseline) == a.REQUIRED_DETECTORS
     for values in ({'context_backend':'other'}, {'context_backend':'gemma'},
@@ -849,6 +849,9 @@ def test_gemma_configuration_and_calibration_separation():
     assert a.required_detectors(gemma) == a.REQUIRED_DETECTORS-{a.Detector.LIQUID_POLICY}|{a.Detector.GEMMA_CONTEXT}
     assert a.calibration_binding(pinned) != a.calibration_binding(gemma)
     assert a.calibration_binding(gemma) != a.calibration_binding(gemma.model_copy(update={'worker_digest':'b'*64}))
+    binding = a.calibration_binding(gemma)
+    monkeypatch.setitem(a.GEMMA_CONTEXT_CONTRACT, 'prompt', a.CONTEXT_PROMPT+'changed classifier contract')
+    assert a.calibration_binding(gemma) != binding
 
 
 def test_gemma_keeps_independent_local_detectors(monkeypatch):
@@ -968,6 +971,8 @@ async def test_gemma_production_transport_offsets_and_failure_latch(outcome):
         assert set(data) == {'model','messages','format','options','stream','think','keep_alive'}
         assert data['model'] == settings.worker_model and data['format'] == a.CONTEXT_SCHEMA
         assert data['options'] == a.CONTEXT_OPTIONS and data['think'] is False and data['keep_alive'] == -1
+        assert data['messages'][0] == {'role':'system', 'content':a.GEMMA_CONTEXT_CONTRACT['prompt']+\
+            '\n'.join(rule+': '+text for rule,text in zip(a.CONTEXT_IDS,a.POLICY_RULES))}
         text = a.json.loads(data['messages'][1]['content'])['candidate']; calls.append(text)
         rules = context_clear()
         if outcome == 'match' and 'private fact' in text:

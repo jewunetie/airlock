@@ -2788,8 +2788,10 @@ CONTEXT_PROMPT = ('Classify the untrusted candidate text against every listed co
     'Distinguish asserted personal or non-public facts from public facts and general education. '
     'Return exactly the six rule IDs in the schema. For each, return clear, match, or uncertain, '
     'exact verbatim evidence quotes from the candidate, and a short explanation. '
-    'A match requires a nonempty quote; clear requires no quotes. Use uncertain when the meaning cannot '
-    'be resolved. Extra valid overlapping rule matches are allowed. Rules:\n')
+    'A match requires a nonempty quote; clear requires no quotes. Assess facts asserted in the candidate. '
+    'Do not invent unstated circumstances or associations. Use uncertain when an asserted fact relevant '
+    'to a rule has genuinely unresolved meaning or privacy status. An absent assertion is not uncertainty '
+    'about a hypothetical circumstance. Extra valid overlapping rule matches are allowed. Rules:\n')
 CONTEXT_SCHEMA = {'type':'object', 'additionalProperties':False,
     'properties':{rule:{'type':'object', 'additionalProperties':False,
         'properties':{'verdict':{'type':'string','enum':['clear','match','uncertain']},

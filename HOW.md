@@ -429,6 +429,37 @@ capture the bounded original helper records in one passive repeat with identical
 bundle/options/golden/budgets. Do not alter document/model/table options or expected
 cells; raw records distinguish a missing table from an adapter/projection mistake.
 
+### Preserve Docling text descendants beneath pictures
+
+Data: retain actual Docling item labels, hierarchy refs, original text strings and
+provenance; a picture remains a picture, not an invented table. The frozen native
+record has15 text child refs under a picture; default traversal drops them.
+API: extract_document_bytes uses supported iterate_items(traverse_pictures=True)
+to serialize original child items under the same output/line caps and errors.
+No classifier, model/table option, file grant or release policy changes.
+Location: airlock_tools.py one traversal argument, airlock.py exact tools digest,
+test.py actual DoclingDocument hierarchy regression; HOW/VALIDATION evidence.
+Tests: default library traversal hides nested text positive control, adapter emits
+picture and original child text/provenance without relabeling; expanded output
+still refuses the cap. Generated helper equals source; full locked suite/build/
+fresh review and native frozen PDF rerun with new helper pins/old assets retained.
+Strict table golden remains unchanged and separate from text-preservation success.
+
+### Current-source local worker table reconstruction check
+
+Data: unchanged frozen ruled PDF and PNG, exact five-by-three string matrix,
+signed amounts and leading-zero references, new private bundles with current
+generated helpers and complete hashes. Preserve original bundles, fixtures and
+shared process identities. Artifacts are local CSV plus provenance JSON.
+API: existing real model, SRT worker and LiteParse read tools receive a natural
+local-only request; grant only synthetic workspace reads/writes, deny shell and
+release. Assert every physical CSV cell, source SHA/page provenance, completed
+receipt with no response and exact owned cleanup. Record model failures as failures.
+Location: private temporary preparation and worker runners/evidence; HOW/VALIDATION.
+Tests: verify every old asset hash before immutable copying, helper/source equality,
+strict PDF and PNG matrix independently, real tool-use positive controls and all
+owner closures. Native table-label goldens remain unchanged and independent.
+
 ### Proposed bounded native asset manifest transport contract
 
 Data: preparation adds asset-manifest.json, a bounded4MiB strict JSON mapping of

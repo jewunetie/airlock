@@ -90,7 +90,7 @@ try:
     _tools_bytes = TOOLS_SOURCE.read_bytes()
 except OSError:
     raise SystemExit('Airlock: tools_source_unavailable') from None
-TOOLS_MODULE_SHA256 = '5a6ee257160423f3533acf2060e168a1c016a54bd57e0076fb2720748c843e82'
+TOOLS_MODULE_SHA256 = '91b08be7f1587efc401c7cecd867cf74822ee7b0a884c5d7e0fd55293a38dc45'
 if hashlib.sha256(_tools_bytes).hexdigest() != TOOLS_MODULE_SHA256:
     raise SystemExit('Airlock: tools_source_changed')
 _tools_spec = importlib.util.spec_from_file_location('airlock_tools', TOOLS_SOURCE)

@@ -209,7 +209,7 @@ def extract_document_bytes(data: bytes, backend: str, media: str, pages: int,
             raises_on_error=True,max_num_pages=pages,max_file_size=len(data))
         if result.status!=ConversionStatus.SUCCESS or result.errors:raise ToolContractError('pdf_unavailable')
         if len(result.document.pages)>pages:raise ToolContractError('pdf_page_limit')
-        for item,_ in result.document.iterate_items():
+        for item,_ in result.document.iterate_items(traverse_pictures=True):
             records.append({'kind':'docling_item','item':item.model_dump(mode='json')})
         if len(records)==1:raise ToolContractError('pdf_no_text')
     output=[];used=0

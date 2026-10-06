@@ -141,8 +141,10 @@ assets in a confined Linux child; no tool installs packages or downloads models.
 PNG/JPEG/WebP inputs retain original digest, dimensions and EXIF orientation.
 Parsed text, cells and page/box provenance remain private and require the same
 separate release approval. Missing assets or cleanup uncertainty withhold text.
-LiteParse's tested scans preserve the tested amounts, but did not produce table
-blocks. Docling model acquisition and the full tax workflow remain pending;
+LiteParse's tested scans preserve the tested amounts; its ruled PDF table misses
+header cells, and its matching PNG produces no table block. Docling assets are
+acquired and load in a private bounded test, but the same grid is classified as a
+picture. Its nested text is preserved. The full tax workflow remains unverified;
 these tools are not yet accepted for tax use. See VALIDATION.md.
 
 Form JSON puts each ordinary field on its own line for bounded offset/limit reads. A single escaped field entry larger than the existing 60000-character read window remains explicitly unreadable through that reader; the full extraction still retains it within the complete byte cap.

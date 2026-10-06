@@ -1378,6 +1378,29 @@ def test_document_helpers_and_fixed_routes(tmp_path,backend):
         a.Settings(document_parsers={('docling' if backend=='liteparse' else 'liteparse'):settings.document_parsers[backend]})
 
 
+def test_docling_preserves_picture_child_text_and_output_cap(monkeypatch):
+    import types
+    import docling
+    import docling.document_converter as converter
+    from docling.datamodel.base_models import ConversionStatus
+    from docling_core.types.doc import DoclingDocument, DocItemLabel
+    document=DoclingDocument(name='synthetic')
+    picture=document.add_picture()
+    child=document.add_text(label=DocItemLabel.TEXT,text='Expenses (250.10) Reference 000042',parent=picture)
+    assert [item for item,_ in document.iterate_items()]==[picture]
+    result=types.SimpleNamespace(status=ConversionStatus.SUCCESS,errors=[],document=document)
+    monkeypatch.setattr(converter,'DocumentConverter',lambda **kwargs:types.SimpleNamespace(convert=lambda *args,**kwargs:result))
+    monkeypatch.setattr(a.local_tools,'document_assets',lambda *args:None)
+    bundle=Path(docling.__file__).resolve().parent.parent
+    text=a.local_tools.extract_document_bytes(b'%PDF-synthetic','docling','pdf',1,10000,10000,10000,bundle)
+    records=[a.json.loads(line) for line in text.splitlines()]
+    assert [record['item'] for record in records[1:]]==[picture.model_dump(mode='json'),child.model_dump(mode='json')]
+    assert records[2]['item']['text']=='Expenses (250.10) Reference 000042'
+    assert records[1]['item']['label']=='picture' and records[2]['item']['parent']['cref']==picture.self_ref
+    with pytest.raises(a.local_tools.ToolContractError,match='^pdf_output_limit$'):
+        a.local_tools.extract_document_bytes(b'%PDF-synthetic','docling','pdf',1,len(text.encode()),10000,10000,bundle)
+
+
 @pytest.mark.parametrize('orientation',range(1,9))
 def test_document_image_orientation_and_original_provenance(orientation):
     from PIL import Image

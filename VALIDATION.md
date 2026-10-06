@@ -4,6 +4,41 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+### Docling nested-text preservation, 2026-10-06
+
+The minimal adapter fix uses supported traverse_pictures=True, retaining original
+labels, text, hierarchy refs and provenance. An actual DoclingDocument regression
+proves default omission, exact child preservation and output-cap refusal. The full
+locked suite passes **597 checks**, with eight existing warnings and no failures
+or skips: `/private/tmp/airlock-traversal-core-20261006.log`.
+Build, exact two-module wheel/source archive inspection, private wheel install,
+source-byte comparison, import and isolated installed CLI help pass. Artifacts:
+`/private/tmp/airlock-traversal-build-20261006/` and
+`/private/tmp/airlock-traversal-installed-20261006/`.
+Combined source identity:
+`f7e5561c74b8d1912f62b1cc39d5578cb5a83c7fe08d3a1857b5f8ce10b6401c`.
+Fresh read-only source/regression review found no concrete defect.
+
+New private bundles preserve every original asset and regenerate current-source
+helpers. The unchanged frozen PDF under the approved private2GiB/no-swap/60CPU
+route now returns all15 original text values, including headers, signed decimals
+and leading-zero references. The separate strict native table check still fails:
+the grid remains a picture with no table item. Peak RSS1216434176 bytes; exact
+owned-container absence and original service preservation pass. Evidence:
+`/private/tmp/airlock-docling-fit-40385cf96a704676ba29bc7a7a5807f0.json`.
+This proves adapter text preservation, not native table fidelity or production
+Docling startup/resource acceptance. Default body traversal does not promise
+complete page-furniture/header/footer extraction.
+
+The first actual local-worker ruled PDF check refuses parser startup before any
+task or tool call with pdf_unavailable. All owner closes, empty jobs/handles and
+shared service preservation pass. Evidence:
+`/private/tmp/airlock-live-document-worker-296aba3ef34d4dc19e5feee992cd53fa/evidence.json`.
+Subsequent available-host-memory observations are below the existing25% admission
+threshold; the failed startup did not record its original memory value, so its
+precise cause is not attributed. No admission limit or shared process is changed.
+Exact worker CSV/provenance and current-source selected release remain pending.
+
 ### Approved private Gemma clarification and selected release, 2026-10-05
 
 The approved private uncertainty-instruction experiment passes all 17 frozen

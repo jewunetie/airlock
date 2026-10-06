@@ -4,6 +4,60 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+### Approved private Gemma clarification and selected release, 2026-10-05
+
+The approved private uncertainty-instruction experiment passes all 17 frozen
+controls, including the six startup privacy canaries, selected financial JSON,
+public/general facts, genuine ambiguity and permission injection. Rules, schema,
+validators and model options are unchanged. Evidence:
+`/private/tmp/airlock-gemma-clarification-acfc8d2ad9ee469b9dd92d88e08699a5/evidence.json`,
+SHA256 `894247bf3617fce963971750ac01687fc0fd10738d62a15d27df7a6e15953d79`.
+
+The private full ScannerService/SRT/resident-Gemma repeat passes startup health,
+actual selected-field approval and actual denial. Approval returns exactly
+`{"net_total":"985.10","wages":"1250.25"}` after financial selection;
+denial returns no response. The direct identifier control withholds for privacy
+before a vote. All component closes, empty owned-job checks and source/global/
+service/model preservation pass. Evidence:
+`/private/tmp/airlock-live-selected-gemma-clarified-e67aa7212f174a81b0881792e2a12677/evidence.json`,
+SHA256 `c20eb61562988247af7710263083e35a1567fc0d391addd4d1f1b454534a7da8`.
+These are synthetic private diagnostic results, not broad field accuracy or
+operator UI acceptance. Production prompt, default Liquid backend and global
+settings remain unchanged; the reviewed minimal source patch awaits approval.
+
+The earlier private run retained an owned job after process_cleanup_failed before
+the approval vote. Existing cleanup_orphan_jobs safely reconciled that exact job;
+original evidence remains in
+`/private/tmp/airlock-live-selected-gemma-clarified-79b004b7e1c5401c8c7d7bf11b7a08d7/evidence.json`
+and `/private/tmp/airlock-selected-orphan-recovery-20261005.json`.
+The repeat did not reproduce the failure; its cause remains unresolved.
+
+### Approved pinned Docling acquisition and distinct startup blockers
+
+Acquisition verifies seven immutable files: 384428156 runtime bytes plus 6632
+model-card bytes, with complete size/upstream/local digest evidence at
+`/private/tmp/airlock-docling-acquisition-20261005.json`. No global activation or
+runtime download was introduced. The first shipped native preflight refuses an
+unsafe-mode empty uv lock before imports. Independently, the complete 2941862-byte
+manifest argument fails host exec with E2BIG while the 1000-byte positive control
+passes: `/private/tmp/airlock-docling-argv-control-20261005.json`.
+Neither failure measures Docling memory fit or table recognition. The separate
+dependency-only diagnostic retains the original 512MiB/15CPU-second bounds and
+no document input; native table fidelity remains required.
+
+On 2026-10-06 that dependency-only diagnostic verifies the complete asset set and
+effective network/IPC/capability/seccomp/no-new-privileges/resource controls, then
+exits 1 at torch_import. OpenBLAS reports memory allocation failure; the cgroup
+reports OOMKilled:false. No converter import, document or table result exists.
+The flushed phase checkpoints survive the library's terminal exit; final Python
+exception/RSS output does not. Exact owned-container absence passes. Evidence:
+`/private/tmp/airlock-docling-fit-7492bf824db24a199454633a90e4f52c.json`.
+This is a dependency failure under the tested limits, not proof of a required
+minimum memory size. No resource limits were increased. A preceding diagnostic
+incorrectly compared Docker's normalized seccomp JSON with its source path and
+refused before starting; that failure and successful cleanup remain recorded in
+`/private/tmp/airlock-docling-import-fit-20261005.json`.
+
 ### Independent required tax-contract verification, 2026-10-05
 
 On unchanged production source at e24079c, the locked focused run passes

@@ -90,11 +90,12 @@ clear financial JSON, negative control, latch and HTTP close assertions remain
 explicit, with original service/global preservation independently verified. Any
 failure keeps the alternative unready; no rule relaxation or model download.
 
-### Proposed private Gemma prompt clarification, pending human answer
+### Approved private Gemma prompt clarification
 
-This is a reviewable experiment specification, not authorization to execute it
-or to change production. The human question is pending in the implementation
-chat; a coordinator message cannot supply that approval.
+The human directly approved this experiment and pinned Docling acquisition in
+the coordinator chat at03:46EDT October5; the implementation owner verified the
+actual question and reply through read_thread. This authorizes the exact private
+experiment below, not a production prompt change or activation.
 
 Data: preserve the current prompt as baseline and its exact source/contract/model
 digests. Freeze cases and required-rule/anchor/uncertainty expectations before
@@ -155,7 +156,121 @@ selected approve/deny evidence before any readiness claim or human activation.
 Independently verify unchanged global bytes, service PID/create-time and resident
 model digest, and close the owned HTTP client in finally.
 
+### Private clarified-Gemma complete scanner and selected-release diagnostic
+
+Data: reuse the exact successful seventeen-case candidate from private evidence,
+verified synthetic scan/artifact and original selected-field approve/deny/identifier
+cases. Private Settings.context_backend=gemma, unchanged pins, thresholds, budgets
+and enforce governance. Clear private calibration/acceptance fields; this diagnostic
+is before operator startup acceptance. Record the candidate contract fingerprint
+separately from unchanged production source and all raw scanner/guard proposals.
+
+API: run the existing actual ScannerService.start with all independent SRT scanner
+positives/negative and all six anchored Gemma startup canaries, then actual SRT/
+Coder/resident-model tasks and original exact financial selection proof/vote route.
+Only the isolated parent process uses the reviewed candidate prompt and matching
+private GEMMA_CONTEXT_CONTRACT; no worker instruction, rule/schema/options/parser
+change or release override. Scanner failures/uncertainty still withhold. Verify
+exact requested JSON on approval, no output on actual denial and withheld
+identifier before a vote. Original input/global/service bytes and identities stay
+fixed; stop/close each owned runtime, scanner and HTTP client with no retained jobs.
+
+Location: one /private/tmp runner derived from the fully read original selected-
+field diagnostic, fresh private workspaces/evidence; HOW/VALIDATION only in repo.
+Tests: frozen exact17-case candidate equality and file pins, actual startup health,
+original manual read/release vote assertions, exact occurrence/context/source/artifact
+proof checks, preserved source digests and no global acceptance. Fresh review before
+execution. Passing synthetic method/task evidence is not field accuracy, interactive
+operator acceptance, production activation or permission to ship the prompt.
+
+### Proposed minimal shipped clarification, pending source-change approval
+
+Data: same six ContextDecision rules/verdicts/quotes/explanations; no new fields.
+API: replace only the uncertainty sentence in CONTEXT_PROMPT with the exact tested
+literal above. GEMMA_CONTEXT_CONTRACT automatically binds it; retain source/backend/
+model/asset calibration invalidation and existing strict uncertainty/error withholding.
+Default backend remains Liquid. No old profile acceptance transfers.
+Location: proposed airlock.py prompt, test.py meaningful contract regression,
+HOW/VALIDATION evidence. No dependencies, settings, plugin or source activation.
+Tests: assert actual outgoing native request uses the candidate while genuinely
+uncertain replies remain failures; old versus changed contract calibration bindings
+differ. Preserve all existing strict parser/health/release tests, full locked suite,
+fresh review/build/archive/installed import checks. Actual private complete-scanner/
+SRT selected approval and denial evidence above is required before recommending
+the source change. This section is a concrete proposal, not authorization to edit
+production; save a reviewable private patch first, then seek direct human approval.
+
 ### Shipped parser selection and owner integration
+
+### Approved pinned Docling asset acquisition and native fit checks
+
+Data: immutable Heron revision8f39ad3c0b4c58e9c2d2c84a38465abf757272d8
+from docling-project/docling-layout-heron; model.safetensors SHA256
+00333a43451945aaf89db8ca9c0a17e75d1537c17db60fdb91aa95f4c7929e0c,
+config.json and preprocessor_config.json. Immutable Tableformer revision
+fc0f2d45e2218ea24bce5045f58a389aed16dc23 from docling-project/docling-models;
+model_artifacts/tableformer/accurate/tableformer_accurate.safetensors SHA256
+2a7d6c924b3cd12fb99a09280ca9c33a89c5d60b93253617d2e088c1a40374d9
+and adjacent tm_config.json. Runtime total384428156 bytes; two pinned model
+cards total6632 bytes retain declared Apache2/CDLA-Permissive2 licensing.
+Record upstream immutable metadata, exact file sizes, Git blob IDs for small
+files and local SHA256 for all files. Preserve source/global/service identities.
+
+API: trusted preparation only, after verified direct human approval. Download
+only those exact immutable URLs and model cards; stream within declared sizes,
+verify LFS SHA256 or Git blob SHA1 before publication. Refuse mismatches/overflow
+and existing destination conflicts; no latest/broad snapshot or library downloader.
+Publish a new owner-only digest-addressed private bundle with complete manifest;
+never activate settings. Native fit/extraction then uses only this read-only
+verified bundle and pinned Linux dependencies under the existing512MiB/15CPU/
+FSIZE0/no-network/nonroot bounds. No automatic downloads, unconfined document
+parsing or silently increased limits. A fit failure remains a required blocker.
+
+Location: one private /private/tmp acquisition runner/evidence; persistent models
+under ~/Library/Application Support/airlock-runtime/document-assets/docling-standard/
+<immutable digest>/. Separate private Linux dependency/bundle and synthetic table
+fixtures; HOW/VALIDATION only in the repo. No production source/profile/plugin edit.
+
+Tests: metadata revision equality, exact expected file set/size/hash, unchanged
+runtime files and no unrelated model downloads. Before native document input,
+verify assets/dependency/helper pins and actual resource-limit installation.
+Positive digital/scanned PDF/image table fixtures require exact labels/string
+cells/signs/leading zeros and table row/column provenance, not plain-text presence.
+Missing/changed assets and network denials withhold, complete terminal output
+and exact owned container absence are required. Preserve import/startup/memory/
+CPU failures separately from recognition accuracy; API/import alone is not green.
+
+Native preflight may separately test dependency imports under those same limits
+with no document input. Use the actual prepared read-only bundle, a privately
+pinned bounded index file and a small trusted inline probe instead of the oversized
+shipped manifest argument. Verify every bundle file/index and effective container
+controls; require owned cleanup/absence. Record actual import phase, exception,
+RSS and OOM state; do not equate this diagnostic with shipped-parser startup or
+table extraction. Preparation may replace only the owned bundle's empty uv .lock
+with an identical safe-mode copy, avoiding mutation of a hardlinked source lock.
+
+### Proposed bounded native asset manifest transport
+
+Data: preparation adds asset-manifest.json, a bounded4MiB strict JSON mapping of
+every other bundle file to its SHA256. Existing AssetSpec.sha256 still includes
+every file, including the index digest; no new public field or broader asset grant.
+API: when the fixed index exists in that complete pinned mapping, create_args sends
+only sha256:<index digest> instead of the full mapping. The generated child reads
+the fixed index within the4MiB bound, verifies that digest, rejects duplicate keys/
+malformed data, adds the pinned index itself and retains exact file-set/path/symlink/
+digest verification before readiness/input. Existing small legacy inline mappings
+remain supported. Errors and owner cleanup stay fail-closed. No runtime index
+creation, extra mount, unsafe permission exception or automatic download.
+Location: proposed airlock.py create_args/pdf_parser_main; generated helper updates
+automatically. Tests test.py, HOW/VALIDATION; preparation/index/private diagnostic
+artifacts only under /private/tmp. Resolve review/authorization before production
+edits; native resource settings remain unchanged.
+Tests: actual multi-megabyte mapping with small bounded argv, exact unchanged asset
+coverage, missing/changed index, over4MiB, duplicate/invalid mapping and extra files
+refuse before input; existing legacy routes/ownership tests remain. Fresh review,
+full locked suite/build and actual native startup/extraction are required before
+claiming this transport repair works. It cannot make Docling fit512MiB or prove
+tables; those remain separate measured gates.
 
 Data: retain the existing optional pypdf route and add trusted
 Settings.document_parsers:dict[Literal['liteparse','docling'],PdfParserSpec], empty

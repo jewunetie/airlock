@@ -142,10 +142,13 @@ PNG/JPEG/WebP inputs retain original digest, dimensions and EXIF orientation.
 Parsed text, cells and page/box provenance remain private and require the same
 separate release approval. Missing assets or cleanup uncertainty withhold text.
 LiteParse's tested scans preserve the tested amounts; its ruled PDF table misses
-header cells, and its matching PNG produces no table block. Docling assets are
-acquired and load in a private bounded test, but the same grid is classified as a
-picture. Its nested text is preserved. The full tax workflow remains unverified;
-these tools are not yet accepted for tax use. See VALIDATION.md.
+header cells, and its matching PNG produces no table block. Separate synthetic
+LiteParse worker tests reconstruct all15 CSV cells and source/page provenance
+from these PNG/PDF fixtures. Current-source startup and both installed/prepared
+plugin connections pass, but the continuous extraction-to-selected-release run
+has failed and remains unresolved. Docling preserves nested text in its bounded
+diagnostic, but production startup and table fidelity remain unresolved. Real tax
+documents and representative privacy accuracy are unverified. See VALIDATION.md.
 
 Form JSON puts each ordinary field on its own line for bounded offset/limit reads. A single escaped field entry larger than the existing 60000-character read window remains explicitly unreadable through that reader; the full extraction still retains it within the complete byte cap.
 

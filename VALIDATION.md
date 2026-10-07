@@ -33,6 +33,31 @@ No scanner, policy, budget or production-code change. Root and independent
 runner review find no actionable defect in this observer correction; full
 workflow and installed/persistent handoff remain in progress.
 
+The observer-corrected repeat reaches READY, records one bounded missing-row
+wait, and proceeds through request/read/write votes without that observer error.
+Its PNG task writes CSV/provenance but fails after5model/4tool calls with the
+fixed component_unavailable result and no response. Original evidence:
+`.airlock-local/validation-99c2c5a76f3f4120a70cdf5264c88c00/evidence.json`.
+All exact owned cleanup/preservation checks pass. Native diagnostics were not
+captured before process shutdown, so the generic result cannot identify the
+original cause. File creation is not completed task acceptance. A single
+unchanged controlled repeat records existing terminal diagnostics and private
+pass-through model observations before assertions/shutdown; no tuning or limit
+change, and all previous failed evidence remains intact.
+
+Independent connection-only handoff passes without submitting work:
+`.airlock-local/handoff-c7172a20e40f4c2ea6aebf7d0f603a69/evidence.json`.
+Actual Textual acceptance/native READY and the installed cached dummy plugin's
+exact three-tool connection pass. Prepared exact modules, manifest/package/profile
+binding, unaccepted refusal, CLI help, fresh workspace acceptance/READY and its
+matching explicit-XDG bridge pass. Original operator budgets300/1800/32/64 are
+restored and checked independently from diagnostic30/600/16/16. Cleanup and
+global/config/service preservation pass. The retained launch.json and
+prepared-connection.json are persistent private paths; all test runtimes stop.
+The prior workflow failure remains explicit, reviewed=false is unchanged, and
+this connection success grants no extraction/release or real-tax acceptance.
+Actual chosen-folder binding remains pending the user's folder path.
+
 ### Accurate startup component/backend notices and socket setup, 2026-10-06
 
 A rendered Textual reproduction confirms that a named LiteParse route with

@@ -4931,3 +4931,32 @@ Tests: assert measured profile source/config/corpus equality and reviewed=false,
 actual Accept/Cancel/READY/bridge, exact cells/provenance/selected values and
 all owned cleanup/global preservation. No classifier, production UI, budget,
 dependency, policy or global acceptance change.
+
+Independent connection handoff: the installed/prepared connection check may use
+the same genuinely measured current-source profile when its prior workflow failed,
+provided all64 measurements, native READY, exact source/config binding and owned
+cleanup/preservation passed. Record the prior overall failure explicitly; this
+does not establish extraction/publication success. Data/API/location/tests remain
+the approved connection-only handoff above; no task is submitted and no failed
+workflow assertion is removed. Keep operator budgets and global setup unchanged.
+
+Native failure observation: one controlled repeat of the unchanged four-case
+workflow records the existing owner-only diagnostics for each terminal task
+before assertions or shutdown. Data: exact task IDs, fixed numeric diagnostic
+records, original failed run and unchanged measured source/config/profile. API:
+control diagnostics only, preserving returned errors/outcomes and all original
+task/receipt/oracle/approval/replay assertions; no task mutation retry, tuning,
+budget increase or scanner bypass. Location: new private temporary runner and
+retained evidence, HOW/VALIDATION. Tests: failed terminals retain diagnostics or
+the explicit diagnostic-unavailable code, successful terminals have no invented
+failure cause; complete original cleanup/preservation checks on every outcome.
+Existing diagnostics are memory-only; absence after the original process ended
+cannot establish its failure cause. No source/global/dependency change.
+
+For that controlled repeat, privately observe existing ModelService.request
+payloads/replies/errors keyed to synthetic task IDs and forward the original
+return/exception unchanged. Persist observations without allowing observation
+I/O failure to alter the native call. Keep all provider options/prompts/schema,
+scanner decisions and budgets unchanged. Require a selected_review plus an
+actual financial_selection vote as the positive control for selected approval;
+ordinary manual release alone does not satisfy the approved proof-path check.

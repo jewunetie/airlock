@@ -2,6 +2,13 @@
 
 This records the completed root promotion and authorized hardening, not production acceptance. The original `new_design/TEST_REPORT.md` references artifacts and tests absent from this repository; its reported counts are not reproducible here.
 
+Readiness and debugging are evaluated with synthetic PDF/image/CSV fixtures.
+The user explicitly does not want to provide tax information; a real-folder path
+is not required. Earlier entries listing that path as pending are superseded.
+The user chooses a private workspace locally at use time. The combined synthetic
+selected-release acceptance gap and existing numeric-overlap privacy rule remain
+unresolved; no policy, source, settings or test outcome changes in this correction.
+
 ## Executed checks
 
 ### Selected outcome visibility and native scope, 2026-10-06
@@ -91,7 +98,8 @@ no extraction or release task is submitted. Cleanup/empty jobs and preservation
 pass with no execution/cleanup error. All native test runtimes are stopped.
 An independent read-only coordinator also verifies the measurement/profile and
 reviewed=false evidence. Global defaults/model/services and the pending privacy
-policy remain unchanged. The real-folder path remains pending.
+policy remain unchanged. Private folder selection belongs to the local user at
+use time and is not a readiness prerequisite.
 
 ### Explicit worker output contract, 2026-10-06
 

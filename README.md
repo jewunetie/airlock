@@ -4,6 +4,13 @@ A private local workspace agent with a separate disclosure boundary. Cloud assis
 
 **Development release.** The root redesign has durable retry identity, contextual release approvals, a configurable storage cap, and its own tests, packaging, and CI. Current executed evidence is recorded in [VALIDATION.md](VALIDATION.md). Real scanner accuracy and OS confinement still require acceptance with reviewed local assets and calibration.
 
+Preparation and debugging use synthetic PDF, image and CSV fixtures. You do not
+need to provide tax information or a real folder to establish readiness. Choose
+your private folder locally when using Airlock. The remaining synthetic acceptance
+gap is the combined selected-field release workflow, including the separately
+reproduced numeric-overlap privacy refusal; [VALIDATION.md](VALIDATION.md) records
+its exact scope and limits.
+
 [ARCHITECTURE.md](ARCHITECTURE.md) defines the design. [HOW.md](HOW.md) defines the authorized hardening contracts. The original implementation and tests are saved in commit `26d93ec`; the original redesign and review are saved in `1bd2999`. `new_design` is a historical reference, not a second active implementation.
 
 ## Interface
@@ -174,6 +181,12 @@ uv run --locked airlock --help
 Python 3.11 or newer on macOS/Linux is required. Package installation and `uv run --script airlock.py --help` use the same bounded direct dependencies as the project. The lockfile fixes the complete development/CI resolution; installing the wheel or script can resolve newer versions within those bounds. Package installation does not provision reviewed executables, model assets, or calibration.
 
 After local preparation, starting a workspace opens the local Textual screen. The CLI accepts a workspace, `--config PATH`, `ps`, `status WORKSPACE`, and `stop WORKSPACE` or `stop --all`. The local bridge attaches to an already running workspace; it does not silently start one. A stdio MCP client uses the prepared environment's absolute Python executable with `-I -B /absolute/airlock.py _bridge /absolute/workspace`.
+
+For synthetic debugging, use the prepared source, configuration and interpreter
+from the local `launch.json`, with its `XDG_STATE_HOME` for both startup and bridge.
+Start the synthetic workspace to review settings in Textual. The private local
+handoff contains the exact paths; choosing a real folder is an operator action at
+use time and does not require sending its contents or path to an assistant.
 
 ## Codex plugin
 

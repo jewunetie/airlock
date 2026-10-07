@@ -4,6 +4,45 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+### Explicit worker output contract, 2026-10-06
+
+The captured recovery run fails at PNG before selection-timeout reconciliation:
+`.airlock-local/validation-81e6c5b76e2a4c7eaccc5746fae092fc/evidence.json`.
+Worker requests allowed plain-text completion; the model returns prose instead of
+strict LocalOutput, and an output-repair exchange leads it to rewrite an already
+correct synthetic artifact. UnexpectedModelBehavior propagates to the fixed
+component_unavailable result with no released response. No parent model-request
+error is captured. Cleanup and preservation pass. This establishes that captured
+run's cause only; older uncaptured failures remain unattributed.
+
+The minimal correction uses the locked framework's explicit ToolOutput wrapper
+around unchanged LocalOutput. Worker requests require tool output and disallow
+text completion; schema, source hints, judge, governance, scanners, budgets and
+dependencies remain unchanged. Fourteen focused checks and **627 locked core
+checks** pass, with eight existing warnings and no failures/skips:
+`/private/tmp/airlock-explicit-worker-output-focused-fixed-20261006.log` and
+`/private/tmp/airlock-explicit-worker-output-core-20261006.log`.
+The initial new schema comparison fails on description/title display metadata;
+the corrected assertion compares the framework's same validation schema without
+weakening any constraint. Original failed evidence remains in
+`/private/tmp/airlock-explicit-worker-output-focused-20261006.log`.
+Six repair controls cover prose, omitted sources and wrong types, each followed
+by valid repair or exhausted retries. The disabled-tool fixture establishes
+framework behavior, not that a live model cannot propose governed writes.
+
+Fresh scoped root/coordinator review finds no blocking source/test defect.
+Offline source/wheel build, exact two-module archive bytes, private installed
+import/source identity and isolated help pass under
+`/private/tmp/airlock-explicit-worker-output-build-20261006/` and
+`/private/tmp/airlock-explicit-worker-output-installed-20261006/`.
+Combined source is
+`38030adef0cca992d4c89183aa69314c0a1baf8f7a472e3d9764c81de2c3633a`.
+Previous prepared modules are preserved before exact current-byte staging;
+old profiles and connection evidence remain tied to their original source.
+Fresh unchanged64-row measurement, actual startup acceptance, four-case native
+workflow and matching persistent handoff remain in progress. No global install,
+configuration change or real-document acceptance is claimed.
+
 ### Current-source native startup and retained UI observer failure, 2026-10-06
 
 The current-source persistent run completes all64 regression scans with strict

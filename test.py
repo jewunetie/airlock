@@ -1995,6 +1995,12 @@ async def test_actual_coder_tools_and_approval_hook_contract(tmp_path, manual, t
                 self.model_calls += 1
                 assert value['role'] == 'worker'
                 params = value['parameters']
+                assert params['output_mode'] == 'tool' and not params['allow_text_output']
+                assert params['output_object'] is None
+                schema=a.LocalOutput.model_json_schema()
+                assert params['output_tools'][0]['description']==schema.pop('description')
+                for field in schema['properties'].values():field.pop('title')
+                assert params['output_tools'][0]['parameters_json_schema']==schema
                 self.visible_tools = {tool['name'] for tool in params['function_tools']}
                 if self.model_calls == 1:
                     args = ({'operation':'subtract', 'left':'-10.05', 'right':'5.00'} if tool == 'calculate'
@@ -2041,6 +2047,51 @@ async def test_actual_coder_tools_and_approval_hook_contract(tmp_path, manual, t
     assert [value for op, value in channel.calls if op == 'tool_finished'] == [{'id': 'read-1'}]
     assert task.tool_calls == 1 and 'read-1' in task.consumed
     assert csv_reads == ([str(document)] if tool == 'read_csv' else [])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('bad', ['prose', 'missing_sources', 'wrong_type'])
+@pytest.mark.parametrize('repair', [False, True])
+async def test_actual_coder_output_repair_does_not_edit_artifact(tmp_path, monkeypatch, bad, repair):
+    from pydantic_ai.exceptions import UnexpectedModelBehavior
+    from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart
+    scratch=tmp_path/'scratch';scratch.mkdir();monkeypatch.setenv('TMPDIR',str(scratch))
+    artifact=tmp_path/'tax-provenance.json';artifact.write_text('{"source":"table.png","page":1}')
+    original=artifact.read_bytes()
+    settings=a.Settings(enabled_tools=(),output_retries=1)
+    expected={'response':'','protected_sources':['1250.25','985.10']}
+    calls=[];guarded=[]
+    class Channel:
+        async def call(self,op,value):
+            if op=='policy':return {'policy':a.Governance().model_dump(mode='json')}
+            if op=='model':
+                calls.append(value)
+                params=value['parameters']
+                assert value['role']=='worker' and params['output_mode']=='tool'
+                assert not params['allow_text_output'] and params['output_object'] is None
+                assert not params['function_tools'] and len(params['output_tools'])==1
+                if len(calls)==2:
+                    retries=[p for m in value['messages'] for p in m['parts'] if p['part_kind']=='retry-prompt']
+                    assert retries
+                    if bad=='prose':
+                        assert 'json_invalid' not in str(retries)
+                        assert 'tool' in str(retries).lower() or 'function' in str(retries).lower()
+                if len(calls)==2 and repair:
+                    part=ToolCallPart(params['output_tools'][0]['name'],expected,tool_call_id='final-2')
+                elif bad=='prose':part=TextPart('The table was converted. tax-provenance.json is complete.')
+                else:
+                    invalid={'response':''} if bad=='missing_sources' else {'response':123,'protected_sources':[]}
+                    part=ToolCallPart(params['output_tools'][0]['name'],invalid,tool_call_id='final-'+str(len(calls)))
+                return {'response':a.TypeAdapter(ModelResponse).dump_python(ModelResponse(parts=[part]),mode='json')}
+            if op=='guard':guarded.append(value);return {'decision':'allow'}
+            if op=='trajectory':return {}
+            pytest.fail('Unexpected operation '+op)
+    args=({'ask':{'request':'The local artifact is complete; finish without changing files.'}},Channel(),settings,tmp_path)
+    if repair:assert await a.run_coder(*args)==expected
+    else:
+        with pytest.raises(UnexpectedModelBehavior):await a.run_coder(*args)
+    assert len(calls)==2 and guarded==([expected] if repair else [])
+    assert artifact.read_bytes()==original
 
 
 @pytest.mark.asyncio

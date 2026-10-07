@@ -4975,3 +4975,26 @@ HOW/VALIDATION; retain all prior failed runners/evidence. Tests: exact candidate
 and selected-proof positive controls, original four-case oracles/deny/retry,
 unchanged scanner/limits and complete cleanup/preservation. This exercises the
 existing local reselect behavior, not a new automatic product retry or timeout.
+
+## Explicit worker result contract
+
+Data: unchanged strict LocalOutput(response:str, protected_sources:list[str]),
+existing final_result output tool and ModelRequestParameters; no new public field.
+API: run_coder uses the locked framework's explicit ToolOutput(LocalOutput), so
+worker requests require tool output and disallow plain-text completion. Retain
+exact schema/validation, output retries, truthful source hints, output guard,
+governance, Coder capabilities and budgets. A prose or malformed result must
+receive the framework's output-specific retry, never become successful output
+or authorize file changes; exhausted retries retain UnexpectedModelBehavior.
+Location: one lazy import and worker output_type argument in airlock.py, actual
+Coder regression assertions and a small parametrized repair check in test.py,
+HOW/VALIDATION. Judge behavior and dependencies remain unchanged.
+Tests: actual worker parameter mode/tool schema and no text output; prose, missing
+protected_sources and wrong response type, followed by valid exact result or
+repeated invalid result. Assert unchanged local artifact, no file/tool execution,
+one guarded valid result with all source hints retained, zero guard calls on
+failure and bounded retries. Run focused/full locked tests, fresh review/build
+and exact module bytes. Changed source invalidates prior preparation/profile;
+refresh exact prepared modules and genuinely measure the unchanged64-row corpus
+before fresh native startup/workflow/connection acceptance. Original failures
+and old handoff remain retained, not silently rebound or counted as fixed.

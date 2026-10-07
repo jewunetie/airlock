@@ -70,6 +70,21 @@ and its genuinely measured profile; reviewed=false remains unchanged. All test
 runtimes stop. This establishes connection preparation only, retaining the failed
 workflow and pending selected/PDF acceptance and real-folder path.
 
+A single exact captured fifth-request replay through unchanged ModelService
+returns in20.489seconds: HTTP200 headers at0.563seconds and544 observed byte
+chunks. Original streaming bytes are forwarded without changing deadlines,
+reasoning, budgets, messages or tool schemas. Client closure and source/workspace/
+shared-service/model preservation pass; no tool is dispatched or content released:
+`/private/tmp/airlock-captured-stream-replay-d19543997c3c4bd299c96c08bc7111d1/evidence.json`.
+The returned part is plain text, not final_result, so this is transport evidence
+only. The original timeout remains unexplained/intermittent; no reasoning-disabled
+comparison is performed. Fresh scoped review finds no actionable replay defect.
+A new unchanged four-case workflow repeat reuses only the genuine current-source
+profile after binding/corpus/completeness/cleanup checks, explicitly labels reused
+measurement provenance and obtains fresh actual startup acceptance. All original
+exact oracles, selected-proof positive controls, denial/replay/diagnostics and
+cleanup checks remain; no production or setting change. Acceptance remains pending.
+
 ### Current-source native startup and retained UI observer failure, 2026-10-06
 
 The current-source persistent run completes all64 regression scans with strict

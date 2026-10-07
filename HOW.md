@@ -4998,3 +4998,29 @@ and exact module bytes. Changed source invalidates prior preparation/profile;
 refresh exact prepared modules and genuinely measure the unchanged64-row corpus
 before fresh native startup/workflow/connection acceptance. Original failures
 and old handoff remain retained, not silently rebound or counted as fixed.
+
+## Captured stream-idle diagnosis
+
+Data: the failed current-source fifth synthetic worker request, exact accepted
+Settings, original model/token counters, private byte/event timings and unchanged
+source/input/global-service snapshots. No new public field or persisted task.
+API: replay that payload once through actual ModelService.request with unchanged
+provider/model, budgets, reasoning, stream-idle/wall deadlines and tool schemas.
+Observe HTTP response status and byte arrival by forwarding the original stream
+unchanged. Never dispatch returned tool calls, start a worker or release content.
+Capture the exact response/error and close the local model client; no model unload.
+Location: one private Python harness/evidence under /private/tmp; HOW/VALIDATION.
+Tests: assert captured source/settings/counters identity, one request, bounded
+timing records, no tool execution, exact source/workspace/global/model preservation
+and closed client. A timeout remains diagnostic failure, not workflow acceptance.
+Reasoning-disabled comparison is outside this scope and awaits human approval;
+the earlier prohibition and all production defaults remain unchanged.
+
+Unchanged full-workflow repeat: reuse only the exact genuinely measured current
+profile/corpus after source/settings/corpus digest,64-row completeness, startup
+READY and prior cleanup/preservation checks. Copy its measured provenance into
+fresh private evidence; do not call copied rows newly measured. Obtain fresh
+actual Textual Cancel/Accept and native startup; retain all four exact workflow,
+selected-proof positive, denial/replay/diagnostics/cleanup assertions and budgets.
+Location: one private copy of the reviewed full native runner plus HOW/VALIDATION.
+Any timeout or invalid output remains failure; no reasoning option or limit change.

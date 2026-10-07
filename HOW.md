@@ -4960,3 +4960,18 @@ I/O failure to alter the native call. Keep all provider options/prompts/schema,
 scanner decisions and budgets unchanged. Require a selected_review plus an
 actual financial_selection vote as the positive control for selected approval;
 ordinary manual release alone does not satisfy the approved proof-path check.
+
+Selection outcome reconciliation: data are the retained timeout run, exact
+pending financial_selection approval ID/version/candidate/proofs and the existing
+measured source/config/profile, with fresh synthetic workspace/state. API: after
+only control_timeout_outcome_unknown from the single select_financial call,
+record that timeout and poll existing read-only review/status within the original
+task deadline. Require the same approval ID/version to become financial_review;
+then reselect that row through the actual Textual screen, inspect the matching
+review and issue one verify_financial call. A terminal task, changed ID/version,
+unavailable review or expired deadline remains failure; never resubmit selection
+or coerce unknown into approval. Location: one new private full-workflow runner,
+HOW/VALIDATION; retain all prior failed runners/evidence. Tests: exact candidate
+and selected-proof positive controls, original four-case oracles/deny/retry,
+unchanged scanner/limits and complete cleanup/preservation. This exercises the
+existing local reselect behavior, not a new automatic product retry or timeout.

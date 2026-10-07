@@ -58,6 +58,24 @@ The prior workflow failure remains explicit, reviewed=false is unchanged, and
 this connection success grants no extraction/release or real-tax acceptance.
 Actual chosen-folder binding remains pending the user's folder path.
 
+The terminal-observing run completes PNG extraction with all 15 exact cells and
+source/page provenance, local-only null response and same-ID replay without work.
+Actual selected denial presents financial_selection, withholds all content and
+also replays without work. No model-request errors are observed in these cases;
+their success does not retrospectively explain the prior PNG failure.
+Selected approval reaches financial_selection, but its single select_financial
+call returns control_timeout_outcome_unknown at the control deadline of 10 seconds.
+The run remains failed; no mutation was retried. Exact cleanup/preservation pass:
+`.airlock-local/validation-78947a99843d4b5a8c7ddc82a1100336/evidence.json`.
+
+A reviewed private full-workflow repeat tests existing read-only status/review
+reconciliation and actual Textual row reselect after that timeout, requiring the
+same approval ID/version and matching displayed financial_review before one
+verification. All original acceptance assertions remain, and unavailable/changed
+or terminal state fails. No product timeout, automatic retry, policy, source,
+dependency or limit change. This test remains in progress; an observer recovery
+must not be represented as fixing the actual UI's timeout.
+
 ### Accurate startup component/backend notices and socket setup, 2026-10-06
 
 A rendered Textual reproduction confirms that a named LiteParse route with

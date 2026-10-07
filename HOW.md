@@ -4873,3 +4873,45 @@ completed reply for every expected original/decoded chunk in order. Any missing,
 partial or parser-error reply aborts, including when another chunk is uncertain.
 This adds completeness assertions, preserves the original failed runner, and
 changes no classifier, scanner lifecycle, release policy or production source.
+
+Operator handoff budgets: data are the four existing prepared/default tool/task
+limits and separate diagnostic overrides. Build private operator Settings from
+the measured scanner configuration with max_tool_seconds, execution_timeout,
+max_model_calls and max_tool_calls restored from existing trusted preparation
+(or shipped defaults when absent). These fields do not enter calibration_binding;
+assert binding equality and exact values in the loaded manifest/TOML probe.
+Use these operator values in both follow-up startup tests and the prepared
+manifest, obtain actual synthetic Textual acceptance for the matching prepared
+workspace, and verify its three-tool bridge in the same explicit XDG state.
+Location: existing private follow-up only; HOW/VALIDATION evidence. Production,
+active continuous test, dependencies and global preparation remain unchanged.
+
+## Startup component and backend notices
+
+Data: existing Settings.pdf_parser/document_parsers/context_backend and measured
+CalibrationProfile thresholds/counts; two existing rendered Static summaries.
+No new model, field, setting or control.
+API: make_startup_tui must show the existing optional Docker trust notice when
+either fixed PDF or named document parsers are configured. For Gemma, show its
+actual categorical clear/match/uncertain context decisions rather than an unused
+Liquid policy threshold. Keep Liquid's numeric threshold, PII/reassembly values,
+measured error counts, exact acceptance/cancel and missing-profile refusals.
+Location: one private rendered-screen reproduction first; after the active native
+run closes, minimal root airlock.py notice changes and focused test.py regressions.
+README/VALIDATION report scope. Preserve original run, then genuinely refresh
+prepared source/profile binding and native acceptance for changed source.
+Tests: render no parser, fixed PDF, LiteParse/Docling named routes and combined
+routes; assert actual Static content mentions Docker/buffers only for configured
+optional components. Render both context backends with a matching synthetic
+profile; assert Gemma categories versus Liquid numeric threshold and unchanged
+false-block/miss/count/review flags. Run focused UI and locked suite, fresh review;
+no scanner logic, privacy policy, source-pin bypass, dependency or global change.
+
+Persistent socket preflight: use fresh short owner-only sibling XDG directories
+under .airlock-local (record their exact paths in evidence/launch/connection), not
+the long validation/handoff path. Before model work, require an empty new state
+and actually bind/close its exact control.sock plus a loopback AF_INET listener
+as used by MCP; verify owned cleanup. Include state in final job/preservation
+checks. Supervisor pre-server failure must close its owned SQLite store in the
+private harness. No production path fallback, existing-state reuse or source
+change is introduced by this test-layout correction.

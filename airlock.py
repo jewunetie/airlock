@@ -6098,8 +6098,10 @@ def make_startup_tui(settings: Settings, root: Path):
     from textual.widgets import Header, Footer, Static, Select, SelectionList, Button
     try:
         profile = load_calibration(settings)
+        context = ('Gemma clear/match/uncertain' if settings.context_backend == 'gemma' else
+            f'Liquid {profile.thresholds["policy_threshold"]}')
         summary = (f'Scanner sensitivity: personal information {profile.thresholds["pii_threshold"]}, '
-            f'sensitive context {profile.thresholds["policy_threshold"]}, '
+            f'sensitive context {context}, '
             f'fragment coverage {profile.thresholds["reassembly_fraction"]}.\n'
             f'Held-out evaluation: {profile.heldout_cases} examples, '
             f'{profile.heldout_false_positives} false blocks, {profile.heldout_false_negatives} missed private examples.\n'
@@ -6127,7 +6129,7 @@ def make_startup_tui(settings: Settings, root: Path):
                 yield Static('Enabled local tools (calculation does not require file or command approval)', markup=False)
                 yield SelectionList(*[(name, name, name in settings.enabled_tools) for name in local_tools.boundaries(settings.extensions)],
                                     id='enabled_tools', compact=True)
-                yield Static('PDF parser: native sandboxed child.' if settings.pdf_parser is None else
+                yield Static('PDF parser: native sandboxed child.' if settings.pdf_parser is None and not settings.document_parsers else
                     'PDF parser: optional fixed local Docker component. The pinned local daemon must already be running; '
                     'Airlock will not start or install it. Document bytes traverse the Docker VM and daemon buffers; '
                     'container cleanup does not securely erase swap, crash dumps or physical storage.', markup=False,

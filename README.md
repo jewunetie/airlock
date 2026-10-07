@@ -76,7 +76,7 @@ After restart, retained opaque registrations and contributions cannot gain verif
 
 Starting a workspace first shows its rules. Accept your saved choices or configured defaults, or change the approval, privacy, and tool access modes before starting. Cancel leaves the workspace stopped. Valid choices are saved locally for that exact workspace. An explicit `--preset` starts from that preset instead; explicit permission flags override saved choices.
 
-The screen also shows scanner sensitivity and measured evaluation errors. Accepting a compatible profile applies it to this workspace without approving it globally. Sensitivity changes require a new tested profile and restart. In the running screen, edit the governance settings and select Apply governance to save changes. Pending work keeps the stricter rules it has encountered; changes invalidate pending approvals. Enabling scanners after an off-mode start or changing workspace write access requires stop/start.
+The screen names the context scanner and shows its applicable settings and measured evaluation errors. It also identifies configured Docker document parsers and their local storage boundary. Accepting a compatible profile applies it to this workspace without approving it globally. Sensitivity changes require a new tested profile and restart. In the running screen, edit the governance settings and select Apply governance to save changes. Pending work keeps the stricter rules it has encountered; changes invalidate pending approvals. Enabling scanners after an off-mode start or changing workspace write access requires stop/start.
 
 The default context scanner remains Liquid. Trusted configuration can explicitly
 select `context_backend = "gemma"` using the same pinned local Gemma worker model.

@@ -2529,6 +2529,44 @@ def test_calibration_acceptance_does_not_survive_profile_or_binding_change(tmp_p
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize('backend', ['liquid', 'gemma'])
+@pytest.mark.parametrize('route', ['native', 'fixed', 'liteparse', 'docling', 'both'])
+async def test_startup_screen_actual_parser_and_context_notices(tmp_path, backend, route):
+    from textual.widgets import Static
+    settings = calibration_fixture(tmp_path)
+    profile = a.load_calibration(settings)
+    fixed = pdf_route_settings(tmp_path).pdf_parser
+    document = a.PdfParserSpec.model_validate({**fixed.model_dump(),
+        'backend':'docling' if route == 'docling' else 'liteparse', 'pypdf_version':None,
+        'parser_version':'2.133.0' if route == 'docling' else '2.15.1',
+        'seccomp':fixed.seccomp.model_copy(update={'sha256':{'seccomp.json':
+            '6cea4d19c3c0b3d6416285ea56d3ef26bd3083830c8319cd334a470558650fc2'}})})
+    settings = a.Settings.model_validate({**settings.model_dump(), 'context_backend':backend,
+        'worker_model':'gemma-synthetic', 'worker_digest':'b'*64,
+        'pdf_parser':fixed if route in ('fixed', 'both') else None,
+        'document_parsers':{document.backend:document} if route in ('liteparse', 'docling', 'both') else {}})
+    profile = profile.model_copy(update={'binding':a.calibration_binding(settings)})
+    a.atomic_private_write(settings.calibration, profile.model_dump_json().encode())
+    settings = settings.model_copy(update={'calibration_sha256':a.hashlib.sha256(settings.calibration.read_bytes()).hexdigest()})
+    original = settings.calibration.read_bytes()
+    app = a.make_startup_tui(settings, tmp_path)
+    async with app.run_test(size=(140, 72)) as pilot:
+        parser = str(app.query_one('#pdf_parser_summary', Static).content)
+        summary = str(app.query_one('#calibration_summary', Static).content)
+        assert ('Docker' in parser) == (route != 'native')
+        assert ('daemon buffers' in parser) == (route != 'native')
+        assert ('native sandboxed child' in parser) == (route == 'native')
+        assert ('Gemma clear/match/uncertain' in summary) == (backend == 'gemma')
+        assert ('Liquid 0.5' in summary) == (backend == 'liquid')
+        assert 'personal information 0.3' in summary and 'fragment coverage 1.0' in summary
+        assert '24 examples, 6 false blocks, 0 missed private examples' in summary
+        assert await pilot.click('#cancel')
+        await pilot.pause()
+    assert app.return_value is None and settings.calibration.read_bytes() == original
+    assert not a.load_calibration(settings).reviewed
+
+
+@pytest.mark.asyncio
 async def test_malformed_profile_cannot_be_accepted_in_startup_screen(tmp_path):
     from textual.widgets import Static
     settings = calibration_fixture(tmp_path)

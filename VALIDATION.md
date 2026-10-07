@@ -4,6 +4,52 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+### Accurate startup component/backend notices and socket setup, 2026-10-06
+
+A rendered Textual reproduction confirms that a named LiteParse route with
+pdf_parser=None showed the native-only PDF notice, and Gemma showed the unused
+Liquid policy threshold. No runtime or acceptance occurs in that synthetic UI
+probe: `.airlock-local/ui-notice-reproduction-421deb0a787c488883d167e606671103/evidence.json`.
+The narrow correction includes named document parsers in the existing Docker
+notice and shows actual Gemma categorical decisions versus Liquid's numeric
+threshold. Scanner rules, thresholds, decisions, governance and acceptance are
+unchanged. Fifteen focused rendered/acceptance checks pass; the locked full suite
+passes **621 checks**, eight existing warnings, no failures/skips:
+`/private/tmp/airlock-startup-notices-core-20261006.log`.
+Independent source/test review finds no actionable defect. Exact two-module wheel
+and source archives, private installed imports/source bytes and isolated CLI help
+pass under `/private/tmp/airlock-startup-notices-build-20261006/` and
+`/private/tmp/airlock-startup-notices-installed-20261006/`. No global installation
+or dependency change. New combined source:
+`c7b0703d482fe2eb966a1ce097030ec30e1cd4ca9a6ee8148afd514dad47ba77`.
+The preceding source-bound accepted profile is correctly refused; no rebind is
+substituted for fresh measurement.
+
+The preceding persistent native run completed all64 regressions: calibration32
+false-block1/miss0; heldout32 false-block1/miss0, three semantic uncertainties and
+zero private examples without findings. All expected original/decoded replies
+were complete and strictly parsed. Actual startup Cancel/Accept pass, but the
+supervisor fails before workspace startup with AF_UNIX path too long. Zero
+workflow cases; preservation passes and no cleanup errors are recorded. The
+failed supervisor's pre-server store closure was not explicitly checked before
+its process ended. Evidence is retained unchanged:
+`.airlock-local/validation-77ec776b2baa4dc88224cc812f069b96/evidence.json`.
+These measurements concern the preceding source and reused regressions, not new
+held-out field accuracy or current-source continuous acceptance.
+
+Fresh short sibling owner-only XDG paths now keep control.sock within the native
+limit and are explicit in handoff connections. An early private preflight failed
+because user_state_path does not create its child directory; no model/scanner or
+workflow started, and preservation passes:
+`.airlock-local/validation-cdda3f7c4d1b4fa3bfe701726d88a705/evidence.json`.
+A standalone cleanup check also encountered Python3.13's automatic socket unlink.
+Explicit private child creation and idempotent owned socket cleanup correct the
+harness only. Actual short Unix and MCP-loopback bind/close preflight now passes.
+The new source runner passes this preflight plus parser pins/handle cleanup before
+fresh measurement; full native acceptance and the matching installed/persistent
+connection remain in progress. Existing operator task budgets will be retained
+in the handoff; diagnostic overrides are recorded separately.
+
 ### Continuous acceptance staging and broader Gemma uncertainty, 2026-10-06
 
 The user resumed completion with project/private environments only and no global

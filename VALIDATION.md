@@ -59,6 +59,17 @@ The frozen profile remains reviewed=false. No deadline, reasoning option or
 scanner decision is changed to make this failure pass. Current-source connection
 preparation is a separate check and retains prior_workflow_overall=failed.
 
+The matching current-source connection-only handoff passes:
+`.airlock-local/handoff-f0a3e852d38340a39e5bf06e4397871b/evidence.json`.
+Actual installed dummy-plugin startup/three-tool connection and prepared private
+workspace startup/connection pass after Textual acceptance. Exact source/package/
+profile binding, unaccepted refusal, CLI help and original operator budgets
+300/1800/32/64 pass. Cleanup, empty jobs and global/source/input preservation pass.
+Retained launch.json and prepared-connection.json refer to current38030ade source
+and its genuinely measured profile; reviewed=false remains unchanged. All test
+runtimes stop. This establishes connection preparation only, retaining the failed
+workflow and pending selected/PDF acceptance and real-folder path.
+
 ### Current-source native startup and retained UI observer failure, 2026-10-06
 
 The current-source persistent run completes all64 regression scans with strict

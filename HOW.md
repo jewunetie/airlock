@@ -4915,3 +4915,19 @@ as used by MCP; verify owned cleanup. Include state in final job/preservation
 checks. Supervisor pre-server failure must close its owned SQLite store in the
 private harness. No production path fallback, existing-state reuse or source
 change is introduced by this test-layout correction.
+
+Continuous UI observer correction: data are the retained current-source failed
+run, its genuinely measured 64-row profile/settings and exact source/asset/corpus
+bindings, plus new synthetic workspace/state and task/vote evidence. API: reuse
+that unchanged measured configuration/profile after exact digest/binding checks;
+repeat actual startup and all four workflow cases in fresh private state. A UI
+refresh can return while another refresh owns the busy guard, so the harness
+must wait for the requested row to appear before selecting it. A missing row
+submits no vote and is observed again within the original finite task deadline.
+Never repeat an outcome-unknown mutation. Keep all oracle, selected-proof,
+deny/replay and cleanup assertions. Location: a new private temporary runner,
+HOW/VALIDATION evidence only; preserve the failed runner and evidence unchanged.
+Tests: assert measured profile source/config/corpus equality and reviewed=false,
+actual Accept/Cancel/READY/bridge, exact cells/provenance/selected values and
+all owned cleanup/global preservation. No classifier, production UI, budget,
+dependency, policy or global acceptance change.

@@ -4,6 +4,35 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+### Current-source native startup and retained UI observer failure, 2026-10-06
+
+The current-source persistent run completes all64 regression scans with strict
+original/decoded chunk completeness and no transport/parser failure. Calibration:
+32 cases, one false block, zero private misses. Held-out regressions:32 cases,
+one false block, zero private misses, three semantic uncertainties and zero
+private cases lacking findings. These are repeated synthetic regressions, not
+independent field accuracy. Actual startup Cancel/Accept displays these measured
+errors and the correct backend/parser notices; reviewed=false remains unchanged.
+Native Supervisor startup reaches READY with no scanner failures, and the actual
+project-Python bridge exposes ask/status/stop.
+
+Overall workflow acceptance still fails: after request and list_files approval,
+the private harness selects a stale approval snapshot whose row is not yet in
+the rendered table, raising StopIteration. Production action_refresh can return
+while another refresh owns its busy guard; this is not evidence of a production
+approval failure. Original failed runner and evidence are retained:
+`.airlock-local/validation-97c2518bb21b4ab2b4d58c9b8368c6fc/evidence.json`.
+Exact owned supervisor/scanner/parser/model/server cleanup, empty jobs and
+source/global/service/input preservation pass; no cleanup errors are recorded.
+
+A fresh private runner waits within the unchanged task deadline when that row
+is absent, submitting no vote. It reuses only the genuinely measured unchanged
+source/config/corpus/profile after exact binding checks, obtains fresh actual
+startup acceptance and repeats all four workflow cases in fresh private state.
+No scanner, policy, budget or production-code change. Root and independent
+runner review find no actionable defect in this observer correction; full
+workflow and installed/persistent handoff remain in progress.
+
 ### Accurate startup component/backend notices and socket setup, 2026-10-06
 
 A rendered Textual reproduction confirms that a named LiteParse route with

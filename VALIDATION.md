@@ -70,11 +70,28 @@ help pass under `/private/tmp/airlock-selection-outcome-build-20261006/` and
 `/private/tmp/airlock-selection-outcome-installed-20261006/`. Combined source is
 `a0461d9a62e48ef963743d03d46a7831424c64d7a2aa12a98d8f7e24d21940b0`;
 tools pin is unchanged. No failed assertion was skipped or weakened.
-Updated source-bound measurement/startup/preparation is still required; previous
-38030ade native workflow results do not certify the new source. The narrowed
-measurement_startup_only runner submits no task and cannot certify extraction or
-selected approval. Global defaults/model/services and the pending privacy policy
-remain unchanged.
+Fresh new-source measurement/startup-only refresh passes at
+`.airlock-local/validation-594320e3abff4151b6c7d72bb60ec3f8/evidence.json`.
+All64 original/decoded rows/chunks are genuinely measured. Calibration32:
+false-block1/miss0/uncertainty0; heldout32: false-block1/miss0/uncertainty2;
+private_without_match0 in both splits. Actual Textual Cancel/Accept, native READY,
+parser pins and three-tool bridge pass. The profile stays reviewed=false. Owned
+cleanup, empty jobs and global/source/input preservation pass, with no execution
+or cleanup error. No task is submitted; this cannot certify extraction or
+selected approval, and previous38030ade native workflow results remain separate.
+Matching installed-plugin/persistent preparation passes at
+`.airlock-local/handoff-c60f4ebd264c464d884599aeced29f8f/evidence.json`.
+Actual installed dummy-plugin and prepared workspace startup/three-tool connections
+pass, along with independent source/package/profile probe, unaccepted refusal and
+CLI help. Operator300/1800/32/64 stays distinct from diagnostic30/600/16/16.
+Exact launch.json and prepared-connection.json retain the new-source private
+launch metadata and explicit XDG state `.airlock-local/h-03839efa0aa1`.
+Prior scope is measurement_startup_only and prior_workflow_overall is not_executed;
+no extraction or release task is submitted. Cleanup/empty jobs and preservation
+pass with no execution/cleanup error. All native test runtimes are stopped.
+An independent read-only coordinator also verifies the measurement/profile and
+reviewed=false evidence. Global defaults/model/services and the pending privacy
+policy remain unchanged. The real-folder path remains pending.
 
 ### Explicit worker output contract, 2026-10-06
 

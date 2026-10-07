@@ -5101,5 +5101,7 @@ profile reviewed=false, strict binding/acceptance gates, no submitted cases,
 closed owned scanner/model/supervisor, empty jobs and exact global/source/input
 preservation. Label measurement_startup_only; success cannot imply extraction or
 combined workflow acceptance. Then use the unchanged reviewed connection-only
-handoff helper with that fresh profile; preserve operator300/1800/32/64 separately
+handoff helper's gates with that fresh profile; its private copy labels
+prior_case_scope=measurement_startup_only and prior_workflow_overall=not_executed,
+so a startup-only pass is never mislabeled as workflow success. Preserve operator300/1800/32/64 separately
 from diagnostic30/600/16/16 and leave installed/global binding unchanged.

@@ -63,6 +63,8 @@ import psutil
 import secrets
 import shlex
 import signal
+import ssl
+import urllib.parse
 import socket
 import sqlite3
 import stat
@@ -113,7 +115,7 @@ MAX_FRAME = 16 * 1024 * 1024
 PDF_CHUNK_BYTES = 65536
 CONTROL_IO_TIMEOUT = 5.0
 DEFAULT_STATE_BYTES = 1_073_741_824
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 ALGORITHM_VERSION = "fragment-graph-v2"
 DEFAULT_TOOLS = local_tools.DEFAULT_TOOLS
 TOOL_NAMES = frozenset(DEFAULT_TOOLS)
@@ -1102,7 +1104,7 @@ class StateStore:
         self.db.execute('PRAGMA trusted_schema=OFF')
         self.db.execute('PRAGMA secure_delete=ON')
         version = self.db.execute('PRAGMA user_version').fetchone()[0]
-        if version not in (0, 1, 2, SCHEMA_VERSION):
+        if version not in (0, 1, 2, 3, SCHEMA_VERSION):
             self.db.close()
             raise AirlockError('schema_unsupported')
         self.db.executescript('''
@@ -1110,6 +1112,14 @@ class StateStore:
         CREATE TABLE IF NOT EXISTS workspaces(
             id TEXT PRIMARY KEY, path TEXT UNIQUE NOT NULL, device INTEGER NOT NULL, inode INTEGER NOT NULL,
             UNIQUE(device,inode));
+        CREATE TABLE IF NOT EXISTS workspace_codes(
+            code TEXT PRIMARY KEY, path TEXT NOT NULL, device INTEGER NOT NULL, inode INTEGER NOT NULL,
+            epoch TEXT NOT NULL, enabled INTEGER NOT NULL CHECK(enabled IN (0,1)));
+        CREATE TABLE IF NOT EXISTS gateway_tasks(task TEXT PRIMARY KEY, identity_ref TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS gateway_native(
+            native_ref TEXT PRIMARY KEY, code TEXT NOT NULL, epoch TEXT NOT NULL,
+            identity_ref TEXT NOT NULL, task TEXT REFERENCES gateway_tasks(task),
+            cancelled INTEGER NOT NULL DEFAULT 0 CHECK(cancelled IN (0,1)));
         CREATE TABLE IF NOT EXISTS global_ledger(
             source TEXT PRIMARY KEY, length INTEGER NOT NULL, geometry TEXT NOT NULL, algorithm TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS configurations(
@@ -1229,6 +1239,52 @@ class StateStore:
 
     def payload_ref(self, request: str, disclosure: str | None) -> str:
         return self.opaque('task-payload-v1', json_bytes([request, disclosure]).decode())
+
+    def register_code(self, code: str, target: Path) -> dict:
+        """Locally bind an exact label to this canonical directory identity; never start it."""
+        validate_workspace_code(code)
+        root = canonical_workspace(target); info = root.stat()
+        row = self.db.execute('SELECT path,device,inode,epoch,enabled FROM workspace_codes WHERE code=?', (code,)).fetchone()
+        if row and row[:3] == (str(root), info.st_dev, info.st_ino) and row[4]:
+            return {'registered':True}
+        with self.transaction():
+            self.db.execute('INSERT OR REPLACE INTO workspace_codes VALUES(?,?,?,?,?,1)',
+                            (code, str(root), info.st_dev, info.st_ino, uuid.uuid4().hex))
+        return {'registered':True}
+
+    def revoke_code(self, code: str) -> dict:
+        """Locally disable this label without deleting history or stopping work."""
+        validate_workspace_code(code)
+        with self.transaction():
+            self.db.execute('UPDATE workspace_codes SET enabled=0 WHERE code=?', (code,))
+        return {'revoked':True}
+
+    def code_binding(self, code: str) -> dict:
+        validate_workspace_code(code)
+        row = self.db.execute('SELECT path,device,inode,epoch FROM workspace_codes WHERE code=? AND enabled=1', (code,)).fetchone()
+        try:
+            if row is None:raise ValueError
+            root = canonical_workspace(Path(row[0])); info = root.stat()
+            if (str(root), info.st_dev, info.st_ino) != row[:3]:raise ValueError
+        except (ValueError, OSError, AirlockError):
+            raise AirlockError('workspace_unavailable') from None
+        return {'code':code, 'path':root, 'device':row[1], 'inode':row[2], 'epoch':row[3],
+                'identity_ref':self.opaque('gateway-workspace-v1', json_bytes(list(row[:3])).decode())}
+
+    def native_binding(self, native: str, scope: str | None, binding: dict | None = None) -> dict:
+        """Freeze a protocol task's original registration and authentication scope."""
+        ref = self.opaque('gateway-native-v1', json_bytes([scope,native]).decode())
+        if binding is not None:
+            with self.transaction():
+                self.db.execute('INSERT OR IGNORE INTO gateway_native(native_ref,code,epoch,identity_ref) VALUES(?,?,?,?)',
+                                (ref,binding['code'],binding['epoch'],binding['identity_ref']))
+        row = self.db.execute('SELECT code,epoch,identity_ref,task,cancelled FROM gateway_native WHERE native_ref=?', (ref,)).fetchone()
+        if row is None:raise AirlockError('task_unavailable')
+        current = self.code_binding(row[0])
+        if (current['epoch'],current['identity_ref']) != row[1:3] or (binding is not None and
+                (binding['code'],binding['epoch'],binding['identity_ref']) != row[:3]):
+            raise AirlockError('task_unavailable')
+        return {**current,'native_ref':ref,'task':row[3],'cancelled':bool(row[4])}
 
     def workspace(self, root: Path) -> str:
         root = canonical_workspace(root)
@@ -4914,16 +4970,81 @@ async def worker_child():
         await channel.send({'op':'done','ok':False, **({'diagnostic':diagnostic} if diagnostic else {})})
 
 
+def validate_workspace_code(code: str) -> None:
+    if type(code) is not str or not code.strip():
+        raise AirlockError('workspace_code_invalid')
+    try:code.encode('utf-8')
+    except UnicodeError:raise AirlockError('workspace_code_invalid') from None
+
+
+class GatewayConfig(BaseModel):
+    model_config = ConfigDict(extra='forbid', frozen=True)
+    listen_host: str
+    port: int = Field(ge=1, le=65535)
+    authority: str
+    certificate: Path
+    private_key: Path
+    token_file: Path
+
+    @model_validator(mode='after')
+    def validate_network(self):
+        try:
+            address = ipaddress.IPv4Address(self.listen_host)
+            if not (address.is_loopback or any(address in ipaddress.IPv4Network(n)
+                    for n in ('10.0.0.0/8','172.16.0.0/12','192.168.0.0/16'))):raise ValueError
+            url = urllib.parse.urlsplit('https://'+self.authority)
+            if (not url.hostname or url.port != self.port or url.username or url.password
+                    or url.path or url.query or url.fragment or any(c.isspace() for c in self.authority)):
+                raise ValueError
+            self.authority.encode('ascii')
+            if not all(p.is_absolute() for p in (self.certificate,self.private_key,self.token_file)):
+                raise ValueError
+        except (ValueError, UnicodeError):raise ValueError('Invalid gateway configuration') from None
+        return self
+
+    def credentials(self) -> tuple[str,str]:
+        try:
+            owned_file(self.certificate, private=False)
+            owned_file(self.private_key); owned_file(self.token_file)
+            token = self.token_file.read_text(encoding='ascii').strip()
+            if not re.fullmatch(r'[A-Za-z0-9_-]{43}', token):raise ValueError
+            fingerprint = hashlib.sha256(json_bytes([self.model_dump(mode='json'),
+                *[hashlib.sha256(p.read_bytes()).hexdigest()
+                  for p in (self.certificate,self.private_key,self.token_file)]])).hexdigest()
+            return token, fingerprint
+        except (OSError, ValueError, AirlockError):
+            raise AirlockError('gateway_preparation_invalid') from None
+
+
+class GatewayClientConfig(BaseModel):
+    model_config = ConfigDict(extra='forbid', frozen=True)
+    endpoint: str
+    token_file: Path
+    trust_file: Path
+
+    @model_validator(mode='after')
+    def validate_connection(self):
+        url = urllib.parse.urlsplit(self.endpoint)
+        if (url.scheme != 'https' or not url.hostname or url.username or url.password
+                or url.path != '/mcp' or url.query or url.fragment
+                or not self.token_file.is_absolute() or not self.trust_file.is_absolute()):
+            raise ValueError('Invalid gateway connection')
+        return self
+
+
 class LocalHTTPBoundary:
     """Bounds inbound HTTP, rejects browser origins/Host rebinding. Auth is FastMCP's."""
-    def __init__(self, app, host: str):
-        self.app, self.host = app, host.encode()
+    def __init__(self, app, host: str, *, tls: bool = False):
+        self.app, self.host, self.tls = app, host.encode(), tls
 
     async def __call__(self, scope, receive, send):
         if scope['type'] != 'http':
             return await self.app(scope, receive, send)
-        headers = dict(scope.get('headers', []))
-        if b'origin' in headers or headers.get(b'host', b'') != self.host:
+        raw = scope.get('headers', [])
+        headers = dict(raw)
+        if (b'origin' in headers or headers.get(b'host', b'') != self.host
+                or any(sum(k == name for k,v in raw) > 1 for name in (b'host',b'authorization',b'content-length'))
+                or (self.tls and scope.get('scheme') != 'https')):
             return await self.reject(send, 403)
         body = bytearray()
         while True:
@@ -5031,7 +5152,8 @@ class WorkspaceRuntime:
                 self.state = 'FAILED'
             raise
 
-    def submit(self, value: AskRequest, native_id: str | None = None) -> Task:
+    def submit(self, value: AskRequest, native_id: str | None = None, *, identity_scope: str | None = None,
+               native_ref: str | None = None) -> Task:
         value = AskRequest.model_validate(value)
         if native_id is not None:
             if not isinstance(native_id, str) or not 0 < len(native_id) <= 256 or not native_id.strip():
@@ -5040,7 +5162,8 @@ class WorkspaceRuntime:
                 native_id.encode('utf-8', errors='strict')
             except UnicodeError:
                 raise AirlockError('task_identity_invalid') from None
-        keys = [(kind, self.store.opaque('task-key-v1:'+kind, identity))
+        keys = [(kind, self.store.opaque('task-key-v1:'+kind,
+                    identity if identity_scope is None else json_bytes([identity_scope,identity]).decode()))
                 for kind, identity in (('request', value.request_id), ('native', native_id)) if identity is not None]
         payload = self.store.payload_ref(value.request, value.disclosure_request)
         existing = set()
@@ -5077,6 +5200,15 @@ class WorkspaceRuntime:
                 for kind, key in keys:
                     self.store.db.execute('INSERT OR IGNORE INTO task_keys VALUES(?,?,?,?,?)',
                                           (self.id, kind, key, payload, task.id))
+                if identity_scope is not None:
+                    row = self.store.db.execute('SELECT identity_ref FROM gateway_tasks WHERE task=?', (task.id,)).fetchone()
+                    if row is not None and row[0] != identity_scope:raise AirlockError('task_identity_conflict')
+                    self.store.db.execute('INSERT OR IGNORE INTO gateway_tasks VALUES(?,?)', (task.id,identity_scope))
+                if native_ref is not None:
+                    row = self.store.db.execute('SELECT identity_ref,task,cancelled FROM gateway_native WHERE native_ref=?', (native_ref,)).fetchone()
+                    if row is None or row[0] != identity_scope or row[2] or row[1] not in (None,task.id):
+                        raise AirlockError('task_identity_conflict')
+                    self.store.db.execute('UPDATE gateway_native SET task=? WHERE native_ref=?', (task.id,native_ref))
         except sqlite3.Error:
             self.state = 'UNAVAILABLE'
             raise AirlockError('storage_unavailable') from None
@@ -5666,23 +5798,194 @@ def build_mcp(runtime: WorkspaceRuntime):
     return mcp
 
 
-async def start_mcp(runtime: WorkspaceRuntime):
+class Gateway:
+    """One authenticated transport; workspace authority stays in the supervisor."""
+
+    def __init__(self, supervisor, config: GatewayConfig):
+        self.supervisor, self.config = supervisor, config
+        self.token, self.fingerprint = config.credentials()
+        self.mcp = self.mcp_server = self.mcp_runner = self.endpoint = None
+        self.native_ready = asyncio.Condition()
+        self.closing = False
+
+    async def close_transport(self):
+        async with self.native_ready:
+            self.closing = True
+            self.native_ready.notify_all()
+        await WorkspaceRuntime.close_transport(self)
+
+    def resolve(self, code: str, expected: dict | None = None):
+        if self.closing:raise AirlockError('workspace_unavailable')
+        binding = self.supervisor.store.code_binding(code)
+        if expected is not None and (binding['epoch'],binding['identity_ref']) != (expected['epoch'],expected['identity_ref']):
+            raise AirlockError('workspace_unavailable')
+        runtime = self.supervisor.locate(str(binding['path']))
+        runtime.revalidate()
+        if runtime.state not in ('READY','ACTIVE') or runtime.closing or runtime.identity != (binding['device'],binding['inode']):
+            raise AirlockError('workspace_unavailable')
+        return runtime,binding
+
+    def native(self, task_id: str, binding: dict | None = None):
+        from fastmcp_tasks.context import get_task_scope
+        value = self.supervisor.store.native_binding(task_id,get_task_scope(),binding)
+        self.resolve(value['code'],value)
+        return value
+
+    def logical(self, code: str, task_id: str):
+        runtime,binding = self.resolve(code)
+        if not isinstance(task_id,str) or not 0 < len(task_id) <= 256:raise AirlockError('task_unavailable')
+        if not re.fullmatch('[0-9a-f]{32}',task_id):
+            native = self.native(task_id)
+            if native['identity_ref'] != binding['identity_ref'] or native['task'] is None:
+                raise AirlockError('task_unavailable')
+            task_id = native['task']
+        row = self.supervisor.store.db.execute('SELECT identity_ref FROM gateway_tasks WHERE task=?',(task_id,)).fetchone()
+        if row is None or row[0] != binding['identity_ref']:raise AirlockError('task_unavailable')
+        return runtime,task_id
+
+    def build_mcp(self):
+        from datetime import timedelta
+        from fastmcp import FastMCP, Context
+        from fastmcp.server.auth import StaticTokenVerifier
+        from fastmcp_tasks import TasksExtension
+        from fastmcp_tasks.models import CreateTaskResult
+        from fastmcp_tasks.context import get_task_scope
+        from fastmcp.exceptions import ToolError
+        from mcp.shared.exceptions import MCPError
+        from fastmcp.utilities.tasks import TaskConfig
+        from fastmcp.dependencies import Progress
+        gateway, store = self, self.supervisor.store
+
+        class ScopedTasks(TasksExtension):
+            async def intercept_tool_call(self, params, context, call_next):
+                try:
+                    original = gateway.resolve((params.arguments or {}).get('workspace_code'))[1] if params.name == 'ask' else None
+                    result = await super().intercept_tool_call(params,context,call_next)
+                    if isinstance(result,CreateTaskResult):
+                        async with gateway.native_ready:
+                            gateway.native(result.task_id,original)
+                            gateway.native_ready.notify_all()
+                    return result
+                except (AirlockError,sqlite3.Error):raise ToolError('Workspace unavailable') from None
+
+            def _check_task_request(self, ctx, task_id):
+                super()._check_task_request(ctx,task_id)
+                try:gateway.native(task_id)
+                except (AirlockError,sqlite3.Error):
+                    raise MCPError(code=-32602,message='Task unavailable') from None
+
+            async def _handle_get(self, ctx, params):
+                result = await super()._handle_get(ctx,params)
+                self._check_task_request(ctx,params.task_id)
+                return result
+
+            async def _handle_update(self, ctx, params):
+                result = await super()._handle_update(ctx,params)
+                self._check_task_request(ctx,params.task_id)
+                return result
+
+            async def _handle_cancel(self, ctx, params):
+                try:
+                    self._check_task_request(ctx,params.task_id)
+                    value = gateway.native(params.task_id)
+                    with store.transaction():
+                        store.db.execute('UPDATE gateway_native SET cancelled=1 WHERE native_ref=?',(value['native_ref'],))
+                    if value['task'] is not None:
+                        runtime,_ = gateway.resolve(value['code'],value)
+                        await runtime.cancel(value['task'])
+                    result = await super()._handle_cancel(ctx,params)
+                    self._check_task_request(ctx,params.task_id)
+                    return result
+                except (AirlockError,sqlite3.Error):
+                    raise MCPError(code=-32602,message='Task unavailable') from None
+
+        auth = StaticTokenVerifier(tokens={self.token:{'client_id':'airlock-gateway','sub':'local-operator','scopes':['airlock']}})
+        mcp = FastMCP('Airlock',auth=auth,instructions=PLUGIN_INSTRUCTIONS+
+            ' Supply the locally assigned workspace_code on every tool call. Codes never grant permissions or start workspaces.')
+        mcp.add_extension(ScopedTasks(url='memory://',name='airlock-gateway',concurrency=Settings().max_tasks))
+
+        async def ask(workspace_code: str, request: str, disclosure_request: str | None = None,
+                      request_id: str | None = None, ctx=None, progress=Progress()) -> dict:
+            """Work only in this locally enabled workspace code under its current rules.
+
+            Keep request/disclosure text complete. request_id retries identical work within
+            this registered directory identity. Unknown/stopped/revoked codes return a fixed
+            unavailable error. Local approval and final privacy checks cannot be overridden.
+            """
+            try:
+                native = ctx.task_id if ctx is not None and ctx.is_background_task else None
+                if native is not None:
+                    ref = store.opaque('gateway-native-v1',json_bytes([get_task_scope(),native]).decode())
+                    async with gateway.native_ready:
+                        await asyncio.wait_for(gateway.native_ready.wait_for(lambda:
+                            gateway.closing or store.db.execute('SELECT 1 FROM gateway_native WHERE native_ref=?',(ref,)).fetchone() is not None),CONTROL_IO_TIMEOUT)
+                    binding = gateway.native(native)
+                    if binding['code'] != workspace_code or binding['cancelled']:raise AirlockError('task_unavailable')
+                    runtime,binding = gateway.resolve(workspace_code,binding)
+                else:
+                    runtime,binding = gateway.resolve(workspace_code)
+                task = runtime.submit(AskRequest(request=request,disclosure_request=disclosure_request,request_id=request_id),
+                    native_id=native,identity_scope=binding['identity_ref'],native_ref=ref if native else None)
+                if native is None:return runtime.status(task.id)
+                while not task.completion.done():
+                    gateway.resolve(workspace_code,binding)
+                    await progress.set_message(f'{task.id}: {SAFE_MESSAGES[task.state]}')
+                    try:await asyncio.wait_for(asyncio.shield(task.completion),1)
+                    except asyncio.TimeoutError:pass
+                gateway.resolve(workspace_code,binding)
+                return task.completion.result()
+            except asyncio.CancelledError:
+                # Only the explicit scoped cancellation handler cancels logical work.
+                raise
+            except Exception:
+                return {'state':'failed','message':'Local request unavailable'}
+
+        async def status(workspace_code: str, task_id: str) -> dict:
+            """Read this registered workspace's task receipt or committed result; never disclose local controls."""
+            try:
+                runtime,tid = gateway.logical(workspace_code,task_id)
+                return runtime.status(tid)
+            except Exception:return {'state':'failed','message':'Task unavailable'}
+
+        async def stop(workspace_code: str, task_id: str) -> dict:
+            """Cancel only this registered workspace's task. Completed writes remain; the workspace keeps running."""
+            try:
+                binding = gateway.resolve(workspace_code)[1]
+                runtime,tid = gateway.logical(workspace_code,task_id)
+                await runtime.cancel(tid)
+                gateway.resolve(workspace_code,binding)
+                return runtime.status(tid)
+            except Exception:return {'state':'failed','message':'Task unavailable'}
+
+        ask.__annotations__['ctx'] = Context;ask.__annotations__['progress'] = Progress
+        mcp.tool(task=TaskConfig(mode='optional',poll_interval=timedelta(seconds=5)))(ask)
+        mcp.tool(annotations={'readOnlyHint':True,'idempotentHint':True})(status)
+        mcp.tool(annotations={'readOnlyHint':False,'idempotentHint':True})(stop)
+        return mcp
+
+
+async def start_mcp(runtime: WorkspaceRuntime | Gateway):
     import uvicorn
     if runtime.mcp_server is not None or runtime.mcp_runner is not None:
         await runtime.close_transport()
-    runtime.mcp = build_mcp(runtime)
+    gateway = isinstance(runtime,Gateway)
+    runtime.mcp = runtime.build_mcp() if gateway else build_mcp(runtime)
     with contextlib.ExitStack() as setup:
         sock = setup.enter_context(socket.socket(socket.AF_INET, socket.SOCK_STREAM))
-        sock.bind(('127.0.0.1', 0)); sock.listen(128); sock.setblocking(False)
+        sock.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
+        host,requested_port = (runtime.config.listen_host,runtime.config.port) if gateway else ('127.0.0.1',0)
+        sock.bind((host,requested_port)); sock.listen(128); sock.setblocking(False)
         port = sock.getsockname()[1]
-        runtime.endpoint = f'http://127.0.0.1:{port}/mcp'
-        app = LocalHTTPBoundary(runtime.mcp.http_app(), f'127.0.0.1:{port}')
+        authority = runtime.config.authority if gateway else f'127.0.0.1:{port}'
+        runtime.endpoint = f'{"https" if gateway else "http"}://{authority}/mcp'
+        app = LocalHTTPBoundary(runtime.mcp.http_app(),authority,tls=gateway)
         class LocalServer(uvicorn.Server):
             @contextlib.contextmanager
             def capture_signals(self):
                 yield  # one supervisor, not each workspace, owns process signals
-        config = uvicorn.Config(app, host='127.0.0.1', port=port, log_config=None,
-                                access_log=False, lifespan='on', timeout_graceful_shutdown=2)
+        tls = {'ssl_certfile':str(runtime.config.certificate),'ssl_keyfile':str(runtime.config.private_key)} if gateway else {}
+        config = uvicorn.Config(app, host=host, port=port, log_config=None,
+                                access_log=False, lifespan='on', timeout_graceful_shutdown=2,proxy_headers=False,**tls)
         server = LocalServer(config)
         server.owned_socket: socket.socket = sock
         server.owned_lifespan: asyncio.Task | None = None
@@ -5691,6 +5994,7 @@ async def start_mcp(runtime: WorkspaceRuntime):
         runtime.mcp_server = server
         setup.pop_all()
     config.load()
+    if gateway:config.ssl.minimum_version = ssl.TLSVersion.TLSv1_2
     class OwnedLifespan(config.lifespan_class):
         async def main(self):
             server.owned_lifespan = asyncio.current_task()
@@ -5716,6 +6020,34 @@ async def bridge(target: str, state: Path):
     transport = StreamableHttpTransport(local['endpoint'], headers={'Authorization': 'Bearer '+local['token']})
     proxy = create_proxy(transport, name='Airlock bridge')
     await proxy.run_async(transport='stdio')
+
+
+async def gateway_client(path: Path):
+    """Attach a verified HTTPS client connection; never create or start a workspace."""
+    from fastmcp.server import create_proxy
+    from fastmcp.client.transports import StreamableHttpTransport
+    import httpx2
+    try:
+        owned_file(path)
+        config = GatewayClientConfig.model_validate_json(path.read_bytes())
+        owned_file(config.token_file);owned_file(config.trust_file,private=False)
+        token = config.token_file.read_text(encoding='ascii').strip()
+        if not re.fullmatch(r'[A-Za-z0-9_-]{43}',token):raise ValueError
+        trust = ssl.create_default_context(cafile=str(config.trust_file))
+    except (OSError,ValueError,AirlockError):
+        raise AirlockError('gateway_connection_invalid') from None
+    def client_factory(**kwargs):
+        return httpx2.AsyncClient(**{**kwargs,'verify':trust,'trust_env':False,'follow_redirects':False})
+    transport = StreamableHttpTransport(config.endpoint,auth=token,httpx_client_factory=client_factory)
+    await create_proxy(transport,name='Airlock gateway').run_async(transport='stdio')
+
+
+def gateway_mcp_config(path: Path) -> dict:
+    """Return a stable local client command independent of any workspace code."""
+    owned_file(path)
+    GatewayClientConfig.model_validate_json(path.read_bytes())
+    return {'mcpServers':{'airlock':{'command':str(Path(sys.executable).absolute()),
+        'args':['-I','-B',str(Path(__file__).resolve()),'_gateway_client',str(path.absolute())]}}}
 
 
 def codex_mcp_config(target: Path) -> dict:
@@ -5766,6 +6098,29 @@ class Supervisor:
         self.socket = self.state/'control.sock'
         self.server = None
         self.scanner_recovery = None
+        self.gateway: Gateway | None = None
+
+    async def start_gateway(self, config: GatewayConfig):
+        if self.shutdown.is_set():raise AirlockError('supervisor_stopping')
+        async with self.registration:
+            token,fingerprint = config.credentials()
+            if self.gateway is not None:
+                if fingerprint != self.gateway.fingerprint:raise AirlockError('gateway_settings_changed')
+                if self.gateway.closing or self.gateway.mcp_runner is None or self.gateway.mcp_runner.done():raise AirlockError('gateway_unavailable')
+            else:
+                self.gateway = Gateway(self,config)
+                try:
+                    await start_mcp(self.gateway)
+                    if config.credentials()[1] != fingerprint:raise AirlockError('gateway_settings_changed')
+                except BaseException:
+                    await self.close_gateway()
+                    raise
+            return {'running':True,'endpoint':self.gateway.endpoint}
+
+    async def close_gateway(self):
+        if self.gateway is not None:
+            await self.gateway.close_transport()
+            self.gateway = None
 
     def locate(self, target: str):
         if target in self.runtimes:
@@ -5896,6 +6251,16 @@ class Supervisor:
             root = canonical_workspace(Path(request['target']))
             running = next((r.snapshot() for r in self.runtimes.values() if r.root == root), None)
             return {'governance':self.store.saved_governance(root), 'running':running}
+        if operation == 'register_code':
+            return self.store.register_code(request['code'],Path(request['target']))
+        if operation == 'revoke_code':
+            return self.store.revoke_code(request['code'])
+        if operation == 'gateway_start':
+            return await self.start_gateway(GatewayConfig.model_validate(request['config']))
+        if operation == 'gateway_stop':
+            async with self.registration:
+                await self.close_gateway()
+            return {'stopped':True}
         if operation == 'start':
             runtime = await self.start_runtime(request['target'], Settings.model_validate(request['settings']))
             return runtime.snapshot()
@@ -5913,6 +6278,10 @@ class Supervisor:
                     await self.cleanup_shared()
                 except Exception:
                     errors.append('shared_cleanup_failed')
+                try:
+                    await self.close_gateway()
+                except Exception:
+                    errors.append('gateway_cleanup_failed')
                 if not errors:
                     self.shutdown.set()
                 return {'stopped':not errors, 'warnings':errors}
@@ -6251,11 +6620,13 @@ def make_tui(state: Path, target: str):
             self.query_one('#settings', TextArea).load_text(json.dumps(self.view.get('governance',{}), indent=2))
             self.set_interval(1, self.action_refresh)
         async def action_refresh(self):
-            if self.busy:
+            if self.busy or not self.is_running:
                 return
             self.busy = True
             try:
                 self.view = await self.request({'op':'status'})
+                if not self.is_running:
+                    return
                 v = self.view
                 self.query_one('#summary',Static).update(f"{v['path']}\n{v['state']} · {v['id']}\n{v['endpoint']}\n"
                     +json.dumps(v['tasks'], ensure_ascii=True))
@@ -6276,6 +6647,8 @@ def make_tui(state: Path, target: str):
                             'financial_source_ambiguous':'Source evidence is ambiguous or other protected information is outside your selection; no sharing was approved.'
                         }.get(outcome,'Selection could not be verified; no sharing was approved. Review the selection or deny it.'))
             except Exception:
+                if not self.is_running:
+                    return
                 self.query_one('#financial_verify',Button).disabled = True
                 self.query_one('#notice',Static).update('Local service unavailable; no approval was submitted.')
             finally:
@@ -6403,6 +6776,19 @@ class CLI(BaseSettings):
 
 def cli_action(args: CLI, cwd: Path):
     tokens = args.args
+    if tokens and tokens[0] == 'register':
+        if len(tokens) != 3 or args.all:raise AirlockError('invalid_command')
+        root = Path(tokens[2]).expanduser()
+        return 'register_code', (tokens[1],str((root if root.is_absolute() else cwd/root).resolve()))
+    if tokens and tokens[0] == 'revoke':
+        if len(tokens) != 2 or args.all:raise AirlockError('invalid_command')
+        return 'revoke_code',tokens[1]
+    if tokens and tokens[0] == 'gateway':
+        if args.all or tokens not in (['gateway'],['gateway','stop']):raise AirlockError('invalid_command')
+        return ('gateway_stop',None) if len(tokens) == 2 else ('gateway_start',None)
+    if tokens and tokens[0] == 'gateway-client':
+        if len(tokens) != 1 or args.all or args.config is None:raise AirlockError('invalid_command')
+        return 'gateway_client',args.config
     if len(tokens) > 2:
         raise AirlockError('invalid_command')
     if tokens and tokens[0] == 'plugin':
@@ -6429,7 +6815,24 @@ def cli_action(args: CLI, cwd: Path):
 async def public_cli(args: CLI):
     state = user_state_path('airlock')
     action, target = cli_action(args, Path.cwd())
-    if action == 'plugin':
+    if action == 'gateway_client':
+        print(json.dumps(gateway_mcp_config(Path(target)),indent=2,ensure_ascii=True))
+    elif action == 'gateway_start':
+        if args.config is None:raise AirlockError('gateway_config_required')
+        try:
+            owned_file(args.config)
+            config = GatewayConfig.model_validate(tomllib.loads(args.config.read_text(encoding='utf-8')))
+            config.credentials()
+        except (OSError,ValueError):raise AirlockError('gateway_preparation_invalid') from None
+        await ensure_supervisor(state)
+        print(json.dumps(await control_request(state,{'op':action,'config':config.model_dump(mode='json')}),ensure_ascii=True))
+    elif action in ('register_code','revoke_code','gateway_stop'):
+        payload = {'op':action}
+        if action == 'register_code':payload.update(code=target[0],target=target[1])
+        elif action == 'revoke_code':payload['code'] = target
+        await ensure_supervisor(state)
+        print(json.dumps(await control_request(state,payload),ensure_ascii=True))
+    elif action == 'plugin':
         print(json.dumps(codex_mcp_config(Path(target)), indent=2, ensure_ascii=True))
     elif action == 'start':
         governance = {key:value for key,value in {'request':args.admission, 'read':args.read, 'write':args.write,
@@ -6483,6 +6886,9 @@ def main() -> int:
                 state = private_directory(user_state_path('airlock'))
                 with FileLock(str(state/'supervisor.lock'), timeout=0):
                     asyncio.run(Supervisor(state, max_bytes).run())
+            elif role == '_gateway_client':
+                if len(sys.argv) != 3:raise AirlockError('internal_command')
+                asyncio.run(gateway_client(Path(sys.argv[2])))
             elif role == '_bridge' and len(sys.argv) == 3:
                 asyncio.run(bridge(sys.argv[2], user_state_path('airlock')))
             else:

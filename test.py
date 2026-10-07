@@ -84,6 +84,454 @@ def extension_spec(directory, *, code=None, **overrides):
                       'required':['context'], 'additionalProperties':False}, **overrides})
 
 
+@pytest.fixture
+def gateway_config(tmp_path):
+    key,cert,token = (tmp_path/name for name in ('gateway.key','gateway.crt','gateway.token'))
+    subprocess.run(['openssl','req','-x509','-newkey','rsa:2048','-nodes','-days','1',
+        '-keyout',str(key),'-out',str(cert),'-subj','/CN=localhost',
+        '-addext','subjectAltName=DNS:localhost,IP:127.0.0.1'],check=True,capture_output=True,timeout=20)
+    key.chmod(0o600);token.write_text(a.secrets.token_urlsafe(32));token.chmod(0o600)
+    with a.socket.socket() as sock:
+        sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
+    return a.GatewayConfig(listen_host='127.0.0.1',port=port,authority=f'127.0.0.1:{port}',
+        certificate=cert,private_key=key,token_file=token)
+
+
+def test_gateway_code_identity_persistence_and_aliases(tmp_path):
+    root=tmp_path/'workspace';root.mkdir();state=tmp_path/'state'
+    store=a.StateStore(state)
+    code='a long exact label '+('x'*300)
+    try:
+        store.register_code(code,root);binding=store.code_binding(code)
+        store.register_code(code,root);assert store.code_binding(code)==binding
+        store.register_code('alias',root)
+        assert store.code_binding('alias')['identity_ref']==binding['identity_ref']
+        for invalid in ('','   ','\ud800',False):
+            with pytest.raises(a.AirlockError):store.register_code(invalid,root)
+        store.close();store=a.StateStore(state);assert store.code_binding(code)==binding
+        store.revoke_code(code)
+        with pytest.raises(a.AirlockError):store.code_binding(code)
+        store.register_code(code,root);assert store.code_binding(code)['epoch']!=binding['epoch']
+        root.rename(tmp_path/'held-workspace');root.mkdir()
+        with pytest.raises(a.AirlockError):store.code_binding(code)
+        store.register_code(code,root)
+        assert store.code_binding(code)['identity_ref']!=binding['identity_ref']
+    finally:store.close()
+
+
+@pytest.mark.asyncio
+async def test_gateway_real_mcp_isolation_retries_and_governance(tmp_path,gateway_config):
+    from fastmcp import Client
+    owner=a.Supervisor(tmp_path/'state')
+    first=Fixture(tmp_path,store=owner.store,name='first')
+    second=Fixture(tmp_path,store=owner.store,name='second')
+    owner.runtimes={first.runtime.id:first.runtime,second.runtime.id:second.runtime}
+    owner.store.register_code('one',first.root);owner.store.register_code('alias',first.root)
+    owner.store.register_code('two',second.root)
+    gateway=a.Gateway(owner,gateway_config)
+    try:
+        async with Client(gateway.build_mcp(),mode='legacy') as client:
+            tools={tool.name:tool for tool in await client.list_tools()}
+            assert set(tools)=={'ask','status','stop'}
+            assert set(tools['ask'].input_schema['properties'])=={'workspace_code','request','disclosure_request','request_id'}
+            assert 'workspace_code' in tools['ask'].input_schema['required']
+            args={'request':'Complete raw synthetic goal','disclosure_request':'Only the public synthetic result','request_id':'same'}
+            one=(await client.call_tool('ask',{'workspace_code':'one',**args})).data
+            two=(await client.call_tool('ask',{'workspace_code':'two',**args})).data
+            alias=(await client.call_tool('ask',{'workspace_code':'alias',**args})).data
+            assert one['task_id']!=two['task_id'] and one['task_id']==alias['task_id']
+            assert first.runtime.queue.qsize()==second.runtime.queue.qsize()==1
+            task=first.runtime.tasks[one['task_id']]
+            assert task.request.request==args['request'] and task.request.disclosure_request==args['disclosure_request']
+            await first.release('public synthetic result',task=task)
+            assert (await client.call_tool('status',{'workspace_code':'alias','task_id':task.id})).data['result']['response']=='public synthetic result'
+            denied=(await client.call_tool('status',{'workspace_code':'two','task_id':task.id})).data
+            assert denied=={'state':'failed','message':'Task unavailable'}
+            assert (await client.call_tool('stop',{'workspace_code':'two','task_id':task.id})).data==denied
+            owner.store.revoke_code('one')
+            with pytest.raises(Exception):await client.call_tool('ask',{'workspace_code':'one',**args})
+            assert first.runtime.queue.qsize()==1
+            owner.store.register_code('one',second.root)
+            assert (await client.call_tool('status',{'workspace_code':'one','task_id':task.id})).data==denied
+            private=(await client.call_tool('ask',{'workspace_code':'two',**args,'request_id':'private'})).data
+            await second.release('PRIVATE-SYNTHETIC',('PRIVATE-SYNTHETIC',),task=second.runtime.tasks[private['task_id']])
+            assert (await client.call_tool('status',{'workspace_code':'two','task_id':private['task_id']})).data['result']['response'] is None
+            second.runtime.state='STOPPED'
+            with pytest.raises(Exception):await client.call_tool('ask',{'workspace_code':'two',**args})
+    finally:owner.store.close()
+
+
+@pytest.mark.asyncio
+async def test_gateway_tls_auth_boundaries_rotation_and_cleanup(tmp_path,gateway_config):
+    from fastmcp import Client
+    from fastmcp.client.transports import StreamableHttpTransport
+    owner=a.Supervisor(tmp_path/'state');endpoint=None
+    try:
+        result=await owner.start_gateway(gateway_config);endpoint=result['endpoint']
+        assert (await owner.start_gateway(gateway_config))==result
+        trust=a.ssl.create_default_context(cafile=str(gateway_config.certificate))
+        transport=StreamableHttpTransport(endpoint,auth=gateway_config.token_file.read_text(),verify=trust)
+        async with Client(transport,mode='legacy',timeout=10) as client:
+            assert {tool.name for tool in await client.list_tools()}=={'ask','status','stop'}
+        body={'jsonrpc':'2.0','id':1,'method':'tools/list','params':{}}
+        auth={'Authorization':'Bearer '+gateway_config.token_file.read_text()}
+        async with a.httpx.AsyncClient(verify=trust,trust_env=False,timeout=5) as client:
+            assert (await client.post(endpoint,json=body)).status_code==401
+            assert (await client.post(endpoint,json=body,headers={'Authorization':'Bearer wrong'})).status_code==401
+            assert (await client.post(endpoint,json=body,headers={**auth,'Origin':'https://wrong.invalid'})).status_code==403
+            assert (await client.post(endpoint,json=body,headers={**auth,'Host':'wrong.invalid'})).status_code==403
+            assert (await client.post(endpoint,json=body,headers=[*auth.items(),*auth.items()])).status_code==403
+            reader,writer=await asyncio.open_connection('127.0.0.1',gateway_config.port,ssl=trust)
+            writer.write(f'POST /mcp HTTP/1.1\r\nHost: {gateway_config.authority}\r\nHost: {gateway_config.authority}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n'.encode())
+            await writer.drain();response=await asyncio.wait_for(reader.read(1024),5)
+            writer.close();await writer.wait_closed()
+            assert response.startswith((b'HTTP/1.1 400',b'HTTP/1.1 403'))
+            assert (await client.post(endpoint,content=b'x'*(a.MAX_FRAME+1),headers=auth)).status_code==413
+            malformed=await client.post(endpoint,content=b'{',headers={**auth,'Accept':'application/json, text/event-stream','Content-Type':'application/json'})
+            assert malformed.status_code>=400 and str(tmp_path) not in malformed.text
+            local=(await client.post(endpoint,json={**body,'method':'settings'},headers={**auth,'Accept':'application/json, text/event-stream'})).text
+            assert 'private_key' not in local and str(tmp_path) not in local
+        with pytest.raises(a.ssl.SSLCertVerificationError):
+            await asyncio.open_connection('127.0.0.1',gateway_config.port,ssl=trust,server_hostname='wrong.invalid')
+        reader,writer=await asyncio.open_connection('127.0.0.1',gateway_config.port,ssl=trust)
+        assert writer.get_extra_info('ssl_object').version() in ('TLSv1.2','TLSv1.3')
+        writer.close();await writer.wait_closed()
+        original_cert=gateway_config.certificate.read_bytes()
+        gateway_config.certificate.write_bytes(original_cert+b'\n')
+        with pytest.raises(a.AirlockError,match='gateway_settings_changed'):await owner.start_gateway(gateway_config)
+        gateway_config.certificate.write_bytes(original_cert)
+        async with a.httpx.AsyncClient(trust_env=False,timeout=5) as client:
+            with pytest.raises(a.httpx.HTTPError):await client.post(endpoint,json=body,headers=auth)
+            with pytest.raises(a.httpx.HTTPError):await client.post(endpoint.replace('https:','http:'),json=body,headers=auth)
+        gateway_config.token_file.write_text(a.secrets.token_urlsafe(32))
+        with pytest.raises(a.AirlockError,match='gateway_settings_changed'):await owner.start_gateway(gateway_config)
+        await owner.close_gateway();assert owner.gateway is None
+        await owner.start_gateway(gateway_config)
+        assert (await owner.dispatch({'op':'stop_all'}))['stopped'] and owner.gateway is None
+    finally:
+        await owner.close_gateway();owner.store.close()
+
+
+@pytest.mark.asyncio
+async def test_gateway_native_cached_result_revocation_and_disconnect(tmp_path,gateway_config):
+    from fastmcp import Client
+    from fastmcp_tasks import call_tool_task
+    owner=a.Supervisor(tmp_path/'state');f=Fixture(tmp_path,store=owner.store)
+    owner.runtimes[f.runtime.id]=f.runtime;owner.store.register_code('one',f.root)
+    gateway=a.Gateway(owner,gateway_config);server=gateway.build_mcp()
+    try:
+        async with Client(server,mode='2026-07-28',timeout=10) as client:
+            args={'workspace_code':'one','request':'Raw native work',
+                  'disclosure_request':'Public synthetic response','request_id':'native-retry'}
+            native=await call_tool_task(client,'ask',args)
+            assert (await native.status()).status in ('working','completed')
+            async with asyncio.timeout(5):
+                while not f.runtime.tasks:await asyncio.sleep(.002)
+            task=next(iter(f.runtime.tasks.values()));assert not task.cancelled
+            await f.release('public synthetic response',task=task)
+            assert (await native.result()).data['response']=='public synthetic response'
+            assert (await native.status()).result is not None
+            replay=await call_tool_task(client,'ask',args)
+            assert (await replay.result()).data['task_id']==task.id
+            row=owner.store.db.execute('SELECT native_ref,code,epoch,task FROM gateway_native').fetchone()
+            assert row[1]=='one' and row[3]==task.id
+            owner.store.revoke_code('one')
+            with pytest.raises(Exception,match='Task unavailable'):await native.status()
+            with pytest.raises(Exception,match='Task unavailable'):await native.cancel()
+            with pytest.raises(a.AirlockError):gateway.logical('one',task.id)
+            assert f.runtime.queue.qsize()==1
+    finally:owner.store.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('change',['revoke','rebind','stop','replacement'])
+async def test_gateway_cached_native_get_rechecks_after_await(tmp_path,gateway_config,monkeypatch,change):
+    from fastmcp import Client
+    from fastmcp_tasks import call_tool_task
+    import fastmcp_tasks.extension as extension
+    owner=a.Supervisor(tmp_path/'state');f=Fixture(tmp_path,store=owner.store)
+    owner.runtimes[f.runtime.id]=f.runtime;owner.store.register_code('one',f.root)
+    gateway=a.Gateway(owner,gateway_config)
+    entered,resume=asyncio.Event(),asyncio.Event();original=extension.tasks_get
+    async def paused(*args):
+        result=await original(*args);entered.set();await resume.wait();return result
+    try:
+        async with Client(gateway.build_mcp(),mode='2026-07-28',timeout=10) as client:
+            native=await call_tool_task(client,'ask',{'workspace_code':'one','request':'Synthetic',
+                'disclosure_request':'Only public synthetic text'})
+            async with asyncio.timeout(5):
+                while not f.runtime.tasks:await asyncio.sleep(.002)
+            await f.release('public synthetic text',task=next(iter(f.runtime.tasks.values())))
+            assert (await native.result()).data['response']=='public synthetic text'
+            monkeypatch.setattr(extension,'tasks_get',paused)
+            pending=asyncio.create_task(native.status());await asyncio.wait_for(entered.wait(),5)
+            if change=='revoke':owner.store.revoke_code('one')
+            elif change=='rebind':
+                other=tmp_path/'other';other.mkdir();owner.store.register_code('one',other)
+            elif change=='stop':f.runtime.state='STOPPED'
+            else:f.root.rename(tmp_path/'held');f.root.mkdir()
+            resume.set()
+            with pytest.raises(Exception,match='Task unavailable'):await pending
+    finally:resume.set();owner.store.close()
+
+
+@pytest.mark.asyncio
+async def test_gateway_stop_rechecks_original_epoch_after_cancel(tmp_path,gateway_config):
+    from fastmcp import Client
+    owner=a.Supervisor(tmp_path/'state');f=Fixture(tmp_path,store=owner.store)
+    owner.runtimes[f.runtime.id]=f.runtime;owner.store.register_code('one',f.root)
+    gateway=a.Gateway(owner,gateway_config);entered,resume=asyncio.Event(),asyncio.Event()
+    original=f.runtime.cancel
+    async def paused(tid):
+        result=await original(tid);entered.set();await resume.wait();return result
+    try:
+        async with Client(gateway.build_mcp(),mode='legacy',timeout=10) as client:
+            task=(await client.call_tool('ask',{'workspace_code':'one','request':'Synthetic'})).data['task_id']
+            f.runtime.cancel=paused
+            pending=asyncio.create_task(client.call_tool('stop',{'workspace_code':'one','task_id':task}))
+            await asyncio.wait_for(entered.wait(),5)
+            owner.store.revoke_code('one');owner.store.register_code('one',f.root)
+            resume.set()
+            assert (await pending).data=={'state':'failed','message':'Task unavailable'}
+            assert f.runtime.tasks[task].cancelled
+    finally:resume.set();owner.store.close()
+
+
+@pytest.mark.asyncio
+async def test_gateway_native_explicit_cancel_and_disconnect(tmp_path,gateway_config):
+    from fastmcp import Client
+    from fastmcp.client.transports import StreamableHttpTransport
+    from fastmcp_tasks import call_tool_task
+    owner=a.Supervisor(tmp_path/'state');f=Fixture(tmp_path,store=owner.store)
+    owner.runtimes[f.runtime.id]=f.runtime;owner.store.register_code('one',f.root)
+    try:
+        endpoint=(await owner.start_gateway(gateway_config))['endpoint']
+        trust=a.ssl.create_default_context(cafile=str(gateway_config.certificate))
+        def transport():return StreamableHttpTransport(endpoint,auth=gateway_config.token_file.read_text(),verify=trust)
+        async with Client(transport(),mode='2026-07-28',timeout=10) as client:
+            native=await call_tool_task(client,'ask',{'workspace_code':'one','request':'Cancel this only'})
+            async with asyncio.timeout(5):
+                while not f.runtime.tasks:await asyncio.sleep(.002)
+            task=next(iter(f.runtime.tasks.values()))
+            await native.cancel();assert task.cancelled and task.state=='cancelled'
+            abandoned=await call_tool_task(client,'ask',{'workspace_code':'one','request':'Keep running','request_id':'disconnect'})
+            async with asyncio.timeout(5):
+                while not any(t.request.request=='Keep running' for t in f.runtime.tasks.values()):await asyncio.sleep(.002)
+            survivor=next(t for t in f.runtime.tasks.values() if t.request.request=='Keep running')
+        assert not survivor.cancelled and not survivor.completion.done()
+        async with Client(transport(),mode='legacy',timeout=10) as client:
+            replay=(await client.call_tool('ask',{'workspace_code':'one','request':'Keep running','request_id':'disconnect'})).data
+            assert replay['task_id']==survivor.id
+        await owner.close_gateway()
+        assert not survivor.cancelled and not survivor.completion.done() and f.runtime.state=='READY'
+    finally:await owner.close_gateway();owner.store.close()
+
+
+@pytest.mark.asyncio
+async def test_gateway_task_association_failure_rolls_back_before_queue(tmp_path):
+    f=Fixture(tmp_path);f.store.register_code('one',f.root)
+    try:
+        binding=f.store.code_binding('one')
+        f.store.db.execute("CREATE TRIGGER deny_gateway BEFORE INSERT ON gateway_tasks BEGIN SELECT RAISE(ABORT,'synthetic'); END")
+        with pytest.raises(a.AirlockError,match='storage_unavailable'):
+            f.runtime.submit(a.AskRequest(request='Raw synthetic goal',request_id='original'),identity_scope=binding['identity_ref'])
+        assert f.runtime.queue.empty() and not f.runtime.tasks
+        assert f.store.db.execute('SELECT count(*) FROM interactions').fetchone()[0]==0
+        assert f.store.db.execute('SELECT count(*) FROM task_keys').fetchone()[0]==0
+    finally:f.store.close()
+
+
+@pytest.mark.asyncio
+async def test_gateway_native_creation_rebind_never_submits(tmp_path,gateway_config,monkeypatch):
+    from fastmcp import Client
+    from fastmcp_tasks import TasksExtension,call_tool_task
+    owner=a.Supervisor(tmp_path/'state');f=Fixture(tmp_path,store=owner.store)
+    owner.runtimes[f.runtime.id]=f.runtime;owner.store.register_code('one',f.root)
+    other=tmp_path/'other';other.mkdir();original=TasksExtension.intercept_tool_call
+    async def rebind(*args,**kwargs):
+        result=await original(*args,**kwargs);owner.store.register_code('one',other);return result
+    monkeypatch.setattr(TasksExtension,'intercept_tool_call',rebind)
+    try:
+        async with Client(a.Gateway(owner,gateway_config).build_mcp(),mode='2026-07-28',timeout=10) as client:
+            with pytest.raises(Exception,match='did not run as a task'):
+                await call_tool_task(client,'ask',{'workspace_code':'one','request':'Original only'})
+            assert not f.runtime.tasks and f.runtime.queue.empty()
+    finally:owner.store.close()
+
+
+def test_gateway_configuration_and_stable_client_contract(tmp_path,gateway_config):
+    connection=tmp_path/'client.json'
+    config=a.GatewayClientConfig(endpoint=f'https://{gateway_config.authority}/mcp',
+        token_file=gateway_config.token_file,trust_file=gateway_config.certificate)
+    connection.write_text(config.model_dump_json());connection.chmod(0o600)
+    command=a.gateway_mcp_config(connection)
+    assert command['mcpServers']['airlock']['args'][-2:]==['_gateway_client',str(connection)]
+    assert gateway_config.token_file.read_text() not in a.json.dumps(command)
+    assert 'workspace_code' not in a.json.dumps(command)
+    assert a.cli_action(a.CLI(args=['register','Exact code','folder']),tmp_path)==('register_code',('Exact code',str(tmp_path/'folder')))
+    assert a.cli_action(a.CLI(args=['gateway','stop']),tmp_path)==('gateway_stop',None)
+    for updates in ({'listen_host':'0.0.0.0'},{'listen_host':'8.8.8.8'}, {'authority':'bad.invalid'},
+                    {'authority':'user:secret@host:'+str(gateway_config.port)}, {'private_key':Path('relative')}):
+        with pytest.raises(ValidationError):a.GatewayConfig.model_validate({**gateway_config.model_dump(),**updates})
+
+
+@pytest.mark.asyncio
+async def test_gateway_actual_stdio_proxy_receipt_retry_cancel_and_disconnect(tmp_path,gateway_config):
+    from fastmcp import Client
+    from fastmcp.client.transports import StdioTransport
+    from fastmcp_tasks import call_tool_task
+    owner=a.Supervisor(tmp_path/'state');f=Fixture(tmp_path,store=owner.store)
+    owner.runtimes[f.runtime.id]=f.runtime;owner.store.register_code('one',f.root)
+    owner.store.register_code('alias',f.root)
+    connection=tmp_path/'client.json'
+    connection.write_text(a.GatewayClientConfig(endpoint=f'https://{gateway_config.authority}/mcp',
+        token_file=gateway_config.token_file,trust_file=gateway_config.certificate).model_dump_json())
+    connection.chmod(0o600);command=a.gateway_mcp_config(connection)['mcpServers']['airlock']
+    def proxy():return StdioTransport(**command,keep_alive=False,log_file=tmp_path/'proxy.log',
+        env={'HTTP_PROXY':'http://127.0.0.1:1','HTTPS_PROXY':'http://127.0.0.1:1','ALL_PROXY':'http://127.0.0.1:1'})
+    args={'workspace_code':'one','request':'Private work without disclosure','request_id':'stdio-original'}
+    try:
+        await owner.start_gateway(gateway_config)
+        async with Client(proxy(),mode='2026-07-28',timeout=15) as client:
+            tools=await client.list_tools();assert {t.name for t in tools}=={'ask','status','stop'}
+            receipt=(await client.call_tool('ask',args)).data;tid=receipt['task_id']
+            with pytest.raises(Exception,match='did not run as a task'):await call_tool_task(client,'ask',args)
+            assert f.runtime.queue.qsize()==1
+            assert (await client.call_tool('ask',{**args,'workspace_code':'alias'})).data['task_id']==tid
+            task=f.runtime.tasks[tid]
+        assert not task.cancelled and not task.completion.done()
+        async with Client(proxy(),mode='legacy',timeout=15) as client:
+            assert (await client.call_tool('ask',args)).data['task_id']==tid
+            await f.release('private candidate never returned',task=task)
+            result=(await client.call_tool('status',{'workspace_code':'one','task_id':tid})).data
+            assert result['result']['response'] is None and 'private candidate' not in a.json.dumps(result)
+            cancelled=(await client.call_tool('ask',{**args,'request_id':'stdio-cancel'})).data['task_id']
+            result=(await client.call_tool('stop',{'workspace_code':'one','task_id':cancelled})).data
+            assert result['state']=='cancelled' and f.runtime.tasks[cancelled].cancelled
+        assert owner.gateway is not None and f.runtime.state=='READY'
+    finally:await owner.close_gateway();owner.store.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('cleanup_failure',[False,True])
+async def test_gateway_owner_socket_and_supervisor_teardown(tmp_path,gateway_config,monkeypatch,cleanup_failure):
+    scratch=tempfile.TemporaryDirectory(dir='/private/tmp' if sys.platform=='darwin' else None)
+    owner=a.Supervisor(Path(scratch.name)/'s');root=tmp_path/'workspace';root.mkdir()
+    async def no_orphans(state):pass
+    monkeypatch.setattr(a,'cleanup_orphan_jobs',no_orphans)
+    monkeypatch.setattr(asyncio.get_running_loop(),'add_signal_handler',lambda *args:None)
+    running=asyncio.create_task(owner.run());gateway=None;original=None
+    try:
+        async with asyncio.timeout(5):
+            while not owner.socket.exists():await asyncio.sleep(.002)
+        assert await a.control_request(owner.state,{'op':'register_code','code':'one','target':str(root)})=={'registered':True}
+        result=await a.control_request(owner.state,{'op':'gateway_start','config':gateway_config.model_dump(mode='json')})
+        assert result['running'];gateway=owner.gateway;original=gateway.close_transport
+        assert await a.control_request(owner.state,{'op':'revoke_code','code':'one'})=={'revoked':True}
+        assert not owner.runtimes and gateway.mcp_server.owned_socket.fileno()>=0
+        if cleanup_failure:
+            async def refuse():
+                gateway.closing=True;raise a.AirlockError('synthetic_cleanup')
+            gateway.close_transport=refuse
+        owner.shutdown.set()
+        if cleanup_failure:
+            with pytest.raises(a.AirlockError,match='process_cleanup_failed'):await running
+            assert owner.gateway is gateway and not owner.server.is_serving()
+            assert (owner.state/'supervisor.json').exists() and owner.store.db.execute('SELECT 1').fetchone()==(1,)
+            gateway.close_transport=original;await owner.close_gateway()
+        else:
+            await running;assert owner.gateway is None and not owner.socket.exists()
+            assert gateway.mcp_server is None and gateway.mcp_runner is None
+    finally:
+        owner.shutdown.set()
+        if not running.done():await running
+        if owner.gateway is not None:
+            gateway.close_transport=original;await owner.close_gateway()
+        if cleanup_failure:owner.store.close()
+        scratch.cleanup()
+
+
+@pytest.mark.asyncio
+async def test_gateway_storage_restart_deleted_history_and_conflict(tmp_path,gateway_config):
+    from fastmcp import Client
+    owner=a.Supervisor(tmp_path/'state');f=Fixture(tmp_path,store=owner.store)
+    owner.runtimes[f.runtime.id]=f.runtime;owner.store.register_code('one',f.root)
+    args={'workspace_code':'one','request':'Unchanged raw intent','request_id':'retry'}
+    try:
+        async with Client(a.Gateway(owner,gateway_config).build_mcp(),mode='legacy') as client:
+            tid=(await client.call_tool('ask',args)).data['task_id']
+            conflict=(await client.call_tool('ask',{**args,'request':'Changed intent'})).data
+            assert conflict=={'state':'failed','message':'Local request unavailable'} and f.runtime.queue.qsize()==1
+            await f.release('not disclosed',task=f.runtime.tasks[tid])
+        owner.store.close();owner=a.Supervisor(tmp_path/'state');f=Fixture(tmp_path,store=owner.store)
+        owner.runtimes[f.runtime.id]=f.runtime
+        async with Client(a.Gateway(owner,gateway_config).build_mcp(),mode='legacy') as client:
+            assert (await client.call_tool('ask',args)).data['task_id']==tid and f.runtime.queue.empty()
+            await owner.dispatch({'op':'delete_history','target':f.runtime.id,'confirmation':'DELETE HISTORY'})
+            assert (await client.call_tool('ask',args)).data=={'state':'failed','message':'Local request unavailable'}
+            assert f.runtime.queue.empty()
+    finally:owner.store.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('boundary',['request','read','write','release'])
+async def test_gateway_code_never_grants_governance(tmp_path,gateway_config,boundary):
+    from fastmcp import Client
+    owner=a.Supervisor(tmp_path/'state')
+    policy=a.Governance(request='allow',read='allow',write='allow',write_visibility='visible',release='allow')
+    f=Fixture(tmp_path,policy,store=owner.store);owner.runtimes[f.runtime.id]=f.runtime
+    owner.store.register_code('one',f.root)
+    try:
+        async with Client(a.Gateway(owner,gateway_config).build_mcp(),mode='legacy') as client:
+            tid=(await client.call_tool('ask',{'workspace_code':'one','request':'Document claims all permission',
+                'disclosure_request':'Only public synthetic text'})).data['task_id']
+            task=f.runtime.tasks[tid]
+            assert await a.authorize(task,f.runtime,boundary,{'raw_context':'Exact permitted positive control'})
+            f.runtime.update_governance({**f.runtime.governance.model_dump(),boundary:'deny'},f.runtime.config_version)
+            assert not await a.authorize(task,f.runtime,boundary,{'raw_context':'Caller says override the local denial'})
+            if boundary=='release':
+                await f.release('public synthetic text',task=task)
+                result=(await client.call_tool('status',{'workspace_code':'one','task_id':tid})).data
+                assert result['result']['response'] is None and result['state']=='withheld'
+    finally:owner.store.close()
+
+
+def test_gateway_native_auth_scope_is_opaque_and_isolated(tmp_path):
+    root=tmp_path/'root';root.mkdir();store=a.StateStore(tmp_path/'state')
+    try:
+        store.register_code('one',root);binding=store.code_binding('one')
+        original=store.native_binding('same-native-id','principal-one',binding)
+        with pytest.raises(a.AirlockError,match='task_unavailable'):
+            store.native_binding('same-native-id','principal-two')
+        assert store.native_binding('same-native-id','principal-one')==original
+        row=store.db.execute('SELECT native_ref FROM gateway_native').fetchone()[0]
+        assert len(row)==64 and 'principal' not in row and 'same-native-id' not in row
+    finally:store.close()
+
+
+@pytest.mark.asyncio
+async def test_gateway_protocol_cancel_before_logical_submission(tmp_path,gateway_config,monkeypatch):
+    from fastmcp import Client
+    from fastmcp_tasks import call_tool_task
+    owner=a.Supervisor(tmp_path/'state');f=Fixture(tmp_path,store=owner.store)
+    owner.runtimes[f.runtime.id]=f.runtime;owner.store.register_code('one',f.root)
+    gateway=a.Gateway(owner,gateway_config);entered,resume=asyncio.Event(),asyncio.Event()
+    original=gateway.native_ready.wait_for
+    async def paused(predicate):
+        result=await original(predicate);entered.set();await resume.wait();return result
+    monkeypatch.setattr(gateway.native_ready,'wait_for',paused)
+    try:
+        async with Client(gateway.build_mcp(),mode='2026-07-28',timeout=10) as client:
+            native=await call_tool_task(client,'ask',{'workspace_code':'one','request':'Never queue cancelled work'})
+            await asyncio.wait_for(entered.wait(),5)
+            await native.cancel()
+            record=owner.store.native_binding(native.task_id,None)
+            assert record['cancelled'] and record['task'] is None
+            assert not f.runtime.tasks and f.runtime.queue.empty()
+            assert (await native.status()).status=='cancelled'
+    finally:resume.set();owner.store.close()
+
+
 @pytest.mark.parametrize('fault', ['duplicate', 'reserved', 'unknown', 'ref', 'dynamic_ref', 'recursive_ref', 'open_schema', 'regex', 'branch', 'enum'])
 def test_extension_registration_rejects_invalid_contract(tmp_path, fault):
     extension = extension_spec(tmp_path)
@@ -2848,7 +3296,7 @@ async def test_schema_two_migrates_native_identity_and_ledger(tmp_path):
     store.close()
     f = Fixture(tmp_path)
     try:
-        assert f.store.db.execute('PRAGMA user_version').fetchone()[0] == 3
+        assert f.store.db.execute('PRAGMA user_version').fetchone()[0] == 4
         retried = f.runtime.submit(a.AskRequest(request='Synthetic work'), native_id='native-old')
         assert retried.id == tid and retried.completion.result()['state'] == 'completed'
         assert f.runtime.queue.empty()
@@ -4235,6 +4683,34 @@ async def test_selected_outcome_survives_control_timeout(expense):
                 if pending is not None:pending.cancel();await asyncio.gather(pending,return_exceptions=True)
             if server is not None:server.close();await server.wait_closed()
             f.store.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('outcome',['success','failure'])
+async def test_tui_delayed_refresh_after_detach_preserves_work(tmp_path,outcome):
+    f=Fixture(tmp_path);task=f.task();app=a.make_tui(tmp_path/'state',f.runtime.id)
+    entered,resume=asyncio.Event(),asyncio.Event();gated=False
+    async def request(payload):
+        assert payload=={'op':'status'}
+        if gated:
+            entered.set();await resume.wait()
+            if outcome=='failure':raise a.AirlockError('synthetic_private_error')
+        return f.runtime.snapshot()
+    app.request=request;refresh=None
+    try:
+        async with app.run_test(size=(140,60)) as pilot:
+            assert app.view['id']==f.runtime.id
+            gated=True;refresh=asyncio.create_task(app.action_refresh())
+            await asyncio.wait_for(entered.wait(),5)
+            app.exit()
+        resume.set();await asyncio.wait_for(refresh,5)
+        assert not app.is_running and not app.busy
+        assert f.runtime.state=='READY' and not task.cancelled and not task.completion.done()
+        assert f.runtime.queue.qsize()==1 and not f.runtime.approvals.pending
+    finally:
+        resume.set()
+        if refresh is not None:await asyncio.gather(refresh,return_exceptions=True)
+        f.store.close()
 
 
 @pytest.mark.asyncio
@@ -5874,6 +6350,8 @@ async def test_branch_interim_pre_server_setup_closes_exact_socket_on_error(tmp_
         closed = False
         def __enter__(self): return self
         def __exit__(self, *args): self.close()
+        def setsockopt(self, level, option, value):
+            assert (level,option,value)==(a.socket.SOL_SOCKET,a.socket.SO_REUSEADDR,1)
         def bind(self, address): assert address == ('127.0.0.1',0)
         def listen(self, backlog): pass
         def setblocking(self, blocking): pass

@@ -5133,3 +5133,174 @@ no expensive scanner/model/full integration rerun. If current prepared files all
 render the actual startup screen using its settings and synthetic workspace, then
 Cancel without acceptance/start/task. This verifies rendering only, not a fix for
 the remaining selected-release or optional Docling gaps.
+
+## Stable workspace-code gateway and private network connections
+
+Direct human approval in Airlock Project Status: "proceed with the changes" and
+"Yes, include Wi-Fi devices". The implementation owner read both original replies.
+This authorizes implementation/preparation, not external publication, new accounts,
+global certificate trust, unapproved installs, or replacing the user's running source.
+
+### 1. Data model
+
+Keep existing Settings/Governance/AskRequest/raw request/disclosure_request,
+WorkspaceRuntime, queues, approvals and global ledger unchanged. Add owner-only
+SQLite workspace_codes(code TEXT PRIMARY KEY, path TEXT, device INTEGER, inode
+INTEGER, epoch TEXT, enabled INTEGER CHECK0/1). A code is a nonblank exact UTF8
+label bounded only by existing frame/storage limits; it is not a secret or a
+path. Registration saves canonical root and exact identity independently of
+StateStore.workspace's historical path-ID reuse. Re-registration changes epoch
+only on explicit identity/rebinding/reactivation; same enabled identity is a no-op.
+Revocation retains the binding but disables it. No remote enumeration of codes.
+
+Gateway task records retain opaque registered-identity references per logical task
+and immutable native-task -> code/epoch/identity/logical-task associations, using
+the same owner SQLite storage cap. Raw task request fields remain in the existing
+interaction contract only. Per-workspace request/native keys use that exact
+registered identity as an internal namespace; aliases for the same identity share
+retry scope, a replaced directory cannot retrieve its predecessor's result.
+No change to legacy fixed-folder retry semantics or global reassembly scope.
+Logical status/retry visibility is shared by aliases of the same registered
+physical identity; distinct identities cannot retrieve/cancel each other's tasks.
+Native protocol access remains bound to its original exact code/epoch/auth scope.
+Task association is written in the existing submission transaction before queueing;
+persistence failure cannot schedule untracked work. Native records allow a pending
+logical ID and a cancelled flag during framework task creation. Before returning
+CreateTaskResult, persist the original intercepted registration/auth binding. A
+background worker waits for that immutable binding within CONTROL_IO_TIMEOUT;
+it never resolves a potentially rebound code as a fresh request. Immediate polls
+can safely see pending protocol state; missing binding/failure refuses execution.
+
+GatewayConfig is strict owner configuration: literal IPv4 listen_host (loopback or
+private LAN only), required TCP port1..65535, exact permitted HTTPS authority,
+absolute certificate/private-key/token-file paths. The key and bearer file are
+owner-only regular files; certificate is owner-controlled, not writable by others.
+One generated high-entropy bearer credential authorizes calls against explicitly
+enabled codes; it does not authorize an operation beyond workspace governance.
+This retains existing auth-holder visibility of a workspace's tasks. No new
+multi-user ACL policy or cloud-managed approval authority is introduced.
+Client configuration contains HTTPS endpoint, private bearer-file path and a
+certificate trust-file path; secrets are never in argv, displayed metadata or Git.
+Trust is per client, never installed into global OS trust. No TLS verify=False.
+
+### 2. API contract
+
+Owner Unix-control operations register_code(code,target), revoke_code(code), and
+gateway_start(config) are local only. CLI: airlock register CODE PATH,
+airlock revoke CODE, airlock gateway --config PATH, plus owner-only stable client
+connection generation. Registration/revocation never starts/stops a runtime or
+changes its policy. A changed root refuses until explicit local registration.
+Gateway startup is idempotent for identical config; changed config refuses while
+running, including changed certificate/key/token bytes at unchanged paths. Local
+airlock gateway stop closes and verifies the exact owned MCP listener/lifespan/
+runner; it leaves workspaces and logical tasks running. Explicit local stop then
+start permits credential/certificate rotation. The stable gateway deliberately
+remains available with no runtimes and returns unavailable; owner stop --all and
+supervisor teardown must close it, and cleanup uncertainty retains owned state.
+No remote operation can stop/restart the gateway. Missing preparation/config/
+credentials/certificate errors are fixed local
+errors and do not trigger downloads, fallback HTTP or lifecycle retries.
+
+Gateway.build_mcp() exposes exactly ask(workspace_code, request,
+disclosure_request=None, request_id=None), status(workspace_code,task_id), and
+stop(workspace_code,task_id). Every call resolves the enabled exact code and
+current canonical path/device/inode to a READY/ACTIVE runtime, then uses the
+existing submit/status/cancel methods and unchanged final Egress commit. No remote
+path/config/model/review/decide/history/registration/lifecycle controls. Unknown,
+revoked, changed identity, unavailable runtime and cross-workspace task references
+return fixed content-free unavailable errors. Code selection grants no read or
+release permission. Auth holders cannot use codes to grant themselves settings.
+
+Keep installed FastMCP Tasks support. Bind native task IDs to the immutable local
+registration and logical task before waiting; validate native protocol get/result/
+update/cancel access, including cached completed results, against that binding.
+Rebinding/revocation cannot expose old native results or cancel another runtime.
+Disconnect or gateway shutdown does not resubmit/cancel durable logical work;
+the explicit scoped native cancellation handler records cancellation before
+awaiting backend cancellation and cancels only its original logical task. Explicit
+protocol/tool cancellation targets only its original scoped task. Native replay
+cannot switch codes. Recheck binding before returning final results. Keep raw
+payload fingerprints, one-use approval and global release locking intact.
+
+Use installed FastMCP authentication/Tasks and uvicorn TLS, with stdlib SSL TLS1.2+
+minimum. Preserve MAX_FRAME HTTP body bounds, reject browser Origin and duplicate
+security headers, accept only configured exact Host, ignore forwarded Host/proto,
+and require bearer authentication before MCP methods. Owner control remains on
+its existing private Unix socket and is never mounted on this app. Fixed-folder
+MCP/bridge remains compatible; stable stdio client proxy attaches to the gateway
+without starting it and supplies verified TLS plus bearer locally. Stable client
+config contains no code or workspace path and survives selecting another code.
+Installed FastMCP4.0.10 explicitly forbids native Tasks through create_proxy.
+Test that ceiling with the actual stdio subprocess: foreground receipts and
+logical status/stop, identical retries and disconnect preservation remain usable.
+Direct HTTPS tests native Tasks separately. Do not invent native forwarding;
+the user's optional interface preference is pending. Disable environment proxies
+and redirects in the verified HTTPS client. Closing the gateway wakes pending
+binding waiters and ends native response waiters without cancelling logical work.
+
+Prepare OpenAI Secure MCP Tunnel's documented stdio binding to that stable client
+proxy, using external environment/file credential references. No homegrown relay
+or OAuth. Exact private config/connection artifacts and a short start command are
+reviewable before any external activation. A missing tunnel-client, tunnel ID,
+runtime key, client trust/acceptance or provider entitlement remains explicit.
+Cloud Claude cannot directly reach a LAN address; desktop/local clients can use
+the verified LAN transport/proxy. No unsupported cloud compatibility claim.
+
+### 3. Location
+
+Production and CLI remain airlock.py; no tools-module change unless genuinely
+needed. Tests stay test.py. Update root ARCHITECTURE.md, README.md, VALIDATION.md
+and plugin skill instructions for workspace_code while preserving fixed-folder
+compatibility. Private preparation/client/TLS/tunnel artifacts live in approved
+.airlock-local or /private/tmp directories; no real documents. Keep two-module
+package scope, inline/locked dependencies and source/calibration binding. Do not
+touch old prepared modules or the user's READY runtime/settings, shared model or
+unrelated supervisors. A new source requires separately bound preparation and
+local review; no silent old-profile acceptance or runtime replacement.
+
+### 4. Tests and review
+
+Use synthetic directories, real SQLite, actual owner control/MCP/HTTP boundaries,
+scripted model/scanner fixtures and no extra resident-model runs. Assert two-code
+isolation, independently scoped same request IDs, identical retries/conflicts,
+native task replay/result/cancel/disconnect, alias identity, revocation/rebinding,
+replacement/removal, stopped runtime, restart persistence and failure rollback.
+Real request/read/write/privacy/final-release denial and successful exact release
+controls must establish that routing adds no authority. Reject native/cached or
+logical task access from another code/identity and guard cancelled/late proposals.
+Aliases of the same identity remain positive controls. Verify immediate task polls,
+rebind during native creation, cancelled-before-submit, task-association commit
+failure, unchanged-path credential/cert rotation rejection, exact transport cleanup,
+last-runtime stop with intentionally available gateway, and owner stop-all teardown.
+
+Actual loopback TLS server and verified clients: auth absent/wrong, TLS trust or
+hostname mismatch, plaintext refusal, wrong/duplicate Host, any Origin, oversized
+and malformed body, forbidden local methods, no credential/path/model/approval
+leaks. Stable schema/config never embeds a workspace/code; fixed bridge tests
+remain. Focused checks then finalized full locked suite, build/exact archive and
+isolated installed import/help, fresh root/read-only design review. Record each
+executed boundary separately: loopback TLS tests are not real Wi-Fi acceptance;
+prepared tunnel files are not cloud proof. No deployment/activation claim without
+actual credentials, external approval and successful compatible-client acceptance.
+
+## Full-suite detach regression discovered during gateway validation
+
+Data: retain existing Textual AirlockApp running/busy state and local runtime/task
+state; add no saved fields. API: action_refresh discards a delayed status response
+or failure after the app stops running, before querying removed widgets; finally
+clears busy. Detaching never cancels work or submits an approval. Location:
+airlock.py existing make_tui and test.py. Tests: actual Textual run_test, gated
+status success/failure across exit, mounted positive status display, no late DOM
+exception, unchanged queued task/runtime/approval authority. Existing timeout/
+selection tests retain their assertions. The socket setup fake must assert the
+new exact SO_REUSEADDR option while preserving exact closure and primary-error
+assertions; no startup failure is swallowed or skipped.
+
+Private launcher data: exact prepared Python/source/config/XDG paths, no secrets
+or workspace defaults. API: owner executable `start` starts only the configured
+gateway; optional --help shows CLI help without activation, all other arguments
+refuse. No install, model/workspace startup, auto-accept or fallback. Location:
+existing .airlock-local/gateway-0584bc90620b/start and its private README. Tests:
+fake executable records exact argv/XDG/inherited stdin, rejects extra arguments;
+real --help succeeds and creates no supervisor metadata/listener. Keep it outside
+Git and preserve the user-owned runtime/prepared source.

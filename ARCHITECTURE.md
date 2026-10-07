@@ -99,6 +99,11 @@ airlock status [PATH|ID]
 airlock stop [PATH|ID]
 airlock stop --all
 airlock plugin [PATH]
+airlock register CODE PATH
+airlock revoke CODE
+airlock gateway --config PATH
+airlock gateway stop
+airlock gateway-client --config PATH
 ```
 
 An omitted target means the current directory. The developer workflow is `uv run airlock` from a prepared local repository. Closing a TUI does not stop its runtime. A cloud bridge never silently creates a runtime.
@@ -130,6 +135,54 @@ It never returns raw model reasoning, private tool output, filenames, raw detect
 Cancels the task and terminates its tracked processes. It does not stop unrelated tasks or erase history. Completed filesystem changes are not undone. A response already committed for release cannot be retracted by a later cancellation.
 
 All three tools are scoped to a locally selected runtime. Cloud arguments cannot select a filesystem root, model endpoint, privacy mode, release mode, or permission policy.
+
+### Stable workspace-code gateway
+
+The fixed-folder bridge remains available. An explicitly prepared gateway provides
+one stable authenticated HTTPS endpoint for locally registered workspace codes.
+Its tools are `ask(workspace_code, request, disclosure_request=None, request_id=None)`,
+`status(workspace_code, task_id)` and `stop(workspace_code, task_id)`. Codes are
+exact nonblank UTF8 labels, bounded by the existing frame/storage limits; they
+are neither secrets nor filesystem paths. The local operator registers/revokes
+them. Remote callers cannot enumerate codes or change configuration, approve
+proposals, start a runtime, or control the gateway.
+
+Each code binds its canonical root, device/inode and registration epoch in
+owner SQLite. Every call rechecks that identity against a READY/ACTIVE runtime.
+Aliases for the same physical identity share logical task/retry visibility;
+distinct or replaced identities do not. Task association and idempotency are
+committed before queueing. Opaque associations survive explicit history deletion;
+old deleted/interrupted tasks cannot be rerun by retry. Existing global disclosure
+tracking, workspace governance and final durable release remain authoritative.
+
+Direct HTTPS retains native MCP Tasks, bound to the original code/epoch and
+authentication scope. Get/update/cancel and cached results recheck authority after
+awaits. Explicit cancellation targets the original logical task; disconnection or
+gateway shutdown preserves logical work. Native protocol caches are transient;
+after gateway restart use the retained logical task ID or identical request_id.
+The installed FastMCP stdio proxy supports foreground receipts/status/stop and
+does not advertise or forward native Tasks. No custom task forwarding is added.
+
+The owner explicitly configures a literal loopback or RFC1918 IPv4 bind, fixed
+port, exact HTTPS authority and local certificate/key/bearer files. TLS1.2+,
+verified client trust, authentication, strict Host/no-Origin/duplicate-header
+checks and existing body bounds apply. Client trust is private to that connection;
+environment proxies and redirects are disabled. One bearer authorizes access to
+all locally enabled codes, under their rules; this is a single-operator boundary,
+not multi-user access control. LAN activation is an explicit local choice.
+
+Registration does not start a workspace. Gateway stop closes its owned transport
+while workspaces keep running; it deliberately remains available after the last
+workspace stops. Stop-all/supervisor teardown closes it. Config or credential-byte
+changes refuse while running; explicit stop/start allows rotation. Cleanup failure
+retains ownership and refuses fresh calls. Old prepared source/calibration cannot
+silently carry forward to this source change.
+
+OpenAI Secure MCP Tunnel may bind the stable stdio proxy using its supported
+command configuration and external runtime credentials. Preparation is not cloud
+acceptance. Required binary, tunnel ID/key, provider access and compatible-client
+testing are separate. Desktop/local clients can use verified LAN TLS; cloud Claude
+compatibility is not established by this integration.
 
 ## 7. Local agent
 
@@ -423,4 +476,4 @@ Unit, property-style, adversarial, subprocess, and integration tests cover disti
 
 ## 16. Non-goals
 
-Airlock does not provide remote or multi-user hosting, autonomous installation, hosted telemetry, persistent model conversations, automatic task replay, write rollback, general-purpose workflow orchestration, model/KV-cache scheduling, or a custom filesystem/tool framework. It does not claim perfect detection of private information or arbitrary covert disclosure.
+Airlock does not provide public or multi-user hosting, autonomous installation, hosted telemetry, persistent model conversations, automatic task replay, write rollback, general-purpose workflow orchestration, model/KV-cache scheduling, or a custom filesystem/tool framework. It does not claim perfect detection of private information or arbitrary covert disclosure.

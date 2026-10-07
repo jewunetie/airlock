@@ -27,6 +27,81 @@ A supervisor restart marks unfinished work interrupted and preserves completed r
 
 After explicit history deletion, opaque ID/payload fingerprints remain. Replaying that ID returns `task_history_deleted`. For example, deleting an old append task's history must not let a delayed retry append the same entry again. Those records contain no raw request or answer.
 
+## Stable connection and workspace codes
+
+The original plugin binds one chosen folder. You can instead prepare one stable
+gateway connection, then select an already running workspace by a local code on
+each call. Registration and the connection never start workspaces or approve work.
+Use the same local state/environment for the gateway and its workspace runtimes.
+
+```sh
+uv run --locked airlock register accounts "/absolute/chosen folder"
+uv run --locked airlock gateway --config "/absolute/private/gateway.toml"
+uv run --locked airlock gateway-client --config "/absolute/private/client.json"
+uv run --locked airlock revoke accounts
+uv run --locked airlock gateway stop
+```
+
+The gateway tools require `workspace_code` alongside the existing arguments, for
+example `ask(workspace_code="accounts", request="Reconcile the local CSV",
+request_id="reconcile-1")`. Without a disclosure request, only a receipt returns.
+The bearer grants connection access to enabled codes; workspace approval/privacy
+rules still decide each operation and disclosure. Codes cannot grant permission.
+Aliases for the same folder identity share logical task/retry visibility. A
+different, revoked, replaced or stopped workspace refuses access. Retrying changed
+text or deleted history refuses without queueing new work.
+
+Prepare trusted configuration outside the workspace, with absolute file paths:
+
+```toml
+listen_host = "127.0.0.1"
+port = 8443
+authority = "127.0.0.1:8443"
+certificate = "/absolute/private/gateway.crt"
+private_key = "/absolute/private/gateway.key"
+token_file = "/absolute/private/gateway.token"
+```
+
+Use an owner-only key/token file and a 32-byte random URL-safe bearer token. The
+client JSON contains `endpoint` (`https://127.0.0.1:8443/mcp`), `token_file` and
+`trust_file` (the trusted certificate/CA path); keep that file owner-only too.
+Generated MCP settings contain paths to this client configuration, never its
+token or a chosen workspace. Client TLS verification remains enabled; redirects
+and environment proxies are disabled. No global certificate trust is needed.
+For the Codex plugin, use the generated gateway connection as its local `.mcp.json`
+instead of the fixed-folder `plugin PATH` output, then reload the plugin. This is
+an explicit connection change; creating a draft does not replace an installed
+dummy-folder binding. Supply the locally assigned code when using that connection.
+
+For Wi-Fi devices, explicitly choose your private IPv4 address instead of
+loopback, an exact matching authority, and a certificate with that address or
+hostname in its subject alternative names. Transfer the certificate and bearer
+securely to the chosen client's private configuration. Never bind all interfaces
+or expose this single-operator service publicly. Remote configuration/startup
+and approval endpoints are absent. An address change needs explicit local config
+and matching TLS preparation. Actual device/client acceptance must be tested.
+
+Direct HTTPS supports native background Tasks. The installed stdio proxy supports
+ordinary `ask` receipts and logical `status`/`stop`; it does not advertise or forward
+native Tasks. Keep the returned logical task ID or exact request_id for reconnects.
+Disconnecting or stopping the gateway preserves logical work; native protocol
+caches do not survive gateway restart. Explicit task cancellation still cancels
+only the selected task. Gateway stop leaves workspaces running, last-workspace
+stop leaves the gateway available, and `stop --all` closes both. Changed config,
+key, certificate or token bytes refuse while running; use explicit stop/start to
+rotate. Cleanup uncertainty retains ownership for local reconciliation.
+
+For OpenAI cloud use, the supported
+[Secure MCP Tunnel client](https://github.com/openai/tunnel-client/blob/master/docs/configuration.md)
+can launch this stable stdio command through `--mcp.command`. It needs its own
+runtime API key, tunnel ID, installed binary and provider permissions. Keep the
+key in an external environment/file reference, run one stdio instance per tunnel
+ID, and verify a compatible client before claiming cloud readiness. No custom
+relay or OAuth server is included. Cloud Claude support remains unverified.
+
+This source change requires freshly bound workspace preparation/calibration and
+local settings review. It does not replace an already running prepared version.
+
 ## Local controls
 
 The worker uses the native Coder tools `read_file`, `write_file`, `edit_file`, `list_files`, `grep`, and `shell`, inside the Sandbox Runtime. OS capabilities and local governance control access; a caller's request cannot grant permissions. Privacy scanning runs on candidate disclosures, with enforce, warn, and off modes. In enforce mode, scanner failure or an ordinary privacy finding withholds the answer. Exact selected financial fields have the additional local verification flow below.

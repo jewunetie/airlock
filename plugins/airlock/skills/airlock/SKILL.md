@@ -6,6 +6,14 @@ description: Use Airlock when the user asks to work in their selected private lo
 Use the plugin's Airlock MCP tools for private work. The local operator chooses
 the folder and starts its prepared runtime; this plugin only attaches to it.
 
+If this connection's tool schema includes `workspace_code`, it uses the stable
+gateway. Supply the exact code the local operator assigned on every ask/status/stop
+call. Do not invent codes, treat them as paths, enumerate folders, or start a
+workspace. Codes choose an existing runtime and never grant permission. The
+fixed-folder connection has no code argument; follow its actual tool schema.
+The installed stdio proxy uses ordinary task receipts/status/stop and does not
+forward native MCP Tasks. Preserve the logical task ID and exact retry identity.
+
 - Call `ask` with the work to perform. Include `disclosure_request` only when
   the user wants information returned, stating exactly what and why. Without
   it, local work returns a fixed receipt.

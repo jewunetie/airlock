@@ -7,9 +7,80 @@ The user explicitly does not want to provide tax information; a real-folder path
 is not required. Earlier entries listing that path as pending are superseded.
 The user chooses a private workspace locally at use time. The combined synthetic
 selected-release acceptance gap and existing numeric-overlap privacy rule remain
-unresolved; no policy, source, settings or test outcome changes in this correction.
+unresolved. The earlier scope correction changed no privacy rule or test outcome;
+the gateway feature and separate detach correction are recorded below.
 
 ## Executed checks
+
+### Stable workspace-code gateway, 2026-10-07
+
+Focused locked offline gateway plus legacy migration checks pass **24 tests**,
+650 deselected: `/private/tmp/airlock-gateway-review-final-20261007.log`.
+These use synthetic folders, actual SQLite, native FastMCP Tasks, a real owner
+Unix socket/supervisor teardown, loopback TLS and the actual `_gateway_client`
+stdio subprocess. They do not start resident models/scanners, inspect real
+documents or activate a Wi-Fi/cloud connection.
+
+Positive and negative controls cover two-code/alias retry and task isolation,
+conflicting text/deleted history/restart, association rollback before queueing,
+request/read/write/release rules, successful exact synthetic release and withheld
+private/no-disclosure output. Native immediate polls/replay/cancel/disconnect,
+cancel-before-submit and creation rebinding are exercised. A cached completed
+native get paused across revoke/rebind/runtime stop/folder replacement refuses
+the result after its await; stop also rechecks its original epoch after cancellation.
+Opaque auth-scope separation is checked in SQLite. Actual TLS clients test absent/
+wrong/duplicate auth, Host/Origin, malformed/oversized body, trust/hostname mismatch,
+plaintext refusal, TLS1.2+, credential/certificate-byte rotation and exact cleanup.
+The gateway remains available without workspaces, stops with supervisor teardown,
+and retains metadata/ownership after a synthetic cleanup failure.
+
+Actual stdio connection verifies schema, logical receipt/status/cancel, alias retry,
+disconnect preservation, no-disclosure withholding and ignored ambient proxy URLs.
+Installed FastMCP4.0.10 does not support native Tasks through `create_proxy`;
+native opt-in cannot return a native handle there. Direct HTTPS native Tasks are
+tested separately. No custom forwarding or unsupported compatibility is claimed.
+
+Original failed focused logs remain: socket sandbox restriction; HTTPX refusing
+duplicate Host before sending; relative CLI path; fixed-port restart; SDK response
+waiter delaying shutdown; missing async fixture; framework native error shape;
+macOS Unix path length and actual server unlink behavior; explicit positive write
+visibility. Corrections retain all denial/security assertions. Import and
+`git diff --check` pass. The first full run retained **672 passes / two failures**:
+the older socket fake omitted the new exact socket-option assertion, and a real
+Textual status refresh resumed after detach and queried removed widgets. The
+narrow reviewed correction checks native app running state before rendering late
+success/failure. Actual gated screen exit controls preserve queued work/approval
+authority; the old selection-timeout and socket primary-error/closure assertions
+remain. Final narrow checks pass **five tests**,671 deselected:
+`/private/tmp/airlock-gateway-detach-final-focused-20261007.log`.
+
+The final locked offline suite passes **676 tests, zero failures/skips**, with eight
+existing PydanticAI HTTPX deprecation warnings:
+`/private/tmp/airlock-gateway-final-full-20261007.log`. Locked sync changes no
+dependencies. Offline build passes; wheel and sdist contain exactly the two root
+Python modules with byte equality, declared docs/metadata and Hatch's default
+sdist `.gitignore`. Isolated no-deps wheel installation resolves locked project
+dependencies and imports/shows CLI help from the installed source:
+`/private/tmp/airlock-gateway-final-packaging-20261007.json`.
+Combined final source is
+`7469028399d236cf3d14db264fa37f8863a8a85f9eb606355df9998fb51337a9`.
+Fresh root and independent final feature/detach reviews find no remaining scoped
+issue. This evidence does not resolve the prior live financial-workflow blockers.
+
+Owner-private loopback TLS/client/tunnel draft preparation is under
+`.airlock-local/gateway-0584bc90620b`, with a separate exact source snapshot and
+short explicit XDG state. Configuration, private permissions, source equality,
+credential-free connection, environment-referenced tunnel key and isolated help
+are verified. From that prepared folder, `./start` launches only this configured
+transport. Exact fake argv/XDG/inherited stdin, extra-argument refusal and actual
+`./start --help` without supervisor metadata are verified. The refreshed private
+source snapshot matches the final source; the existing installed dummy-plugin
+binding is unchanged. The one-day certificate is for synthetic review only. No listener
+or tunnel is started by preparation; `tunnel-client` is absent, doctor/provider
+credentials/compatible cloud client are untested. Wi-Fi bind/certificate/client
+choice and actual device acceptance remain separate. Cloud Claude compatibility
+is unknown. Existing prepared source/profile and user-started runtime are not
+modified; prior source-bound calibration does not authorize this changed source.
 
 ### Prepared example launcher, 2026-10-07
 

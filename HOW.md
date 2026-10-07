@@ -4772,3 +4772,104 @@ original outcome forwarding; root full read and fresh review before one executio
 Outer parent waits the owned diagnostic and independently audits preservation.
 This replaces no case in the original failed suite and cannot establish that
 observer failure caused the original native failure or complete R8 readiness.
+
+## Approved continuous dummy-workspace acceptance, 2026-10-06
+
+Data: current combined source/module/test hashes, existing pinned Gemma and
+LiteParse assets, unchanged first-64 synthetic calibration/regression corpus,
+32 measured cases per split, raw findings/errors and an unreviewed source-bound
+CalibrationProfile. A fresh private workspace contains the frozen ruled PNG/PDF;
+the model creates CSV/provenance locally before any selected publication. Record
+exact decimal values, occurrence proofs, task IDs, votes, final receipts, owned
+jobs and service/configuration snapshots. Previously observed cases remain
+regressions, not new held-out evidence.
+
+API: use actual ScannerService measurement, Textual startup Cancel/Accept,
+Supervisor.run/control start, and the plugin's project-Python stdio bridge form
+bound to this chosen synthetic folder with isolated XDG_STATE_HOME. Use natural
+extraction requests without expected amounts; compare all cells/provenance to the
+independent oracle afterward. In the same runtime, request only wages/net_total
+from that new artifact, locally select/verify exact source-relative occurrences
+through existing owner control, approve one publication and deny another. Keep
+enforce/manual rules, current thresholds and finite existing budgets; test local-
+only receipts and same-ID replay without new work. Scanner failures/misses/errors
+remain recorded; no tuning, fake scanner, privacy bypass or global activation.
+
+Location: one reviewed /private/tmp Python harness, private workspace/state,
+measured profile/settings/plugin connection and retained evidence. HOW/VALIDATION
+and precise README evidence only in the repo. Project .venv or isolated private
+environments exclusively; no global installs/config/model-service changes.
+
+Tests: refuse unaccepted/mismatched profiles, verify startup display and actual
+accepted digest with reviewed=false unchanged, native READY and three bridge
+tools, exact PNG/PDF cells/signs/leading zeros/provenance, correct local-only null
+response, exact selected JSON on approval and no content on denial, no repeated
+execution for same request_id, input/global/source preservation, exact owned
+runtime/scanner/parser/model/server/store/bridge cleanup and no remaining jobs.
+Fresh review precedes execution; failures retain evidence and remain failures.
+
+The follow-up reads the installed cached plugin's exact unchanged connection,
+accepts the same measured profile through Textual for its existing synthetic
+dummy binding, starts that read-only workspace in a fresh private supervisor,
+and checks the actual three-tool bridge inventory without submitting more work.
+It snapshots every original dummy/config/service before and after and stops only
+the owned test supervisor. It also copies the two current modules into an owner-
+only private preparation directory, writes a current PreparedRuntime manifest
+with exact locked package versions and no governance/acceptance, and writes a
+private TOML containing the tested manual workspace rules. A project-interpreter
+subprocess loads that preparation, validates profile/source/package binding and
+unaccepted refusal, and prints help/plugin configuration. Keep reviewed=false;
+the normal local startup screen obtains later operator acceptance. Location:
+one /private/tmp follow-up runner and retained preparation/evidence; no plugin
+reinstall, global file edits, model loading or source/dependency changes.
+
+Persistent handoff: stage only the verified LiteParse bundle/seccomp policy and
+frozen synthetic fixtures/corpus beneath owner-only ignored .airlock-local in
+this checkout, preserving every original. Copy bytes and verify every pinned
+digest; no package or shared-service installation. Repeat the unchanged complete
+measurement/startup/continuous workflow against the relocated paths so a profile
+is genuinely evaluated with its new configuration binding, not silently reused.
+Use those persistent validation/profile paths for the prepared two-module copy,
+trusted manifest, manual rules and connection with explicit matching XDG state.
+The actual tax folder is a separate human decision; do not inspect real content
+directly or activate it before the user supplies the folder. Synthetic activation
+and existing dummy binding checks stay scoped separately. Test every relocated
+asset/fixture hash, current source/package/profile binding, new actual native
+startup and bridge, exact oracle/deny/approve/local-only/replay/cleanup controls;
+preserve global files, installed plugin and original fixtures. No source change
+is needed for this path; production uses existing manifest/config features.
+
+First profile run retains its failure on the initial held-out shipment sentence.
+A single private diagnostic calls unchanged ModelService.context_scan for that
+exact sentence and an explicit confidential-company positive, observing native
+reply bytes/parser exceptions/strict decisions without altering outcomes. Data:
+source/model pins, original failure, latch state, findings/failures and exact
+closure/global preservation. Location: private temporary runner/evidence only.
+Tests: forwards original parser result/exception, clear benign and anchored
+private expectations, client close and preserved resident model/services; a
+successful repeat does not establish the original failure's cause or repair.
+No prompt/schema/options/retry/default change is authorized by this diagnostic.
+
+The zero-failure accuracy gate in the first temporary harness was not an
+architecture requirement. Preserve that failed runner and its case unchanged.
+For the persistent profile measurement, record a strictly parsed semantic
+uncertainty as a false withholding for a benign label, not a clear or successful
+classification. Require exact Gemma-only failure, an observed valid uncertain
+decision and no unavailable latch; all other scanner/transport/parser failures
+still abort. Preserve raw decisions, separate uncertainty counts and diagnostic
+missed-match counts; profile FP/FN measure actual unsafe/withheld versus labels.
+Use the existing bounded backoff/start recovery after such a response, asserting
+all original health canaries before continuing. This does not change production
+scanner lifecycle or relax release checks. Startup displays the genuine profile
+errors under the already authorized synthetic test acceptance; no perfect-
+classifier or new global activation prerequisite is introduced.
+
+Persistent runner correction: import byte-identical prepared modules from
+.airlock-local/source, with pinned assets as siblings rather than beneath that
+installation root. Verify exact two-module bytes and actual PdfParser.pins before
+corpus measurement, then close only that private parser handle. For every corpus
+scan record before/after native and strict-decision positions; require one valid
+completed reply for every expected original/decoded chunk in order. Any missing,
+partial or parser-error reply aborts, including when another chunk is uncertain.
+This adds completeness assertions, preserves the original failed runner, and
+changes no classifier, scanner lifecycle, release policy or production source.

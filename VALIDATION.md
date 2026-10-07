@@ -4,6 +4,55 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+### Continuous acceptance staging and broader Gemma uncertainty, 2026-10-06
+
+The user resumed completion with project/private environments only and no global
+installs. The verified project interpreter uses the already resident pinned Gemma;
+no installation, global configuration or model-service change was performed.
+The first actual scanner startup passes. All32 calibration regressions complete
+with one false block and zero private misses. The first held-out regression,
+"The quarterly shipment target is six boxes.", returns gemma_context failure
+without findings. The runner retains its failed assertion and exits before
+profile creation, startup acceptance or any workflow task. Evidence:
+`/private/tmp/airlock-continuous-zp2zf3y1/evidence.json`.
+The final preservation reporter incorrectly asks for a nonexistent calibration
+and records calibration_required; this does not establish a process-close fault.
+Measurement scanner/model close completed, and no owned job record remains.
+
+A single unchanged-method diagnostic reproduces that benign sentence as a valid
+context_5 uncertain verdict: the model speculates that the shipment target could
+be confidential. Strict native parsing succeeds and context_unavailable remains
+false. The explicit confidential earnings-forecast positive matches correctly;
+client close and resident-service preservation pass. Evidence:
+`/private/tmp/airlock-shipment-cause-96nv166n/evidence.json`.
+This explains the reproduced fail-closed refusal as semantic uncertainty, not
+component unavailability. The original run did not capture its raw reply, so
+precise historical attribution remains limited. No prompt, schema, threshold,
+parser or error-handling change is made. The additional scanner-choice question
+was unnecessary: the existing approved synthetic Gemma route permits recording
+measured false blocks and displaying the profile during local startup review.
+The original failed assertion is not weakened or erased.
+
+Independent persistent staging copies/hash-checks149 pinned LiteParse files,
+the exact syscall policy, frozen PNG/PDF and32+32 regression corpus beneath
+owner-only ignored `.airlock-local/`. Existing originals and shared preparation
+remain unchanged. This is asset copying, not package installation. Changing
+asset paths requires genuinely measured compatible profile binding; the private
+first persistent runner was deliberately interrupted after one measured row:
+root-module import would make parser assets overlap INSTALLATION_ROOT. Its
+evidence records CancelledError, preservation passed and zero workflow cases:
+`.airlock-local/validation-f9208a1a5d7f4553896ee882858ff60f/evidence.json`.
+Byte-identical prepared code now lives in a sibling source directory. The
+corrected runner passes actual parser pins and owned handle cleanup before
+fresh measurement; all expected original/decoded chunk replies must be complete
+and strictly parsed. No persistent profile or real-tax activation is yet claimed.
+Installed binding and matching prepared-source/XDG checks remain follow-up work.
+
+Only HOW/VALIDATION and the private-directory ignore rule change in this
+checkpoint. Production source remains the source verified by611 core tests and
+the earlier live method checks. Persistent full workflow, installed current
+startup and actual tax-folder activation remain unfinished.
+
 ### Diagnosed macOS environment lookup correction, 2026-10-06
 
 The first current-source selected-field run passes all three case assertions:

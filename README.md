@@ -182,11 +182,18 @@ Python 3.11 or newer on macOS/Linux is required. Package installation and `uv ru
 
 After local preparation, starting a workspace opens the local Textual screen. The CLI accepts a workspace, `--config PATH`, `ps`, `status WORKSPACE`, and `stop WORKSPACE` or `stop --all`. The local bridge attaches to an already running workspace; it does not silently start one. A stdio MCP client uses the prepared environment's absolute Python executable with `-I -B /absolute/airlock.py _bridge /absolute/workspace`.
 
-For synthetic debugging, use the prepared source, configuration and interpreter
-from the local `launch.json`, with its `XDG_STATE_HOME` for both startup and bridge.
-Start the synthetic workspace to review settings in Textual. The private local
-handoff contains the exact paths; choosing a real folder is an operator action at
-use time and does not require sending its contents or path to an assistant.
+To open the already prepared synthetic example from this checkout:
+
+```sh
+./start-example
+```
+
+Review or edit the workspace settings in Textual, then choose Accept or Cancel.
+The launcher uses the exact local prepared source, configuration, interpreter and
+state; it does not prepare missing assets or accept settings for you. It requires
+the existing private example preparation, which is not distributed in Git.
+Choosing a real folder is an operator action at use time and does not require
+sending its contents or path to an assistant.
 
 ## Codex plugin
 

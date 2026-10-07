@@ -11,6 +11,26 @@ unresolved; no policy, source, settings or test outcome changes in this correcti
 
 ## Executed checks
 
+### Prepared example launcher, 2026-10-07
+
+`./start-example` wraps the existing exact private launch manifest without changing
+production modules, settings, calibration, dependencies or privacy rules. Focused
+locked offline checks pass **16 tests**, with635 deselected:
+`/private/tmp/airlock-start-example-focused-20261007.log`. Copied temporary fixtures
+verify exact argv/environment, inherited terminal input, another working directory,
+literal paths with spaces/shell syntax and refusal of missing/malformed preparation
+or extra arguments. No acceptance flag is supplied.
+
+Actual prepared `make_startup_tui` renders its measured profile/settings and Cancel
+returns no accepted settings; profile bytes and reviewed=false remain unchanged:
+`/private/tmp/airlock-start-example-render-20261007.json`. This is rendering/Cancel
+only, without supervisor startup, model/scanner execution or a submitted task.
+Root and prepared module hashes still match the source bound below. Independent
+fresh review finds no scoped issue in the launcher/HOW/tests. The prior635-pass
+core result remains separate; no full suite or native workflow rerun is claimed.
+This convenience command requires this checkout's private preparation; it does not
+resolve selected-release acceptance or optional Docling table/startup gaps.
+
 ### Selected outcome visibility and native scope, 2026-10-06
 
 The unchanged explicit-output source repeat at

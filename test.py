@@ -17,6 +17,62 @@ from pydantic import ValidationError
 import airlock as a
 
 
+@pytest.fixture
+def prepared_example(tmp_path):
+    root=tmp_path/'example checkout';root.mkdir()
+    launcher=root/'start-example'
+    launcher.write_bytes((Path(a.__file__).parent/'start-example').read_bytes());launcher.chmod(0o755)
+    bootstrap=root/'.venv/bin';bootstrap.mkdir(parents=True)
+    (bootstrap/'python').symlink_to(sys.executable)
+    python=root/'prepared python'
+    python.write_text(f'#!{sys.executable}\nimport json,os,sys\n'
+        'print(json.dumps({"argv":sys.argv[1:],"state":os.environ["XDG_STATE_HOME"],'
+        '"inherited":os.environ.get("AIRLOCK_LAUNCHER_CHECK"),"stdin":sys.stdin.read()}))\n')
+    python.chmod(0o700)
+    launch={'python':str(python),'source':str(root/'source;$(touch UNEXPECTED)'),
+            'config':str(root/'example config.toml'),'workspace':str(root/'workspace'),
+            'xdg_state_home':str(root/'state')}
+    for key in ('source','config'):Path(launch[key]).write_text('synthetic')
+    for key in ('workspace','xdg_state_home'):Path(launch[key]).mkdir()
+    manifest=root/'.airlock-local/handoff-c60f4ebd264c464d884599aeced29f8f/launch.json'
+    manifest.parent.mkdir(parents=True);manifest.write_text(a.json.dumps(launch))
+    return root,launcher,manifest,launch
+
+
+@pytest.mark.parametrize('elsewhere',[False,True])
+def test_start_example_exact_launch_and_terminal_input(prepared_example,tmp_path,elsewhere):
+    root,launcher,manifest,launch=prepared_example
+    environment={**a.os.environ,'AIRLOCK_LAUNCHER_CHECK':'preserved'}
+    result=subprocess.run([str(launcher)],cwd=tmp_path if elsewhere else root,env=environment,
+                          input='terminal input remains available',capture_output=True,text=True,timeout=10)
+    assert result.returncode==0 and result.stderr==''
+    assert a.json.loads(result.stdout)=={'argv':['-I','-B',launch['source'],'--config',launch['config'],launch['workspace']],
+        'state':launch['xdg_state_home'],'inherited':'preserved','stdin':'terminal input remains available'}
+    assert '--accept' not in result.stdout and not (root/'UNEXPECTED').exists() and not (tmp_path/'UNEXPECTED').exists()
+
+
+@pytest.mark.parametrize('failure',['bootstrap','manifest','malformed','not_object','field','type','relative',
+                                  'python','nonexecutable','source','config','workspace','xdg_state_home','extra_args'])
+def test_start_example_refuses_incomplete_preparation(prepared_example,failure):
+    root,launcher,manifest,launch=prepared_example
+    if failure=='bootstrap':(root/'.venv/bin/python').rename(root/'.venv/bin/held-python')
+    elif failure=='manifest':manifest.rename(manifest.with_suffix('.held'))
+    elif failure=='malformed':manifest.write_text('{')
+    elif failure=='not_object':manifest.write_text('[]')
+    elif failure=='nonexecutable':Path(launch['python']).chmod(0o600)
+    elif failure in ('python','source','config','workspace','xdg_state_home'):
+        Path(launch[failure]).rename(root/('held-'+failure))
+    elif failure in ('field','type','relative'):
+        if failure=='field':launch.pop('source')
+        else:launch['source']=False if failure=='type' else 'relative.py'
+        manifest.write_text(a.json.dumps(launch))
+    result=subprocess.run([str(launcher)]+(['--accept'] if failure=='extra_args' else []),
+                          cwd=root,capture_output=True,text=True,timeout=10)
+    assert result.returncode!=0 and result.stdout==''
+    assert './start-example' in result.stderr
+    assert 'Traceback' not in result.stderr and not (root/'UNEXPECTED').exists()
+
+
 def extension_spec(directory, *, code=None, **overrides):
     module = directory/'operator_tool.py'
     module.write_text(code or 'async def echo(context: str) -> str:\n    return context\n')

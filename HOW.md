@@ -5105,3 +5105,31 @@ handoff helper's gates with that fresh profile; its private copy labels
 prior_case_scope=measurement_startup_only and prior_workflow_overall=not_executed,
 so a startup-only pass is never mislabeled as workflow success. Preserve operator300/1800/32/64 separately
 from diagnostic30/600/16/16 and leave installed/global binding unchanged.
+
+## Prepared synthetic example launcher
+
+Data: consume only python/source/config/xdg_state_home/workspace nonempty absolute
+path strings from the existing fixed
+.airlock-local/handoff-c60f4ebd264c464d884599aeced29f8f/launch.json.
+Retain the prepared modules, calibration identity, settings and synthetic files;
+no latest-profile discovery, new configuration or real-folder access.
+API: executable ./start-example takes no arguments, uses the checkout-relative
+existing .venv Python for stdlib JSON parsing, then execs the manifest interpreter
+with -I -B, exact source, --config and exact synthetic workspace; only XDG_STATE_HOME
+is changed in the inherited environment. Preserve terminal input and normal local
+startup review; no auto-accept, task submission, downloads or silent fallback.
+Missing/invalid JSON/fields, required files or directories, unavailable executable
+or exec failure gives a short actionable stderr message and nonzero exit.
+Location: one root executable start-example with minimal shell bootstrap/stdlib
+Python, small test.py launcher checks, README/HOW/VALIDATION only. No dependency,
+production-module, package scope or privacy-rule changes.
+Tests: copied temporary launcher plus exact fixed-layout synthetic JSON and fake
+executable, verify exact argv/environment/inherited stdin from root and another
+working directory, paths with spaces/shell syntax, and no acceptance flags.
+Missing/malformed preparation/fields/interpreter/source/config/workspace/state,
+nonexecutable interpreter and extra arguments refuse without executing the fake.
+Focused locked checks, source/tool hash preservation and fresh read-only review;
+no expensive scanner/model/full integration rerun. If current prepared files allow,
+render the actual startup screen using its settings and synthetic workspace, then
+Cancel without acceptance/start/task. This verifies rendering only, not a fix for
+the remaining selected-release or optional Docling gaps.

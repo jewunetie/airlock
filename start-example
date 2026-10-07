@@ -1,0 +1,36 @@
+#!/bin/sh
+if [ "$#" -ne 0 ]; then
+    printf '%s\n' 'Usage: ./start-example (opens the synthetic example)' >&2
+    exit 2
+fi
+launcher_root=$(CDPATH= cd -P -- "$(dirname -- "$0")" && pwd) || exit 1
+launcher_python="$launcher_root/.venv/bin/python"
+if [ ! -x "$launcher_python" ]; then
+    printf '%s\n' 'Example Python is missing. Run uv sync --locked, then try ./start-example again.' >&2
+    exit 1
+fi
+exec "$launcher_python" -I -B -c '
+import json, os, sys
+from pathlib import Path
+
+try:
+    root = Path(sys.argv[1])
+    launch = json.loads((root / ".airlock-local/handoff-c60f4ebd264c464d884599aeced29f8f/launch.json").read_text(encoding="utf-8"))
+    names = ("python", "source", "config", "xdg_state_home", "workspace")
+    if not isinstance(launch, dict) or any(type(launch.get(k)) is not str or not launch[k] for k in names):
+        raise ValueError
+    paths = {k: Path(launch[k]) for k in names}
+    if (not all(p.is_absolute() for p in paths.values())
+            or not all(paths[k].is_file() for k in ("python", "source", "config"))
+            or not all(paths[k].is_dir() for k in ("xdg_state_home", "workspace"))
+            or not os.access(paths["python"], os.X_OK)):
+        raise ValueError
+except (OSError, ValueError, TypeError):
+    sys.exit("Example preparation is missing or invalid. Restore the prepared example files, then try ./start-example again.")
+try:
+    os.execve(launch["python"], [launch["python"], "-I", "-B", launch["source"],
+              "--config", launch["config"], launch["workspace"]],
+              {**os.environ, "XDG_STATE_HOME": launch["xdg_state_home"]})
+except OSError:
+    sys.exit("The example could not open. Check its prepared Python executable, then try ./start-example again.")
+' "$launcher_root"

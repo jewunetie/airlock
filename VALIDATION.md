@@ -43,6 +43,22 @@ Fresh unchanged64-row measurement, actual startup acceptance, four-case native
 workflow and matching persistent handoff remain in progress. No global install,
 configuration change or real-document acceptance is claimed.
 
+The fresh current-source run completes all64 original/decoded regression scans:
+calibration32 false-block1/miss0; heldout32 false-block1/miss0, three semantic
+uncertainties and zero private cases lacking findings. Actual Textual Cancel/Accept,
+native READY and three-tool bridge connection pass. Its first PNG task fails on
+the fifth model request at the unchanged60-second stream-idle deadline:
+ModelService.request raises TimeoutError while awaiting an SDK streaming event.
+The four completed requests contain valid tool calls under output_mode=tool and
+allow_text_output=false; no prose-output repair is captured. This is a distinct
+provider-stream failure, not the earlier UnexpectedModelBehavior. Overall remains
+failed; selected approve/deny and PDF cases do not run. Exact owned cleanup,
+empty jobs and source/global/input preservation pass, with no cleanup error:
+`.airlock-local/validation-9c36cea4ec3d4a3694ef515d655423ed/evidence.json`.
+The frozen profile remains reviewed=false. No deadline, reasoning option or
+scanner decision is changed to make this failure pass. Current-source connection
+preparation is a separate check and retains prior_workflow_overall=failed.
+
 ### Current-source native startup and retained UI observer failure, 2026-10-06
 
 The current-source persistent run completes all64 regression scans with strict

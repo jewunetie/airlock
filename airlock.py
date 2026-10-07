@@ -1790,6 +1790,8 @@ class Approval:
     version: int
     content: dict[str, Any]
     future: asyncio.Future
+    selection_state: str = 'idle'
+    selection_revision: int = 0
 
 
 class ApprovalBroker:
@@ -1820,7 +1822,9 @@ class ApprovalBroker:
                 approval.future.cancel()
 
     def safe_snapshot(self):
-        return [{'id': a.id, 'task_id': a.task_id, 'kind': a.kind, 'version': a.version}
+        return [{'id': a.id, 'task_id': a.task_id, 'kind': a.kind, 'version': a.version,
+                 **({'selection_state':a.selection_state,'selection_revision':a.selection_revision}
+                    if a.kind in ('financial_selection','financial_review') else {})}
                 for a in self.pending.values()]
 
 
@@ -2080,7 +2084,7 @@ class Egress:
             raise AirlockError('financial_selection_invalid')
         approval = next((a for a in rt.approvals.pending.values()
                          if a.task_id == task.id and a.kind in ('financial_selection','financial_review')),None)
-        if approval is None or approval.future.done():
+        if approval is None or approval.future.done() or approval.selection_state == 'checking':
             raise AirlockError('financial_selection_invalid')
         try:
             fields = [SelectedFinancialField.model_validate(f) for f in selected_fields]
@@ -2102,23 +2106,43 @@ class Egress:
             artifact_identity=files[p.artifact_ref][0],artifact_digest=files[p.artifact_ref][1]) for p in proposals)
         staged = dataclasses.replace(pending,fields=tuple(fields),origins=origins,candidate=candidate)
         task.pending_financial = staged
+        approval.selection_revision += 1
+        approval.selection_state = 'checking'
         try:
-            raw, rendered = await self.inspect(task,original_candidate), await self.inspect(task,candidate)
+            raw = await self.inspect(task,original_candidate)
+            if task.cancelled or approval.future.done() or task.pending_financial is not staged:
+                raise AirlockError('financial_selection_invalid')
+            rendered = await self.inspect(task,candidate)
+            if task.cancelled or approval.future.done() or task.pending_financial is not staged:
+                raise AirlockError('financial_selection_invalid')
             content = self.financial_snapshot(task,raw,rendered)
             if len(json_bytes(content)) > MAX_FRAME-1024:
                 raise AirlockError('financial_selection_invalid')
             staged.fingerprint = review_fingerprint(content,rt.store.key)
-        except sqlite3.Error:
-            task.pending_financial = pending
+        except sqlite3.Error as error:
+            if task.pending_financial is staged:
+                task.pending_financial = pending
             rt.state = 'UNAVAILABLE'
+            approval.selection_state = 'storage_unavailable'
+            record_diagnostic(task.id,5,error)
             raise AirlockError('storage_unavailable') from None
-        except BaseException:
-            task.pending_financial = pending
+        except BaseException as error:
+            if task.pending_financial is staged:
+                task.pending_financial = pending
+            approval.selection_state = (error.code if isinstance(error,AirlockError) and error.code in
+                {'financial_selection_invalid','financial_source_ambiguous','financial_evidence_unavailable','storage_unavailable'}
+                else 'local_operation_failed')
+            record_diagnostic(task.id,5,error)
             raise
-        approval.kind, approval.content = 'financial_review', content
-        return {'id':approval.id,'kind':approval.kind,'version':approval.version,'content':content}
+        finally:
+            if task.state == 'waiting_local' and not task.cancelled and not approval.future.done():
+                task.activity('approval')
+        approval.kind, approval.content, approval.selection_state = 'financial_review', content, 'ready'
+        return {'id':approval.id,'kind':approval.kind,'version':approval.version,'content':content,
+                'selection_state':approval.selection_state,'selection_revision':approval.selection_revision}
 
-    def verify_financial(self, task: Task, approval_id: str, version: int) -> bool:
+    def verify_financial(self, task: Task, approval_id: str, version: int,
+                         selection_revision: int | None = None) -> bool:
         """Explicit local Verify-and-Approve, never called by an ordinary release vote."""
         rt, pending = self.runtime, task.pending_financial
         if rt.state == 'UNAVAILABLE':
@@ -2126,6 +2150,9 @@ class Egress:
         approval = rt.approvals.pending.get(approval_id) if type(approval_id) is str else None
         if (pending is None or pending.fingerprint is None or pending.verified or approval is None
                 or approval.kind != 'financial_review' or approval.task_id != task.id
+                or approval.selection_state != 'ready'
+                or (selection_revision is not None and (type(selection_revision) is not int
+                    or selection_revision != approval.selection_revision))
                 or approval.future.done() or type(version) is not int or version != pending.version):
             raise AirlockError('financial_selection_invalid')
         raw = ScanResult([PrivacyFindingFull.model_validate(f) for f in approval.content['raw']['findings']])
@@ -5917,7 +5944,9 @@ class Supervisor:
             approval = runtime.approvals.pending.get(request['approval_id'])
             if approval is None:
                 raise AirlockError('approval_unavailable')
-            return {'id':approval.id,'kind':approval.kind,'version':approval.version,'content':approval.content}
+            return {'id':approval.id,'kind':approval.kind,'version':approval.version,'content':approval.content,
+                **({'selection_state':approval.selection_state,'selection_revision':approval.selection_revision}
+                   if approval.kind in ('financial_selection','financial_review') else {})}
         if operation == 'decide':
             if type(request.get('allow')) is not bool or request.get('version') != runtime.config_version:
                 raise AirlockError('config_conflict')
@@ -5933,9 +5962,11 @@ class Supervisor:
                                                          request['registration_proofs'],request['version'])
         if operation == 'verify_financial':
             task = runtime.tasks.get(request.get('task_id')) if type(request.get('task_id')) is str else None
-            if task is None or set(request) != {'op','target','task_id','approval_id','version'}:
+            if (task is None or set(request) != {'op','target','task_id','approval_id','version','selection_revision'}
+                    or type(request['selection_revision']) is not int):
                 raise AirlockError('financial_selection_invalid')
-            return {'accepted':runtime.egress.verify_financial(task,request['approval_id'],request['version'])}
+            return {'accepted':runtime.egress.verify_financial(task,request['approval_id'],request['version'],
+                                                              request['selection_revision'])}
         if operation == 'cancel':
             return {'cancelled':await runtime.cancel(request['task_id'])}
         if operation == 'settings':
@@ -6196,7 +6227,7 @@ def make_tui(state: Path, target: str):
                 with Horizontal():
                     yield Button('Add supporting occurrence',id='financial_add')
                     yield Button('Review exact selected fields',id='financial_select')
-                    yield Button('Verify and Approve',id='financial_verify',variant='success')
+                    yield Button('Verify and Approve',id='financial_verify',variant='success',disabled=True)
             with Horizontal():
                 yield Button('Approve', id='approve', variant='success')
                 yield Button('Deny', id='deny', variant='error')
@@ -6229,9 +6260,23 @@ def make_tui(state: Path, target: str):
                 self.query_one('#summary',Static).update(f"{v['path']}\n{v['state']} · {v['id']}\n{v['endpoint']}\n"
                     +json.dumps(v['tasks'], ensure_ascii=True))
                 table = self.query_one('#approvals',DataTable); table.clear()
+                self.query_one('#financial_verify',Button).disabled = True
                 for approval in v['approvals']:
                     table.add_row(approval['id'],approval['task_id'],approval['kind'],str(approval['version']),key=approval['id'])
+                    outcome = approval.get('selection_state','idle')
+                    if self.selected == approval['id'] and outcome != 'idle':
+                        loaded = (self.financial_review is not None and self.financial_review['id'] == approval['id']
+                            and self.financial_review.get('selection_state') == 'ready'
+                            and self.financial_review.get('selection_revision') == approval.get('selection_revision'))
+                        self.query_one('#financial_verify',Button).disabled = outcome != 'ready' or not loaded
+                        self.query_one('#notice',Static).update({
+                            'checking':'Checking selected fields; no approval has been submitted.',
+                            'ready':('Inspect the completed selection, then Verify and Approve or Deny.' if loaded
+                                else 'Selection checking finished. Reopen the approval row to inspect its completed review.'),
+                            'financial_source_ambiguous':'Source evidence is ambiguous or other protected information is outside your selection; no sharing was approved.'
+                        }.get(outcome,'Selection could not be verified; no sharing was approved. Review the selection or deny it.'))
             except Exception:
+                self.query_one('#financial_verify',Button).disabled = True
                 self.query_one('#notice',Static).update('Local service unavailable; no approval was submitted.')
             finally:
                 self.busy = False
@@ -6243,10 +6288,15 @@ def make_tui(state: Path, target: str):
                 self.query_one('#financial_value',Input).value = item['raw_text']
                 return
             self.selected = str(event.row_key.value)
+            selected = self.selected
+            self.query_one('#financial_verify',Button).disabled = True
             try:
-                result = await self.request({'op':'review','approval_id':self.selected})
+                result = await self.request({'op':'review','approval_id':selected})
+                if self.selected != selected:
+                    return
                 self.query_one('#review',TextArea).load_text(json.dumps(result,indent=2,ensure_ascii=True))
                 self.financial_review = result if result['kind'] in ('financial_selection','financial_review') else None
+                self.query_one('#financial_verify',Button).disabled = result.get('selection_state') != 'ready'
                 self.proofs = {}; self.occurrence = None
                 self.query_one('#financial_controls').display = self.financial_review is not None
                 self.query_one('#approve',Button).disabled = self.financial_review is not None
@@ -6282,19 +6332,23 @@ def make_tui(state: Path, target: str):
                         if name in fields and fields[name]['value_text'] != proof['value_text']:
                             raise AirlockError('financial_selection_invalid')
                         fields.setdefault(name,{'field_name':name,'value_text':proof['value_text'],'registration_refs':[]})['registration_refs'].append(proof['registration_ref'])
+                    self.query_one('#financial_verify',Button).disabled = True
                     result = await self.request({'op':'select_financial',
                         'task_id':self.financial_review['content'].get('task_id') or next(a['task_id'] for a in self.view['approvals'] if a['id']==self.selected),
                         'original_candidate':self.financial_review['content']['candidate'],
                         'selected_fields':list(fields.values()),'registration_proofs':list(self.proofs.values()),
                         'version':self.financial_review['version']})
+                    self.financial_review = result
                     self.query_one('#review',TextArea).load_text(json.dumps(result,indent=2,ensure_ascii=True))
-                    self.query_one('#notice',Static).update('Inspect the exact publication and all proofs, then Verify and Approve or Deny.')
+                    await self.action_refresh()
                     return
                 elif action == 'financial_verify':
-                    if self.financial_review is None:
+                    if (self.financial_review is None or self.financial_review['id'] != self.selected
+                            or self.query_one('#financial_verify',Button).disabled):
                         return
                     payload = {'op':'verify_financial','task_id':next(a['task_id'] for a in self.view['approvals'] if a['id']==self.selected),
-                        'approval_id':self.selected,'version':self.financial_review['version']}
+                        'approval_id':self.selected,'version':self.financial_review['version'],
+                        'selection_revision':self.financial_review['selection_revision']}
                 elif action in ('approve','deny'):
                     if not self.selected:
                         return

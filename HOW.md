@@ -5024,3 +5024,82 @@ actual Textual Cancel/Accept and native startup; retain all four exact workflow,
 selected-proof positive, denial/replay/diagnostics/cleanup assertions and budgets.
 Location: one private copy of the reviewed full native runner plus HOW/VALIDATION.
 Any timeout or invalid output remains failure; no reasoning option or limit change.
+
+Captured amount-coincidence check: data are the retained wages1250.25/net985.10
+candidate and unselected protected expense(250.10), actual SQLite registrations
+and local immutable synthetic statement/artifact proofs. API: existing Fixture,
+worker_message guard, r9_pending/proposals/select helpers and actual reassembly/
+financial_snapshot; fixture scanner only. Location: private assert-based Python
+harness/evidence under /private/tmp. Tests: without expense registration, selected
+review succeeds; with that separately registered expense, the candidate's guard
+findings include it and selection raises financial_source_ambiguous at the exact
+production branch. Deny both final releases; assert no output, consent or ledger
+release and close each store. No inference or privacy-rule change. This isolates
+the contract conflict; it does not recover the lost live control error.
+
+Independent PDF completion: data are the unchanged current profile/corpus/settings
+and frozen PDF/table oracle in fresh private state. API: the reviewed native
+runner's exact pdf_local request, actual local approvals, CSV/provenance checks,
+same-ID replay and complete owned cleanup/preservation. Location: one private
+PDF-only copy of that runner. Tests: retain all original PDF assertions and
+profile/actual-startup gates; explicitly label pdf_only and never present it as
+the failed four-case workflow passing. No source, deadline or policy change.
+
+Late-selection error reproduction: same synthetic amounts/proofs and real SQLite,
+with a fixture scanner gated only until the existing actual control timeout fires.
+API: actual Supervisor.connection/dispatch and control_request over a private Unix
+socket; a pass-through dispatch observer records the terminal select error after
+disconnect, then existing review/status and a denial. Location: private harness/
+evidence. Tests: timeout reports outcome_unknown; release the gate once; exact
+financial_source_ambiguous is captured while review remains financial_selection
+and task phase privacy. Assert no automatic retry/approval, final null output,
+no financial consumption/ledger release and closed server/store. This demonstrates
+the existing observability/phase defect, not the old uncaptured native error.
+
+## Local financial-selection outcome visibility
+
+Data: in-memory Approval.selection_revision:int starts at zero and increments
+before each asynchronous selection inspection. Approval.selection_state has idle/checking/ready or fixed
+financial_selection_invalid/financial_source_ambiguous/financial_evidence_unavailable/
+storage_unavailable/local_operation_failed values. It carries no exception message,
+source content or authority and is not persisted. Existing candidates/proofs and
+fingerprints remain unchanged. API: only local control review/status and successful
+selection responses expose this state and revision; MCP task envelopes remain unchanged.
+Local verify_financial control requires the exact displayed selection_revision;
+verification rejects checking/error state and stale or invalid revisions. Trusted
+direct Egress callers may omit the revision, but still require ready state.
+Set checking around asynchronous inspection, reject a concurrent selection before
+it mutates the pending proposal, record success or sanitized failure, and restore
+the waiting-local task's approval phase after inspection ends. Denial/cancellation
+and all existing source/privacy checks dominate; no retry or implicit consent.
+The existing Textual refresh shows fixed plain-language progress/error messages
+for the selected row. Verify remains disabled until the completed review is
+loaded and its revision matches the owner snapshot. A late ready result prompts
+reopening the row; it never implies the old displayed review was updated.
+Location: Approval/Broker, Egress.select_financial/verify_financial, local
+Supervisor review and Textual refresh in airlock.py; tests in test.py and current
+HOW/README/VALIDATION. Tests: actual socket timeout followed by same-row failed
+or ready outcome; exact source-ambiguity/no-consent controls, concurrent refusal,
+phase/budget pause after failure/success, sanitized arbitrary exceptions and
+cancellation; actual Textual failure notice, late-ready stale display, server
+refusal during reselection, stale revision refusal and fresh-review verification.
+Full locked suite, fresh review,
+build/archive/import and changed-source profile/preparation binding remain required.
+The pending policy decision about coincidental numeric reconstruction is separate;
+no exception to that privacy contract is introduced here.
+
+Changed-source measurement/startup refresh: data are the unchanged frozen64-row
+original/decoded corpus, exact new source/tools/package pins, original scanner
+settings and resident model/service identities, in new private evidence/state.
+API: reuse the fully reviewed native measurement, parser preflight, unaccepted
+profile refusal, actual Textual Cancel/Accept, Supervisor READY and three-tool
+bridge connection. Submit no task and perform no financial selection or release.
+Location: one narrowed private /private/tmp runner derived from the native runner,
+new .airlock-local source snapshot/evidence/profile, HOW/VALIDATION only. Tests:
+all64 rows/chunks genuinely measured, original uncertainties/failures retained,
+profile reviewed=false, strict binding/acceptance gates, no submitted cases,
+closed owned scanner/model/supervisor, empty jobs and exact global/source/input
+preservation. Label measurement_startup_only; success cannot imply extraction or
+combined workflow acceptance. Then use the unchanged reviewed connection-only
+handoff helper with that fresh profile; preserve operator300/1800/32/64 separately
+from diagnostic30/600/16/16 and leave installed/global binding unchanged.

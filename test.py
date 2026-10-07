@@ -4099,6 +4099,188 @@ async def r9_select(f,task,fields=None,proofs=None):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize('expense',[False,True])
+async def test_selected_outcome_survives_control_timeout(expense):
+    from textual.widgets import Button, DataTable, Static, TextArea
+    entered=asyncio.Event();gate=asyncio.Event()
+    class GatedScanner(Scanner):
+        gated=False
+        async def scan(self,text):
+            if self.gated:self.gated=False;entered.set();await gate.wait()
+            return await super().scan(text)
+    with tempfile.TemporaryDirectory(dir='/private/tmp' if sys.platform=='darwin' else None) as directory:
+        home=Path(directory);supervisor=a.Supervisor(home/'state')
+        scanner=GatedScanner();f=Fixture(home,scanner=scanner,store=supervisor.store)
+        release=selection=server=None
+        try:
+            raw='{"wages":"1250.25","net_total":"985.10"}'
+            (f.root/'statement.txt').write_text('Wages 1250.25; Expenses (250.10); Net 985.10')
+            (f.root/'result.json').write_text(raw)
+            if expense:
+                prior=f.task()
+                assert await f.runtime.worker_message(prior,{'op':'guard','payload':a.LocalOutput(
+                    response='',protected_sources=['(250.10)']).model_dump()})=={'decision':'allow'}
+            task,release,vote=await r9_pending(f,raw,('1250.25','985.10'))
+            fields=[];proofs=[]
+            for name,value in [('wages','1250.25'),('net_total','985.10')]:
+                refs=[e.registration_ref for e in f.reassembly.evidence.values() if e.raw_text==value]
+                chosen,origins=r9_proposals(f,name,value,'Wages 1250.25; Expenses (250.10); Net 985.10',refs)
+                fields.extend(chosen);proofs.extend(origins)
+            supervisor.runtimes[f.runtime.id]=f.runtime
+            server=await asyncio.start_unix_server(supervisor.connection,str(supervisor.socket))
+            supervisor.socket.chmod(0o600)
+            old_review=await a.control_request(supervisor.state,{'op':'review','target':f.runtime.id,'approval_id':vote.id})
+            frame={'op':'select_financial','target':f.runtime.id,'task_id':task.id,'original_candidate':raw,
+                'selected_fields':fields,'registration_proofs':proofs,'version':vote.version}
+            scanner.gated=True;selection=asyncio.create_task(a.control_request(supervisor.state,frame))
+            await asyncio.wait_for(entered.wait(),5)
+            assert vote.selection_state=='checking' and task.phase=='privacy'
+            staged=task.pending_financial
+            with pytest.raises(a.AirlockError,match='^financial_selection_invalid$'):
+                await a.control_request(supervisor.state,frame)
+            assert task.pending_financial is staged and vote.selection_state=='checking'
+            with pytest.raises(a.AirlockError,match='^control_timeout_outcome_unknown$'):await selection
+            gate.set()
+            expected='financial_source_ambiguous' if expense else 'ready'
+            for _ in range(100):
+                if vote.selection_state!= 'checking':break
+                await asyncio.sleep(.01)
+            assert vote.selection_state==expected and task.phase=='approval' and task.active_since is None
+            elapsed=task.elapsed_active();await asyncio.sleep(.01);assert task.elapsed_active()==elapsed
+            review=await a.control_request(supervisor.state,{'op':'review','target':f.runtime.id,'approval_id':vote.id})
+            assert review['selection_state']==expected and review['id']==vote.id and review['version']==vote.version
+            assert review['kind']==('financial_selection' if expense else 'financial_review')
+            assert not task.pending_financial.verified and not release.done()
+            app=a.make_tui(supervisor.state,f.runtime.id)
+            async with app.run_test(size=(140,60)) as pilot:
+                table=app.query_one('#approvals',DataTable);table.focus();await pilot.press('enter');await pilot.pause()
+                await app.action_refresh();notice=str(app.query_one('#notice',Static).content)
+                assert ('Source evidence is ambiguous' if expense else 'Inspect the completed selection') in notice
+                verify=app.query_one('#financial_verify',Button)
+                assert verify.disabled==expense
+                if not expense:
+                    app.financial_review=old_review
+                    app.query_one('#review',TextArea).load_text(a.json.dumps(old_review))
+                    await app.action_refresh()
+                    assert verify.disabled and 'Reopen the approval row' in str(app.query_one('#notice',Static).content)
+                    await pilot.click('#financial_verify');await pilot.pause()
+                    assert not task.pending_financial.verified and not release.done()
+                    table.focus();await pilot.press('enter');await pilot.pause()
+                    assert not verify.disabled and app.financial_review['selection_revision']==review['selection_revision']
+                    assert a.json.loads(app.query_one('#review',TextArea).text)==review
+            assert f.runtime.approvals.decide(vote.id,False,vote.version)
+            await asyncio.wait_for(release,5)
+            assert task.completion.result()['response'] is None
+            assert not f.store.db.execute('SELECT 1 FROM global_ledger').fetchone()
+            assert not f.store.db.execute('SELECT 1 FROM financial_consumption').fetchone()
+        finally:
+            gate.set()
+            for pending in (selection,release):
+                if pending is not None:pending.cancel();await asyncio.gather(pending,return_exceptions=True)
+            if server is not None:server.close();await server.wait_closed()
+            f.store.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('failure',['private_error','storage','cancel'])
+async def test_selected_failure_is_sanitized_and_waiting_phase_restored(tmp_path,failure):
+    f=Fixture(tmp_path);r9_files(f);release=None
+    try:
+        task,release,vote=await r9_pending(f)
+        previous=task.pending_financial
+        async def fail(task,text):
+            task.activity('privacy')
+            if failure=='storage':raise a.sqlite3.Error('PRIVATE_EXCEPTION_DETAIL')
+            if failure=='cancel':raise asyncio.CancelledError('PRIVATE_EXCEPTION_DETAIL')
+            raise a.AirlockError('PRIVATE_EXCEPTION_DETAIL')
+        f.runtime.egress.inspect=fail
+        expected=asyncio.CancelledError if failure=='cancel' else a.AirlockError
+        with pytest.raises(expected):await r9_select(f,task)
+        assert task.pending_financial is previous and not previous.verified
+        assert vote.selection_state==('storage_unavailable' if failure=='storage' else 'local_operation_failed')
+        assert task.phase=='approval' and task.active_since is None and not release.done()
+        records=[r for r in a.telemetry().records if r.get('task_id')==task.id]
+        assert records and 'PRIVATE_EXCEPTION_DETAIL' not in a.json.dumps([f.runtime.approvals.safe_snapshot(),records])
+        assert not f.store.db.execute('SELECT 1 FROM financial_consumption').fetchone()
+        assert not f.store.db.execute('SELECT 1 FROM global_ledger').fetchone()
+    finally:
+        if release is not None:release.cancel();await asyncio.gather(release,return_exceptions=True)
+        f.store.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('decision',['deny','cancel'])
+async def test_selected_late_scan_cannot_restore_terminal_proposal(tmp_path,decision):
+    entered=asyncio.Event();gate=asyncio.Event()
+    class GatedScanner(Scanner):
+        gated=False
+        async def scan(self,text):
+            if self.gated:self.gated=False;entered.set();await gate.wait()
+            return await super().scan(text)
+    scanner=GatedScanner();f=Fixture(tmp_path,scanner=scanner)
+    r9_files(f);release=selection=None
+    try:
+        task,release,vote=await r9_pending(f)
+        scanner.gated=True
+        selection=asyncio.create_task(r9_select(f,task))
+        await asyncio.wait_for(entered.wait(),5)
+        if decision=='deny':assert f.runtime.approvals.decide(vote.id,False,vote.version)
+        else:assert await f.runtime.cancel(task.id)
+        await asyncio.gather(release,return_exceptions=True)
+        assert task.pending_financial is None and task.state in a.TERMINAL
+        phase=task.phase;gate.set()
+        with pytest.raises(a.AirlockError,match='^financial_selection_invalid$'):await selection
+        assert task.pending_financial is None and task.phase==phase and task.active_since is None
+        assert vote.selection_state!='ready' and not f.runtime.approvals.pending
+        assert task.completion.result()['response'] is None
+        assert not f.store.db.execute('SELECT 1 FROM financial_consumption').fetchone()
+        assert not f.store.db.execute('SELECT 1 FROM global_ledger').fetchone()
+    finally:
+        gate.set()
+        for pending in (selection,release):
+            if pending is not None:pending.cancel();await asyncio.gather(pending,return_exceptions=True)
+        f.store.close()
+
+
+@pytest.mark.asyncio
+async def test_selected_reselection_requires_current_completed_review(tmp_path):
+    f=Fixture(tmp_path);r9_files(f);release=selection=None
+    gate=asyncio.Event();entered=asyncio.Event()
+    try:
+        task,release,vote=await r9_pending(f)
+        first=await r9_select(f,task)
+        original=f.runtime.egress.inspect
+        async def inspect(task,text):
+            entered.set();await gate.wait();return await original(task,text)
+        f.runtime.egress.inspect=inspect
+        selection=asyncio.create_task(r9_select(f,task))
+        await asyncio.wait_for(entered.wait(),5)
+        assert vote.selection_state=='checking' and vote.selection_revision==first['selection_revision']+1
+        with pytest.raises(a.AirlockError,match='^financial_selection_invalid$'):
+            f.runtime.egress.verify_financial(task,vote.id,vote.version)
+        assert not task.pending_financial.verified and not release.done()
+        gate.set();current=await selection
+        assert current['selection_state']=='ready'
+        supervisor=object.__new__(a.Supervisor);supervisor.runtimes={f.runtime.id:f.runtime}
+        payload={'op':'verify_financial','target':f.runtime.id,'task_id':task.id,
+                 'approval_id':vote.id,'version':vote.version}
+        for revision in (None,True,first['selection_revision']):
+            frame=payload if revision is None else {**payload,'selection_revision':revision}
+            with pytest.raises(a.AirlockError,match='^financial_selection_invalid$'):
+                await supervisor.dispatch(frame)
+        assert not task.pending_financial.verified and not release.done()
+        assert await supervisor.dispatch({**payload,'selection_revision':current['selection_revision']})=={'accepted':True}
+        await asyncio.wait_for(release,5)
+        assert task.completion.result()['response']=='{"wages":"1250.25"}'
+        assert f.store.db.execute('SELECT 1 FROM financial_consumption').fetchone()
+    finally:
+        gate.set()
+        for pending in (selection,release):
+            if pending is not None:pending.cancel();await asyncio.gather(pending,return_exceptions=True)
+        f.store.close()
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize('vote',['approve','deny'])
 async def test_r9_actual_coder_same_runtime_two_proofs_one_field(tmp_path,monkeypatch,vote):
     from pydantic_ai.messages import ModelResponse,ToolCallPart
@@ -4830,7 +5012,7 @@ async def test_r9_correction_sqlite_read_error_over_local_socket(boundary):
             'original_candidate':pending.original_candidate,'selected_fields':fields,
             'registration_proofs':proofs,'version':f.runtime.config_version} if boundary=='select' else {
             'op':'verify_financial','target':f.runtime.id,'task_id':task.id,
-            'approval_id':review['id'],'version':review['version']}
+            'approval_id':review['id'],'version':review['version'],'selection_revision':review['selection_revision']}
         server=await asyncio.start_unix_server(supervisor.connection,str(supervisor.socket))
         supervisor.socket.chmod(0o600)
         def authorize(action,arg1,arg2,database,trigger):

@@ -4,6 +4,78 @@ This records the completed root promotion and authorized hardening, not producti
 
 ## Executed checks
 
+### Selected outcome visibility and native scope, 2026-10-06
+
+The unchanged explicit-output source repeat at
+`.airlock-local/validation-9846a94b7d524e75971299a1b4a2f226/evidence.json`
+passes PNG extraction with exact15CSVcells/source-page provenance, local null
+response and same-ID replay without work. Manual selected denial reaches the
+financial_selection vote and withholds all content with the same retry behavior.
+Selected approval sends one selection mutation, times out, and bounded read-only
+reconciliation never reaches completed financial_review. Overall remains failed;
+the exact lost terminal native selection error was not recovered. Native output
+repair now explicitly asks for a tool call and reaches final_result/AllGood in
+the successful PNG task. Cleanup/preservation pass with no cleanup errors.
+
+An independent PDF-only native run passes exact15cells/source-page provenance,
+local null response, same-ID replay and cleanup/preservation:
+`.airlock-local/validation-c7a310a50d6349c48543fe56a77d4840/evidence.json`.
+It is explicitly pdf_only, not a passing combined workflow. Both runs reuse the
+same genuine source38030ade64-row measurement with explicit reused provenance,
+fresh Textual Cancel/Accept and native READY/bridge checks.
+
+The actual-method fixture reproduction at
+`/private/tmp/airlock-amount-coincidence-5164b0ffff1d484aa0145f2dfb7d2ab5/evidence.json`
+selects wages1250.25/net985.10 successfully without a separate protected expense.
+Adding protected expense(250.10) produces a third reconstruction finding and the
+unchanged financial_source_ambiguous refusal. Both final votes deny; no consent or
+ledger release occurs. This isolates the contract conflict rather than recovering
+the lost native error. The user-owned numeric-coincidence policy remains pending.
+
+An actual Unix-socket reproduction at
+`/private/tmp/al-late-16d58a3877c84131/evidence.json` sends exactly one selection
+mutation. After the client timeout, its gated scan ends with source ambiguity;
+the error is absent from the local review and the waiting task retains privacy
+phase. It publishes no content and closes its server/store. This identifies the
+local outcome/phase defect addressed by the current patch, with fixture scanning.
+
+The patch retains fixed local selection state and a monotonic revision, rejects
+concurrent selection and verification while checking, restores waiting approval
+phase after inspection, and binds local verification to the exact displayed
+completed revision. Late-ready screens require reopening the row. Sanitized
+errors remain local; MCP envelopes, privacy policy, dependencies and budgets are
+unchanged. Deny/Cancel dominate late results and prevent proposal resurrection.
+Old measured profiles and prepared source are not rebound to this edited source.
+
+Initial focused evidence is retained: three failures/six passes at
+`/private/tmp/airlock-selection-outcome-focused-20261006.log` (missing owner-only
+socket mode and a missing test import), followed by six sandbox socket-bind
+failures/six passes at
+`/private/tmp/airlock-selection-outcome-focused-fixed-20261006.log`.
+The permitted intermediate run passes all12 focused checks. Fresh review then
+adds actual Deny/Cancel-during-selection controls; their initial two failures
+expose a privacy-phase restart after terminal cleanup. Checks after each scan
+await prevent starting the next scan after termination; conditional restoration
+preserves cleared proposals. The realistic gate sits inside Scanner.scan after
+privacy activity begins. Original failed evidence remains at
+`/private/tmp/airlock-selection-outcome-focused-final-20261006.log`.
+Final focused **14 pass**, full locked suite **635 pass**, eight existing warnings,
+no failures or skips:
+`/private/tmp/airlock-selection-outcome-focused-terminal-fixed-20261006.log` and
+`/private/tmp/airlock-selection-outcome-core-20261006.log`.
+Root and independent scoped fresh review find no further concrete blocker after
+the terminal, stale-display and in-progress verification corrections. Offline
+build, exact two-module wheel/sdist bytes and private isolated installed import/
+help pass under `/private/tmp/airlock-selection-outcome-build-20261006/` and
+`/private/tmp/airlock-selection-outcome-installed-20261006/`. Combined source is
+`a0461d9a62e48ef963743d03d46a7831424c64d7a2aa12a98d8f7e24d21940b0`;
+tools pin is unchanged. No failed assertion was skipped or weakened.
+Updated source-bound measurement/startup/preparation is still required; previous
+38030ade native workflow results do not certify the new source. The narrowed
+measurement_startup_only runner submits no task and cannot certify extraction or
+selected approval. Global defaults/model/services and the pending privacy policy
+remain unchanged.
+
 ### Explicit worker output contract, 2026-10-06
 
 The captured recovery run fails at PNG before selection-timeout reconciliation:

@@ -70,6 +70,12 @@ Two tasks in the same running workspace can support one field only when you inde
 
 Financial proposal labels and decimal strings must be literal ASCII tokens. Structural JSON whitespace is allowed; escaped or encoded keys/values are refused. A storage read failure makes the runtime unavailable, and retrying a local selection or verification cannot restore release authority in that runtime.
 
+Selection checking shows progress and a fixed local error if verification fails.
+If the screen times out while checking, Airlock keeps the outcome available while
+the approval remains pending; it does not submit the selection again. Reopen the approval row to inspect a later
+completed review. Verify and Approve stays disabled until that exact completed
+review is displayed; a stale review, failed check, Deny or Cancel cannot approve it.
+
 Once an exact selected financial value has been fully shared, its retained complete verified occurrence baseline permits later answers that touch that same value without another reconstruction block. Original history stays intact, and current sharing rules still apply to every answer. A new or unknown occurrence invalidates this baseline; it gains no origin or consent from matching the old amount. A different private field still needs its own exact local verification and fresh consent.
 
 After restart, retained opaque registrations and contributions cannot gain verified origins from a newly matching amount. If the exact old occurrence/context is no longer recoverable, it remains ambiguous and selected release can stay withheld. Deleting interaction history cannot reset this evidence or consumed consent. Same-runtime fixture success does not establish cross-restart usefulness or live tax-document accuracy.
@@ -144,9 +150,13 @@ separate release approval. Missing assets or cleanup uncertainty withhold text.
 LiteParse's tested scans preserve the tested amounts; its ruled PDF table misses
 header cells, and its matching PNG produces no table block. Separate synthetic
 LiteParse worker tests reconstruct all15 CSV cells and source/page provenance
-from these PNG/PDF fixtures. Current-source startup and both installed/prepared
-plugin connections pass, but the continuous extraction-to-selected-release run
-has failed and remains unresolved. Docling preserves nested text in its bounded
+from these PNG/PDF fixtures. The explicit-output checkpoint passes native PNG,
+manual selected denial and a separate PDF-only run. The combined selected-approval
+workflow fails after a selection timeout whose terminal error was not captured.
+A separate local reproduction shows coincidental reconstruction of an unselected
+protected amount blocks selection. Startup and installed/prepared connections pass for
+their exact measured source; source changes require renewed preparation and
+measurement. Docling preserves nested text in its bounded
 diagnostic, but production startup and table fidelity remain unresolved. Real tax
 documents and representative privacy accuracy are unverified. See VALIDATION.md.
 
